@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'https://deno.land/std@0.177.0/node/crypto.ts';
 
 export interface GlucoseData {
   value: number;
@@ -7,7 +7,7 @@ export interface GlucoseData {
   time: number;
   isHigh: boolean;
   isLow: boolean;
-  unit: string; // 'mg/dL'
+  unit: string;
 }
 
 export interface Patient {
@@ -77,7 +77,8 @@ export class LibreLinkUpClient {
   }
 
   private async request(endpoint: string, method: string = 'GET', body?: any, lastError4Type: string = ''): Promise<any> {
-    const response = await fetch(this.getUrl(endpoint), {
+    const url = this.getUrl(endpoint);
+    const response = await fetch(url, {
       method,
       headers: this.getHeaders(),
       body: body ? JSON.stringify(body) : undefined,
@@ -85,29 +86,22 @@ export class LibreLinkUpClient {
 
     const data = await response.json();
 
-    // Handle Redirect
     if (data.status === 0 && data.data?.redirect && data.data?.region) {
-      console.log(`[LibreLink] Redirecting to region: ${data.data.region}`);
       this.region = data.data.region;
       return this.request(endpoint, method, body, lastError4Type);
     }
 
-    // Handle Error 4 (Terms of Use / Privacy Policy)
     if (data.status === 4) {
       const step = data.data?.step;
       const type = step?.type;
       const ticket = data.data?.authTicket;
-
-      console.log(`[LibreLink] Status 4 received. Type: ${type}`);
 
       if (ticket?.token) {
         this.token = ticket.token;
       }
 
       if (type && type !== lastError4Type && this.autoAcceptTerms) {
-        console.log(`[LibreLink] Automatically accepting ${type}...`);
         await this.request(`/auth/continue/${type}`, 'POST', null, type);
-        // After accepting, retry the original request
         return this.request(endpoint, method, body, type);
       }
 
@@ -140,9 +134,7 @@ export class LibreLinkUpClient {
 
   async getConnections(): Promise<Patient[]> {
     if (!this.token) await this.login();
-
     const data = await this.request('/llu/connections');
-
     return data.data.map((conn: any) => ({
       patientId: conn.patientId,
       firstName: conn.firstName,
@@ -150,9 +142,8 @@ export class LibreLinkUpClient {
     }));
   }
 
-  async getGlucose(patientId: string): Promise<{ measurement: GlucoseData, graph: GlucoseData[] }> {
+  async getGlucose(patientId: string): Promise<{ measurement: GlucoseData | null, graph: GlucoseData[] }> {
     if (!this.token) await this.login();
-
     const data = await this.request(`/llu/connections/${patientId}/graph`);
 
     const mapMeasurement = (m: any): GlucoseData | null => {
@@ -179,4 +170,3 @@ export class LibreLinkUpClient {
     };
   }
 }
-

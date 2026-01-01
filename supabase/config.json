@@ -1,0 +1,8 @@
+{
+  "project_id": "ouhlfhcrepeubngnjdam",
+  "functions": {
+    "sync-glucose": {
+      "verify_jwt": false
+    }
+  }
+}
