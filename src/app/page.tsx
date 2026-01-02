@@ -514,10 +514,10 @@ export default function GlucoPage() {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="flex-1 p-0 pt-4 flex flex-col">
+                    <CardContent className="flex-1 p-0 pt-2 flex flex-col">
                       <div className="flex-1 min-h-0">
-                        <ResponsiveContainer width="100%" height="95%">
-                          <AreaChart data={filteredGraph} margin={{ top: 15, right: 5, left: -20, bottom: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={filteredGraph} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
                             <defs>
                               <linearGradient id="lineGluc" x1="0%" y1="104%" x2="0%" y2="-2%">
                                 <stop offset="0%" stopColor={getGlucoseColor(dataMin)} />
