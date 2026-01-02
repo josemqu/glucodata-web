@@ -16,6 +16,18 @@ export interface Patient {
   lastName: string;
 }
 
+function parseLibreTimestamp(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string" || value.trim() === "") return Date.now();
+
+  const raw = value.trim();
+  const hasTimeZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const isoish = hasTimeZone ? raw : `${raw}Z`;
+
+  const ms = new Date(isoish).getTime();
+  return Number.isFinite(ms) ? ms : Date.now();
+}
+
 export class LibreLinkUpClient {
   private token: string = "";
   private userId: string = "";
@@ -173,7 +185,7 @@ export class LibreLinkUpClient {
       return {
         value: m.ValueInMgPerDl,
         trend: m.TrendArrow,
-        time: m.Timestamp ? new Date(m.Timestamp).getTime() : Date.now(),
+        time: parseLibreTimestamp(m.Timestamp),
         isHigh: m.isHigh,
         isLow: m.isLow,
         unit: m.GlucoseUnits === 1 ? "mg/dL" : "mmol/L",

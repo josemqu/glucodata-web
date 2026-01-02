@@ -1,4 +1,4 @@
-import crypto from 'https://deno.land/std@0.177.0/node/crypto.ts';
+import crypto from "https://deno.land/std@0.177.0/node/crypto.ts";
 
 export interface GlucoseData {
   value: number;
@@ -16,13 +16,25 @@ export interface Patient {
   lastName: string;
 }
 
+function parseLibreTimestamp(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string" || value.trim() === "") return Date.now();
+
+  const raw = value.trim();
+  const hasTimeZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const isoish = hasTimeZone ? raw : `${raw}Z`;
+
+  const ms = new Date(isoish).getTime();
+  return Number.isFinite(ms) ? ms : Date.now();
+}
+
 export class LibreLinkUpClient {
-  private token: string = '';
-  private userId: string = '';
-  private region: string = '';
-  private topLevelDomain: string = 'io';
-  private apiVersion: string = '4.17.0';
-  private product: string = 'llu.android';
+  private token: string = "";
+  private userId: string = "";
+  private region: string = "";
+  private topLevelDomain: string = "io";
+  private apiVersion: string = "4.17.0";
+  private product: string = "llu.android";
   private autoAcceptTerms: boolean = true;
 
   constructor(
@@ -41,16 +53,16 @@ export class LibreLinkUpClient {
     return {
       token: this.token,
       userId: this.userId,
-      region: this.region
+      region: this.region,
     };
   }
 
   private encryptSHA256(value: string): string {
-    return crypto.createHash('sha256').update(value.trim()).digest('hex');
+    return crypto.createHash("sha256").update(value.trim()).digest("hex");
   }
 
   private getUrl(endpoint: string): string {
-    const baseUrl = this.region 
+    const baseUrl = this.region
       ? `https://api-${this.region}.libreview.${this.topLevelDomain}`
       : `https://api.libreview.${this.topLevelDomain}`;
     return baseUrl + endpoint;
@@ -58,25 +70,30 @@ export class LibreLinkUpClient {
 
   private getHeaders() {
     const headers: Record<string, string> = {
-      'product': this.product,
-      'version': this.apiVersion,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'cache-control': 'no-cache',
+      product: this.product,
+      version: this.apiVersion,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "cache-control": "no-cache",
     };
 
     if (this.userId) {
-      headers['Account-Id'] = this.encryptSHA256(this.userId);
+      headers["Account-Id"] = this.encryptSHA256(this.userId);
     }
 
     if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+      headers["Authorization"] = `Bearer ${this.token}`;
     }
 
     return headers;
   }
 
-  private async request(endpoint: string, method: string = 'GET', body?: any, lastError4Type: string = ''): Promise<any> {
+  private async request(
+    endpoint: string,
+    method: string = "GET",
+    body?: any,
+    lastError4Type: string = ""
+  ): Promise<any> {
     const url = this.getUrl(endpoint);
     const response = await fetch(url, {
       method,
@@ -101,15 +118,19 @@ export class LibreLinkUpClient {
       }
 
       if (type && type !== lastError4Type && this.autoAcceptTerms) {
-        await this.request(`/auth/continue/${type}`, 'POST', null, type);
+        await this.request(`/auth/continue/${type}`, "POST", null, type);
         return this.request(endpoint, method, body, type);
       }
 
-      throw new Error(data.error?.message || `Required action: ${type || 'Accept Terms'}`);
+      throw new Error(
+        data.error?.message || `Required action: ${type || "Accept Terms"}`
+      );
     }
 
     if (data.status !== 0) {
-      throw new Error(data.error?.message || `API error with status ${data.status}`);
+      throw new Error(
+        data.error?.message || `API error with status ${data.status}`
+      );
     }
 
     return data;
@@ -117,10 +138,10 @@ export class LibreLinkUpClient {
 
   async login(): Promise<void> {
     if (!this.email || !this.password) {
-      throw new Error('Email and password are required for login');
+      throw new Error("Email and password are required for login");
     }
 
-    const data = await this.request('/llu/auth/login', 'POST', {
+    const data = await this.request("/llu/auth/login", "POST", {
       email: this.email,
       password: this.password,
     });
@@ -134,7 +155,7 @@ export class LibreLinkUpClient {
 
   async getConnections(): Promise<Patient[]> {
     if (!this.token) await this.login();
-    const data = await this.request('/llu/connections');
+    const data = await this.request("/llu/connections");
     return data.data.map((conn: any) => ({
       patientId: conn.patientId,
       firstName: conn.firstName,
@@ -142,7 +163,9 @@ export class LibreLinkUpClient {
     }));
   }
 
-  async getGlucose(patientId: string): Promise<{ measurement: GlucoseData | null, graph: GlucoseData[] }> {
+  async getGlucose(
+    patientId: string
+  ): Promise<{ measurement: GlucoseData | null; graph: GlucoseData[] }> {
     if (!this.token) await this.login();
     const data = await this.request(`/llu/connections/${patientId}/graph`);
 
@@ -151,10 +174,10 @@ export class LibreLinkUpClient {
       return {
         value: m.ValueInMgPerDl,
         trend: m.TrendArrow,
-        time: m.Timestamp ? new Date(m.Timestamp).getTime() : Date.now(),
+        time: parseLibreTimestamp(m.Timestamp),
         isHigh: m.isHigh,
         isLow: m.isLow,
-        unit: m.GlucoseUnits === 1 ? 'mg/dL' : 'mmol/L',
+        unit: m.GlucoseUnits === 1 ? "mg/dL" : "mmol/L",
       };
     };
 
@@ -165,7 +188,9 @@ export class LibreLinkUpClient {
       .sort((a: any, b: any) => a.time - b.time);
 
     return {
-      measurement: measurement || (graphData.length > 0 ? graphData[graphData.length - 1] : null),
+      measurement:
+        measurement ||
+        (graphData.length > 0 ? graphData[graphData.length - 1] : null),
       graph: graphData,
     };
   }

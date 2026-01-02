@@ -676,7 +676,7 @@ export default function GlucoPage() {
                               key={glucose.value}
                               initial={{ opacity: 0, scale: 0.9 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className={`text-5xl font-black tabular-nums tracking-tighter ${status.color}`}
+                              className={`text-5xl font-black tabular-nums font-numbers tracking-tighter ${status.color}`}
                             >
                               {glucose.value}
                             </motion.span>
@@ -713,7 +713,7 @@ export default function GlucoPage() {
                           Time in Range
                         </p>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-black text-emerald-500 tabular-nums">
+                          <span className="text-2xl font-black text-emerald-500 tabular-nums font-numbers">
                             {stats?.inRange}%
                           </span>
                           <span className="text-[8px] text-muted-foreground font-bold">
@@ -735,7 +735,7 @@ export default function GlucoPage() {
                           Avg Glucose
                         </p>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-black tabular-nums">
+                          <span className="text-2xl font-black tabular-nums font-numbers">
                             {stats?.avg}
                           </span>
                           <span className="text-[8px] text-muted-foreground font-bold uppercase">
@@ -743,8 +743,8 @@ export default function GlucoPage() {
                           </span>
                         </div>
                         <div className="flex justify-between text-[8px] font-bold mt-1 text-muted-foreground opacity-60">
-                          <span>↓ {stats?.min}</span>
-                          <span>↑ {stats?.max}</span>
+                          <span className="font-numbers">↓ {stats?.min}</span>
+                          <span className="font-numbers">↑ {stats?.max}</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -1156,7 +1156,7 @@ export default function GlucoPage() {
                           <p className="text-[8px] font-bold text-muted-foreground uppercase leading-none mb-1 opacity-60">
                             Last sync
                           </p>
-                          <p className="text-base font-black tabular-nums">
+                          <p className="text-base font-black tabular-nums font-numbers">
                             {glucose
                               ? new Date(glucose.time).toLocaleTimeString([], {
                                   hour: "2-digit",
@@ -1217,7 +1217,7 @@ export default function GlucoPage() {
                               />
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-[9px] font-black tabular-nums text-primary">
+                              <span className="text-[9px] font-black tabular-nums font-numbers text-primary">
                                 {secondsUntilRefresh}
                               </span>
                             </div>
@@ -1330,7 +1330,7 @@ export default function GlucoPage() {
                               hypo: parseInt(e.target.value),
                             })
                           }
-                          className="bg-muted/50 font-black tabular-nums h-12 text-lg"
+                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
                         <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
                           Umbral hipoglucemia grave
@@ -1355,7 +1355,7 @@ export default function GlucoPage() {
                               low: parseInt(e.target.value),
                             })
                           }
-                          className="bg-muted/50 font-black tabular-nums h-12 text-lg"
+                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
                         <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
                           Inicio de rango objetivo
@@ -1380,7 +1380,7 @@ export default function GlucoPage() {
                               high: parseInt(e.target.value),
                             })
                           }
-                          className="bg-muted/50 font-black tabular-nums h-12 text-lg"
+                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
                         <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
                           Fin de rango objetivo
@@ -1405,7 +1405,7 @@ export default function GlucoPage() {
                               hyper: parseInt(e.target.value),
                             })
                           }
-                          className="bg-muted/50 font-black tabular-nums h-12 text-lg"
+                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
                         <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
                           Umbral hiperglucemia grave
