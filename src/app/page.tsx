@@ -448,6 +448,9 @@ export default function GlucoPage() {
   const unit = glucose?.unit || "mg/dL";
   const status = getGlucoseStatus(glucose.value);
 
+  const windowEnd = Date.now();
+  const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
+
   const filteredGraph = graph
     ? graph.filter((p: any) => {
         const hoursAgo = (new Date().getTime() - p.time) / (1000 * 60 * 60);
@@ -455,21 +458,38 @@ export default function GlucoPage() {
       })
     : [];
 
+  const filteredGraphWithValues = filteredGraph.filter(
+    (p: any) => p.value !== null && p.value !== undefined
+  );
+
+  const chartGraph = [
+    ...filteredGraph,
+    { time: windowStart, value: null },
+    { time: windowEnd, value: null },
+  ]
+    .sort((a: any, b: any) => a.time - b.time)
+    .filter(
+      (p: any, idx: number, arr: any[]) =>
+        idx === 0 || p.time !== arr[idx - 1].time
+    );
+
   const stats =
-    filteredGraph.length > 0
+    filteredGraphWithValues.length > 0
       ? {
           avg: Math.round(
-            filteredGraph.reduce((acc: number, p: any) => acc + p.value, 0) /
-              filteredGraph.length
+            filteredGraphWithValues.reduce(
+              (acc: number, p: any) => acc + p.value,
+              0
+            ) / filteredGraphWithValues.length
           ),
-          max: Math.max(...filteredGraph.map((p: any) => p.value)),
-          min: Math.min(...filteredGraph.map((p: any) => p.value)),
+          max: Math.max(...filteredGraphWithValues.map((p: any) => p.value)),
+          min: Math.min(...filteredGraphWithValues.map((p: any) => p.value)),
           inRange: Math.round(
-            (filteredGraph.filter(
+            (filteredGraphWithValues.filter(
               (p: any) =>
                 p.value >= targetConfig.low && p.value <= targetConfig.high
             ).length /
-              filteredGraph.length) *
+              filteredGraphWithValues.length) *
               100
           ),
         }
@@ -481,12 +501,12 @@ export default function GlucoPage() {
   // Calculate the actual range of values in the current data set
   // This is used for the "User Approach" to normalize the gradient
   const dataMin =
-    filteredGraph.length > 0
-      ? Math.min(...filteredGraph.map((p: any) => p.value))
+    filteredGraphWithValues.length > 0
+      ? Math.min(...filteredGraphWithValues.map((p: any) => p.value))
       : targetConfig.low;
   const dataMax =
-    filteredGraph.length > 0
-      ? Math.max(...filteredGraph.map((p: any) => p.value))
+    filteredGraphWithValues.length > 0
+      ? Math.max(...filteredGraphWithValues.map((p: any) => p.value))
       : targetConfig.high;
 
   const breakPointPercentage = (value: number) => {
@@ -498,9 +518,15 @@ export default function GlucoPage() {
   const CustomDot = (props: any) => {
     const { cx, cy, payload, index } = props;
     const val = payload?.value;
-    if (cx === undefined || cy === undefined || val === undefined) return null;
+    if (
+      cx === undefined ||
+      cy === undefined ||
+      val === undefined ||
+      val === null
+    )
+      return null;
 
-    const dataLength = filteredGraph.length;
+    const dataLength = chartGraph.length;
     const isFirst = index === 0;
     const isLast = index === dataLength - 1;
 
@@ -510,14 +536,16 @@ export default function GlucoPage() {
     }
 
     // Calcular densidad local
-    const prev = filteredGraph[index - 1];
-    const next = filteredGraph[index + 1];
+    const prev = chartGraph[index - 1];
+    const next = chartGraph[index + 1];
 
     // Calcular distancia a los vecinos
     const timeDiffPrev = prev ? Math.abs(payload.time - prev.time) : Infinity;
     const timeDiffNext = next ? Math.abs(next.time - payload.time) : Infinity;
-    const valueDiffPrev = prev ? Math.abs(val - prev.value) : Infinity;
-    const valueDiffNext = next ? Math.abs(val - next.value) : Infinity;
+    const valueDiffPrev =
+      prev?.value != null ? Math.abs(val - prev.value) : Infinity;
+    const valueDiffNext =
+      next?.value != null ? Math.abs(val - next.value) : Infinity;
 
     // Normalizar las diferencias
     const timeThreshold = 600000; // 10 minutos
@@ -769,7 +797,7 @@ export default function GlucoPage() {
                       <div className="flex-1 min-h-0">
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart
-                            data={filteredGraph}
+                            data={chartGraph}
                             margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
                           >
                             <defs>
@@ -908,7 +936,7 @@ export default function GlucoPage() {
                             <XAxis
                               dataKey="time"
                               type="number"
-                              domain={["dataMin", "dataMax"]}
+                              domain={[windowStart, windowEnd]}
                               tickFormatter={(t) =>
                                 new Date(t).toLocaleTimeString([], {
                                   hour: "2-digit",
@@ -933,6 +961,12 @@ export default function GlucoPage() {
                               orientation="right"
                             />
                             <Tooltip
+                              cursor={{
+                                stroke: "var(--muted-foreground)",
+                                strokeOpacity: 0.25,
+                                strokeWidth: 1,
+                                strokeDasharray: "3 3",
+                              }}
                               contentStyle={{
                                 backgroundColor: "var(--card)",
                                 borderColor: "var(--border)",
