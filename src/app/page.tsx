@@ -307,10 +307,8 @@ export default function GlucoPage() {
         <circle 
           cx={cx} 
           cy={cy} 
-          r={2.5} 
+          r={1.5} 
           fill={getGlucoseColor(val)} 
-          stroke="var(--background)" 
-          strokeWidth={1} 
         />
       );
     }
@@ -355,10 +353,8 @@ export default function GlucoPage() {
       <circle 
         cx={cx} 
         cy={cy} 
-        r={2.5} 
+        r={1.5} 
         fill={getGlucoseColor(val)} 
-        stroke="var(--background)" 
-        strokeWidth={1} 
       />
     );
   };
