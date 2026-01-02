@@ -295,9 +295,16 @@ export default function GlucoPage() {
 
   const yMin = 35;
   const yMax = 320;
-  const getOffset = (val: number) => {
-    const offset = 1 - (val - yMin) / (yMax - yMin);
-    return `${Math.max(0, Math.min(100, offset * 100))}%`;
+  
+  // Calculate the actual range of values in the current data set
+  // This is used for the "User Approach" to normalize the gradient
+  const dataMin = filteredGraph.length > 0 ? Math.min(...filteredGraph.map((p: any) => p.value)) : targetConfig.low;
+  const dataMax = filteredGraph.length > 0 ? Math.max(...filteredGraph.map((p: any) => p.value)) : targetConfig.high;
+
+  const breakPointPercentage = (value: number) => {
+    if (dataMax === dataMin) return "0%";
+    const percentage = ((value - dataMin) / (dataMax - dataMin)) * 100;
+    return `${Math.max(0, Math.min(100, percentage))}%`;
   };
 
   return (
@@ -460,23 +467,46 @@ export default function GlucoPage() {
                         <ResponsiveContainer width="100%" height="95%">
                           <AreaChart data={filteredGraph} margin={{ top: 15, right: 5, left: -20, bottom: 0 }}>
                             <defs>
+                              <linearGradient id="lineGluc" x1="0%" y1="104%" x2="0%" y2="-2%">
+                                <stop offset="0%" stopColor={getGlucoseColor(dataMin)} />
+                                
+                                {targetConfig.hypo > dataMin && targetConfig.hypo < dataMax && (
+                                  <>
+                                    <stop offset={breakPointPercentage(targetConfig.hypo)} stopColor={getGlucoseColor(targetConfig.hypo - 1)} />
+                                    <stop offset={breakPointPercentage(targetConfig.hypo)} stopColor={getGlucoseColor(targetConfig.hypo + 1)} />
+                                  </>
+                                )}
+                                
+                                {targetConfig.low > dataMin && targetConfig.low < dataMax && (
+                                  <>
+                                    <stop offset={breakPointPercentage(targetConfig.low)} stopColor={getGlucoseColor(targetConfig.low - 1)} />
+                                    <stop offset={breakPointPercentage(targetConfig.low)} stopColor={getGlucoseColor(targetConfig.low + 1)} />
+                                  </>
+                                )}
+                                
+                                {targetConfig.high > dataMin && targetConfig.high < dataMax && (
+                                  <>
+                                    <stop offset={breakPointPercentage(targetConfig.high)} stopColor={getGlucoseColor(targetConfig.high - 1)} />
+                                    <stop offset={breakPointPercentage(targetConfig.high)} stopColor={getGlucoseColor(targetConfig.high + 1)} />
+                                  </>
+                                )}
+                                
+                                {targetConfig.hyper > dataMin && targetConfig.hyper < dataMax && (
+                                  <>
+                                    <stop offset={breakPointPercentage(targetConfig.hyper)} stopColor={getGlucoseColor(targetConfig.hyper - 1)} />
+                                    <stop offset={breakPointPercentage(targetConfig.hyper)} stopColor={getGlucoseColor(targetConfig.hyper + 1)} />
+                                  </>
+                                )}
+                                
+                                <stop offset="100%" stopColor={getGlucoseColor(dataMax)} />
+                              </linearGradient>
+
                               <linearGradient id="colorGluc" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="var(--muted-foreground)" stopOpacity={0.1}/>
                                 <stop offset="95%" stopColor="var(--muted-foreground)" stopOpacity={0}/>
                               </linearGradient>
-                              <linearGradient id="lineGluc" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset={getOffset(yMax)} stopColor="#ef4444" />
-                                <stop offset={getOffset(targetConfig.hyper)} stopColor="#ef4444" />
-                                <stop offset={getOffset(targetConfig.hyper)} stopColor="#f59e0b" />
-                                <stop offset={getOffset(targetConfig.high)} stopColor="#f59e0b" />
-                                <stop offset={getOffset(targetConfig.high)} stopColor="#10b981" />
-                                <stop offset={getOffset(targetConfig.low)} stopColor="#10b981" />
-                                <stop offset={getOffset(targetConfig.low)} stopColor="#f59e0b" />
-                                <stop offset={getOffset(targetConfig.hypo)} stopColor="#f59e0b" />
-                                <stop offset={getOffset(targetConfig.hypo)} stopColor="#ef4444" />
-                                <stop offset={getOffset(yMin)} stopColor="#ef4444" />
-                              </linearGradient>
                             </defs>
+                            
                             <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="var(--muted)" opacity={0.15} />
                             <XAxis 
                               dataKey="time" 
@@ -589,11 +619,12 @@ export default function GlucoPage() {
                               type="monotone" 
                               dataKey="value" 
                               stroke="url(#lineGluc)" 
-                              strokeWidth={2.5}
+                              strokeWidth={3}
                               strokeOpacity={showLine ? 1 : 0}
-                              fillOpacity={1} 
-                              fill="url(#colorGluc)" 
+                              fill="url(#colorGluc)"
+                              baseValue={yMin}
                               animationDuration={800}
+                              connectNulls={true}
                               dot={<CustomDot />}
                               activeDot={{ r: 4, strokeWidth: 2, fill: '#94a3b8', stroke: 'var(--background)' }}
                             />
