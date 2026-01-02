@@ -169,21 +169,6 @@ export default function GlucoPage() {
     return '#10b981';
   };
 
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
-    const val = payload?.value;
-    if (cx === undefined || cy === undefined || val === undefined) return null;
-    return (
-      <circle 
-        cx={cx} 
-        cy={cy} 
-        r={2.5} 
-        fill={getGlucoseColor(val)} 
-        stroke="var(--background)" 
-        strokeWidth={1} 
-      />
-    );
-  };
 
   if (isInitializing) {
     return (
@@ -305,6 +290,77 @@ export default function GlucoPage() {
     if (dataMax === dataMin) return "0%";
     const percentage = ((value - dataMin) / (dataMax - dataMin)) * 100;
     return `${Math.max(0, Math.min(100, percentage))}%`;
+  };
+
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload, index } = props;
+    const val = payload?.value;
+    if (cx === undefined || cy === undefined || val === undefined) return null;
+    
+    const dataLength = filteredGraph.length;
+    const isFirst = index === 0;
+    const isLast = index === dataLength - 1;
+    
+    // Siempre mostrar el primer y último punto
+    if (isFirst || isLast) {
+      return (
+        <circle 
+          cx={cx} 
+          cy={cy} 
+          r={2.5} 
+          fill={getGlucoseColor(val)} 
+          stroke="var(--background)" 
+          strokeWidth={1} 
+        />
+      );
+    }
+    
+    // Calcular densidad local
+    const prev = filteredGraph[index - 1];
+    const next = filteredGraph[index + 1];
+    
+    // Calcular distancia a los vecinos
+    const timeDiffPrev = prev ? Math.abs(payload.time - prev.time) : Infinity;
+    const timeDiffNext = next ? Math.abs(next.time - payload.time) : Infinity;
+    const valueDiffPrev = prev ? Math.abs(val - prev.value) : Infinity;
+    const valueDiffNext = next ? Math.abs(val - next.value) : Infinity;
+    
+    // Normalizar las diferencias
+    const timeThreshold = 600000; // 10 minutos
+    const valueThreshold = 20; // 20 mg/dL
+    
+    const normalizedTimePrev = timeDiffPrev / timeThreshold;
+    const normalizedTimeNext = timeDiffNext / timeThreshold;
+    const normalizedValuePrev = valueDiffPrev / valueThreshold;
+    const normalizedValueNext = valueDiffNext / valueThreshold;
+    
+    // Distancia euclidiana normalizada
+    const distPrev = Math.sqrt(normalizedTimePrev ** 2 + normalizedValuePrev ** 2);
+    const distNext = Math.sqrt(normalizedTimeNext ** 2 + normalizedValueNext ** 2);
+    const minDist = Math.min(distPrev, distNext);
+    
+    // Ocultar dots en áreas muy densas
+    if (minDist < 0.25) {
+      // Área muy densa - mostrar solo algunos dots usando muestreo
+      const skipFactor = dataLength > 100 ? 5 : (dataLength > 50 ? 4 : 3);
+      if (index % skipFactor !== 0) return null;
+    } else if (minDist < 0.5) {
+      // Área moderadamente densa - mostrar más dots
+      const skipFactor = dataLength > 100 ? 3 : 2;
+      if (index % skipFactor !== 0) return null;
+    }
+    // Si minDist >= 0.5, mostrar todos los dots (área dispersa)
+
+    return (
+      <circle 
+        cx={cx} 
+        cy={cy} 
+        r={2.5} 
+        fill={getGlucoseColor(val)} 
+        stroke="var(--background)" 
+        strokeWidth={1} 
+      />
+    );
   };
 
   return (
