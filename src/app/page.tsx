@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { getLatestGlucoseAction } from './actions';
 import Cookies from 'js-cookie';
 import { 
@@ -57,6 +58,8 @@ export default function GlucoPage() {
     hypo: 60,
     hyper: 250
   });
+
+  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(60);
 
   // Load session and config
   useEffect(() => {
@@ -94,6 +97,7 @@ export default function GlucoPage() {
   const fetchData = async (creds = credentials, sessionData = session) => {
     setLoading(true);
     setError(null);
+    setSecondsUntilRefresh(60); // Reset countdown on manual refresh
     const result = await getLatestGlucoseAction(creds.email, creds.password, sessionData);
     if (result.success) {
       setData(result.data);
@@ -131,10 +135,28 @@ export default function GlucoPage() {
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let countdown: NodeJS.Timeout;
+    
     if (isLoggedIn && activeView === 'dashboard') {
-      interval = setInterval(() => fetchData(), 60000); 
+      // Reset countdown
+      setSecondsUntilRefresh(60);
+      
+      // Auto-refresh every 60 seconds
+      interval = setInterval(() => {
+        fetchData();
+        setSecondsUntilRefresh(60);
+      }, 60000);
+      
+      // Update countdown every second
+      countdown = setInterval(() => {
+        setSecondsUntilRefresh(prev => prev > 0 ? prev - 1 : 60);
+      }, 1000);
     }
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      clearInterval(countdown);
+    };
   }, [isLoggedIn, credentials, activeView]);
 
   const getTrendIcon = (trend: number) => {
@@ -675,7 +697,9 @@ export default function GlucoPage() {
                               strokeOpacity={showLine ? 1 : 0}
                               fill="url(#colorGluc)"
                               baseValue={yMin}
-                              animationDuration={800}
+                              animationDuration={300}
+                              animationEasing="linear"
+                              isAnimationActive={true}
                               connectNulls={true}
                               dot={<CustomDot />}
                               activeDot={{ r: 4, strokeWidth: 2, fill: '#94a3b8', stroke: 'var(--background)' }}
@@ -729,6 +753,39 @@ export default function GlucoPage() {
                       <Separator className="opacity-30" />
                       
                       <div className="space-y-3 pt-1">
+                        {/* Countdown indicator */}
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+                          <div className="relative w-10 h-10 shrink-0">
+                            <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                              <circle
+                                cx="18"
+                                cy="18"
+                                r="16"
+                                fill="none"
+                                className="stroke-muted"
+                                strokeWidth="2"
+                              />
+                              <circle
+                                cx="18"
+                                cy="18"
+                                r="16"
+                                fill="none"
+                                className="stroke-primary"
+                                strokeWidth="2"
+                                strokeDasharray={`${(secondsUntilRefresh / 60) * 100} 100`}
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-[9px] font-black tabular-nums text-primary">{secondsUntilRefresh}</span>
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[8px] font-bold text-muted-foreground uppercase leading-none mb-1 opacity-60">Auto-Sync</p>
+                            <p className="text-[10px] font-bold text-foreground">Actualización en {secondsUntilRefresh}s</p>
+                          </div>
+                        </div>
+                        
                         <Button 
                           className="w-full h-9 text-[9px] font-bold uppercase tracking-[0.15em] shadow-sm active:scale-95 transition-transform"
                           onClick={() => fetchData()}
@@ -901,8 +958,4 @@ export default function GlucoPage() {
       </footer>
     </main>
   );
-}
-
-function Separator({ className }: { className?: string }) {
-  return <div className={`h-[1px] w-full bg-border ${className}`} />
 }
