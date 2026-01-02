@@ -54,7 +54,8 @@ export default function GlucoPage() {
   const [targetConfig, setTargetConfig] = useState({
     low: 70,
     high: 180,
-    hypo: 60
+    hypo: 60,
+    hyper: 250
   });
 
   // Load session and config
@@ -149,13 +150,40 @@ export default function GlucoPage() {
   };
 
   const getGlucoseStatus = (val: number) => {
-    if (val <= targetConfig.hypo) return { label: 'HIPO CRÍTICA', color: 'text-red-600', badge: 'bg-red-600', isCritical: true };
-    if (val < targetConfig.low) return { label: 'BAJA', color: 'text-orange-500', badge: 'bg-orange-500', isCritical: false };
-    if (val > targetConfig.high) return { label: 'ALTA', color: 'text-destructive', badge: 'bg-destructive', isCritical: false };
-    return { label: 'NORMATIVO', color: 'text-emerald-500', badge: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5', isCritical: false };
+    if (val <= targetConfig.hypo) return { label: 'HIPO', color: 'text-red-500', badge: 'bg-red-500', isCritical: true };
+    if (val < targetConfig.low) return { label: 'BAJA', color: 'text-amber-500', badge: 'bg-amber-500', isCritical: false };
+    if (val >= targetConfig.hyper) return { label: 'HIPER', color: 'text-red-500', badge: 'bg-red-500', isCritical: true };
+    if (val > targetConfig.high) return { label: 'ALTA', color: 'text-amber-500', badge: 'bg-amber-500', isCritical: false };
+    return { label: 'OBJETIVO', color: 'text-emerald-500', badge: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5', isCritical: false };
   };
 
   const [timeRange, setTimeRange] = useState(24); // hours
+  const [showLine, setShowLine] = useState(true);
+
+  const getGlucoseColor = (val: number) => {
+    if (val === undefined || val === null) return '#94a3b8';
+    if (val <= targetConfig.hypo) return '#ef4444';
+    if (val < targetConfig.low) return '#f59e0b';
+    if (val >= targetConfig.hyper) return '#ef4444';
+    if (val > targetConfig.high) return '#f59e0b';
+    return '#10b981';
+  };
+
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    const val = payload?.value;
+    if (cx === undefined || cy === undefined || val === undefined) return null;
+    return (
+      <circle 
+        cx={cx} 
+        cy={cy} 
+        r={2.5} 
+        fill={getGlucoseColor(val)} 
+        stroke="var(--background)" 
+        strokeWidth={1} 
+      />
+    );
+  };
 
   if (isInitializing) {
     return (
@@ -265,6 +293,13 @@ export default function GlucoPage() {
     inRange: Math.round((filteredGraph.filter((p: any) => p.value >= targetConfig.low && p.value <= targetConfig.high).length / filteredGraph.length) * 100)
   } : null;
 
+  const yMin = 35;
+  const yMax = 320;
+  const getOffset = (val: number) => {
+    const offset = 1 - (val - yMin) / (yMax - yMin);
+    return `${Math.max(0, Math.min(100, offset * 100))}%`;
+  };
+
   return (
     <main className="h-screen flex flex-col bg-background text-foreground transition-colors duration-300 overflow-hidden text-xs">
       {/* Header */}
@@ -326,7 +361,7 @@ export default function GlucoPage() {
                   {/* Top Metrics Bar */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     <Card className="relative overflow-hidden border bg-card/50 shadow-sm md:col-span-6">
-                      <div className={`absolute top-0 left-0 bottom-0 w-1 ${status.label === 'NORMATIVO' ? 'bg-emerald-500' : status.badge}`} />
+                      <div className={`absolute top-0 left-0 bottom-0 w-1 ${status.label === 'OBJETIVO' ? 'bg-emerald-500' : status.badge}`} />
                       <CardContent className="p-3.5 flex items-center justify-between">
                         <div>
                           <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Sensing Real-Time</p>
@@ -344,7 +379,7 @@ export default function GlucoPage() {
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
                           <div className="flex gap-1.5">
-                            <Badge variant={status.label === 'NORMATIVO' ? 'outline' : 'default'} className={`${status.badge} ${status.label === 'NORMATIVO' ? '' : 'text-white'} px-2 py-0.5 text-[8px] font-bold rounded-sm uppercase tracking-wider`}>
+                            <Badge variant={status.label === 'OBJETIVO' ? 'outline' : 'default'} className={`${status.badge} ${status.label === 'OBJETIVO' ? '' : 'text-white'} px-2 py-0.5 text-[8px] font-bold rounded-sm uppercase tracking-wider`}>
                               {status.label}
                             </Badge>
                             <div className="p-1.5 bg-muted rounded-md border border-border/50">
@@ -394,20 +429,30 @@ export default function GlucoPage() {
                       </div>
                       
                       {/* Time Filters */}
-                      <div className="flex items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
-                        {[1, 6, 12, 24].map((h) => (
-                          <button
-                            key={h}
-                            onClick={() => setTimeRange(h)}
-                            className={`px-3 py-1 text-[9px] font-bold transition-all rounded-md ${
-                              timeRange === h 
-                                ? 'bg-background text-primary shadow-sm' 
-                                : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                          >
-                            {h}H
-                          </button>
-                        ))}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
+                          {[1, 6, 12, 24].map((h) => (
+                            <button
+                              key={h}
+                              onClick={() => setTimeRange(h)}
+                              className={`px-3 py-1 text-[9px] font-bold transition-all rounded-md ${
+                                timeRange === h 
+                                  ? 'bg-background text-primary shadow-sm' 
+                                  : 'text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {h}H
+                            </button>
+                          ))}
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className={`h-7 px-3 text-[9px] font-bold uppercase tracking-wider border transition-all ${showLine ? 'bg-primary/10 text-primary border-primary/20' : 'text-muted-foreground border-border/50 hover:bg-muted'}`}
+                          onClick={() => setShowLine(!showLine)}
+                        >
+                          {showLine ? 'Ocultar Línea' : 'Mostrar Línea'}
+                        </Button>
                       </div>
                     </CardHeader>
                     <CardContent className="flex-1 p-0 pt-4 flex flex-col">
@@ -416,8 +461,20 @@ export default function GlucoPage() {
                           <AreaChart data={filteredGraph} margin={{ top: 15, right: 5, left: -20, bottom: 0 }}>
                             <defs>
                               <linearGradient id="colorGluc" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.2}/>
-                                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                                <stop offset="5%" stopColor="var(--muted-foreground)" stopOpacity={0.1}/>
+                                <stop offset="95%" stopColor="var(--muted-foreground)" stopOpacity={0}/>
+                              </linearGradient>
+                              <linearGradient id="lineGluc" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset={getOffset(yMax)} stopColor="#ef4444" />
+                                <stop offset={getOffset(targetConfig.hyper)} stopColor="#ef4444" />
+                                <stop offset={getOffset(targetConfig.hyper)} stopColor="#f59e0b" />
+                                <stop offset={getOffset(targetConfig.high)} stopColor="#f59e0b" />
+                                <stop offset={getOffset(targetConfig.high)} stopColor="#10b981" />
+                                <stop offset={getOffset(targetConfig.low)} stopColor="#10b981" />
+                                <stop offset={getOffset(targetConfig.low)} stopColor="#f59e0b" />
+                                <stop offset={getOffset(targetConfig.hypo)} stopColor="#f59e0b" />
+                                <stop offset={getOffset(targetConfig.hypo)} stopColor="#ef4444" />
+                                <stop offset={getOffset(yMin)} stopColor="#ef4444" />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="var(--muted)" opacity={0.15} />
@@ -439,7 +496,7 @@ export default function GlucoPage() {
                               fontWeight="600"
                               tickLine={false}
                               axisLine={false}
-                              domain={[35, 320]}
+                              domain={[yMin, yMax]}
                               ticks={[40, 70, 100, 140, 180, 220, 260, 300]}
                               orientation="right"
                             />
@@ -458,24 +515,38 @@ export default function GlucoPage() {
                               formatter={(v: any) => [`${v} ${unit}`, 'GLUCOSA']}
                             />
                             
-                            {/* Visual Reference Zones */}
-                            <ReferenceArea 
-                              y1={targetConfig.low} 
-                              y2={targetConfig.high} 
-                              fill="var(--primary)" 
-                              fillOpacity={0.05} 
-                            />
+                            {/* Background Bands */}
+                            <ReferenceArea y1={targetConfig.hyper} y2={yMax} fill="#ef4444" fillOpacity={0.03} />
+                            <ReferenceArea y1={targetConfig.high} y2={targetConfig.hyper} fill="#f59e0b" fillOpacity={0.02} />
+                            <ReferenceArea y1={targetConfig.low} y2={targetConfig.high} fill="#10b981" fillOpacity={0.05} />
+                            <ReferenceArea y1={targetConfig.hypo} y2={targetConfig.low} fill="#f59e0b" fillOpacity={0.02} />
+                            <ReferenceArea y1={yMin} y2={targetConfig.hypo} fill="#ef4444" fillOpacity={0.03} />
                             
                             <ReferenceLine 
-                              y={targetConfig.high} 
-                              stroke="#ff4d4d" 
+                              y={targetConfig.hyper} 
+                              stroke="#ef4444" 
                               strokeDasharray="6 3" 
                               strokeWidth={1}
-                              opacity={0.8} 
+                              opacity={0.6} 
                               label={{ 
-                                value: 'HÍPER', 
+                                value: 'HIPER', 
                                 position: 'insideTopRight', 
-                                fill: '#ff4d4d', 
+                                fill: '#ef4444', 
+                                fontSize: 9, 
+                                fontWeight: '900',
+                                dy: -10
+                              }} 
+                            />
+                            <ReferenceLine 
+                              y={targetConfig.high} 
+                              stroke="#f59e0b" 
+                              strokeDasharray="6 3" 
+                              strokeWidth={1}
+                              opacity={0.6} 
+                              label={{ 
+                                value: 'ALTA', 
+                                position: 'insideTopRight', 
+                                fill: '#f59e0b', 
                                 fontSize: 9, 
                                 fontWeight: '900',
                                 dy: -10
@@ -486,7 +557,7 @@ export default function GlucoPage() {
                               stroke="#f59e0b" 
                               strokeDasharray="6 3" 
                               strokeWidth={1}
-                              opacity={0.8} 
+                              opacity={0.6} 
                               label={{ 
                                 value: 'BAJA', 
                                 position: 'insideTopRight', 
@@ -502,7 +573,7 @@ export default function GlucoPage() {
                                 stroke="#ef4444" 
                                 strokeDasharray="3 2" 
                                 strokeWidth={1}
-                                opacity={1} 
+                                opacity={0.6} 
                                 label={{ 
                                   value: 'HIPO', 
                                   position: 'insideBottomRight', 
@@ -517,13 +588,14 @@ export default function GlucoPage() {
                             <Area 
                               type="monotone" 
                               dataKey="value" 
-                              stroke="var(--primary)" 
+                              stroke="url(#lineGluc)" 
                               strokeWidth={2.5}
+                              strokeOpacity={showLine ? 1 : 0}
                               fillOpacity={1} 
                               fill="url(#colorGluc)" 
                               animationDuration={800}
-                              dot={{ r: 2.5, fill: 'var(--primary)', fillOpacity: 1, strokeWidth: 1, stroke: 'var(--background)' }}
-                              activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)' }}
+                              dot={<CustomDot />}
+                              activeDot={{ r: 4, strokeWidth: 2, fill: '#94a3b8', stroke: 'var(--background)' }}
                             />
                           </AreaChart>
                         </ResponsiveContainer>
@@ -637,11 +709,11 @@ export default function GlucoPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-red-600">Hipoglucemia</Label>
-                          <Badge className="bg-red-600 h-4 text-[8px] font-black">CRÍTICO</Badge>
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-red-500">HIPO</Label>
+                          <Badge className="bg-red-500 h-4 text-[8px] font-black">CRÍTICO</Badge>
                         </div>
                         <Input 
                           type="number" 
@@ -649,13 +721,13 @@ export default function GlucoPage() {
                           onChange={(e) => saveConfig({...targetConfig, hypo: parseInt(e.target.value)})}
                           className="bg-muted/50 font-black tabular-nums h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Normalmente ≤ 60 mg/dL</p>
+                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Umbral hipoglucemia grave</p>
                       </div>
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-orange-500">Mínimo Objetivo</Label>
-                          <Badge className="bg-orange-500 h-4 text-[8px] font-black">WARNING</Badge>
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-amber-500">Bajo</Label>
+                          <Badge className="bg-amber-500 h-4 text-[8px] font-black">WARNING</Badge>
                         </div>
                         <Input 
                           type="number" 
@@ -663,13 +735,13 @@ export default function GlucoPage() {
                           onChange={(e) => saveConfig({...targetConfig, low: parseInt(e.target.value)})}
                           className="bg-muted/50 font-black tabular-nums h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Rango de inicio objetivo</p>
+                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Inicio de rango objetivo</p>
                       </div>
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-destructive">Máximo Objetivo</Label>
-                          <Badge variant="destructive" className="h-4 text-[8px] font-black">HÍPER</Badge>
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-amber-500">Alto</Label>
+                          <Badge className="bg-amber-500 h-4 text-[8px] font-black">WARNING</Badge>
                         </div>
                         <Input 
                           type="number" 
@@ -677,7 +749,21 @@ export default function GlucoPage() {
                           onChange={(e) => saveConfig({...targetConfig, high: parseInt(e.target.value)})}
                           className="bg-muted/50 font-black tabular-nums h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Límite superior deseado</p>
+                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Fin de rango objetivo</p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-red-500">HIPER</Label>
+                          <Badge className="bg-red-500 h-4 text-[8px] font-black">CRÍTICO</Badge>
+                        </div>
+                        <Input 
+                          type="number" 
+                          value={targetConfig.hyper}
+                          onChange={(e) => saveConfig({...targetConfig, hyper: parseInt(e.target.value)})}
+                          className="bg-muted/50 font-black tabular-nums h-12 text-lg"
+                        />
+                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">Umbral hiperglucemia grave</p>
                       </div>
                     </div>
 
