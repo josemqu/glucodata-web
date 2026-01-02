@@ -121,31 +121,36 @@ export default function GlucoPage() {
   ) => {
     setLoading(true);
     setError(null);
-    const result = await getLatestGlucoseAction(
-      creds.email,
-      creds.password,
-      sessionData
-    );
-    if (result.success) {
-      setData(result.data);
-      setIsLoggedIn(true);
-      setLastFetch(new Date());
+    try {
+      const result = await getLatestGlucoseAction(
+        creds.email,
+        creds.password,
+        sessionData
+      );
+      if (result.success) {
+        setData(result.data);
+        setIsLoggedIn(true);
+        setLastFetch(new Date());
 
-      const newSession = result.data?.session;
-      if (newSession && newSession.token) {
-        setSession(newSession);
-        Cookies.set("gluco_session", JSON.stringify(newSession), {
-          expires: 7,
-        });
+        const newSession = result.data?.session;
+        if (newSession && newSession.token) {
+          setSession(newSession);
+          Cookies.set("gluco_session", JSON.stringify(newSession), {
+            expires: 7,
+          });
+        }
+      } else {
+        setError(result.error);
+        if (isLoggedIn) {
+          setIsLoggedIn(false);
+          Cookies.remove("gluco_session");
+        }
       }
-    } else {
-      setError(result.error);
-      if (isLoggedIn) {
-        setIsLoggedIn(false);
-        Cookies.remove("gluco_session");
-      }
+    } catch (e: any) {
+      setError(e?.message || "Error actualizando datos");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -168,6 +173,19 @@ export default function GlucoPage() {
   useEffect(() => {
     let tick: ReturnType<typeof setInterval> | undefined;
 
+    const triggerIfDue = () => {
+      const nextAt = nextRefreshAtRef.current;
+      if (!nextAt) return;
+      if (Date.now() < nextAt) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      fetchData().finally(() => {
+        inFlightRef.current = false;
+        nextRefreshAtRef.current = Date.now() + 60000;
+        setSecondsUntilRefresh(60);
+      });
+    };
+
     if (isLoggedIn && activeView === "dashboard") {
       nextRefreshAtRef.current = Date.now() + 60000;
       setSecondsUntilRefresh(60);
@@ -189,6 +207,28 @@ export default function GlucoPage() {
           });
         }
       }, 250);
+
+      const handleVisibilityOrFocus = () => {
+        if (
+          typeof document !== "undefined" &&
+          document.visibilityState !== "visible"
+        ) {
+          return;
+        }
+        triggerIfDue();
+      };
+
+      document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.addEventListener("focus", handleVisibilityOrFocus);
+
+      return () => {
+        if (tick) clearInterval(tick);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityOrFocus
+        );
+        window.removeEventListener("focus", handleVisibilityOrFocus);
+      };
     }
 
     return () => {
@@ -253,6 +293,28 @@ export default function GlucoPage() {
 
   const [timeRange, setTimeRange] = useState(24); // hours
   const [showLine, setShowLine] = useState(true);
+
+  useEffect(() => {
+    const saved = Cookies.get("gluco_chart_prefs");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed?.timeRange === "number") {
+        setTimeRange(parsed.timeRange);
+      }
+      if (typeof parsed?.showLine === "boolean") {
+        setShowLine(parsed.showLine);
+      }
+    } catch {
+      Cookies.remove("gluco_chart_prefs");
+    }
+  }, []);
+
+  useEffect(() => {
+    Cookies.set("gluco_chart_prefs", JSON.stringify({ timeRange, showLine }), {
+      expires: 365,
+    });
+  }, [timeRange, showLine]);
 
   const getGlucoseColor = (val: number) => {
     if (val === undefined || val === null) return "#94a3b8";
