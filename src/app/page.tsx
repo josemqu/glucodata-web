@@ -583,9 +583,6 @@ export default function GlucoPage() {
         }
       : null;
 
-  const yMin = 35;
-  const yMax = 320;
-
   // Calculate the actual range of values in the current data set
   // This is used for the "User Approach" to normalize the gradient
   const dataMin =
@@ -596,6 +593,60 @@ export default function GlucoPage() {
     filteredGraphWithValues.length > 0
       ? Math.max(...filteredGraphWithValues.map((p: any) => p.value))
       : targetConfig.high;
+
+  const yDomain = (() => {
+    const thresholds = [
+      targetConfig.hypo,
+      targetConfig.low,
+      targetConfig.high,
+      targetConfig.hyper,
+    ].filter((v) => typeof v === "number" && !Number.isNaN(v));
+
+    const minCandidate =
+      filteredGraphWithValues.length > 0
+        ? Math.min(dataMin, ...thresholds)
+        : Math.min(targetConfig.low, ...thresholds);
+    const maxCandidate =
+      filteredGraphWithValues.length > 0
+        ? Math.max(dataMax, ...thresholds)
+        : Math.max(targetConfig.high, ...thresholds);
+
+    const pad = 15;
+    const paddedMin = minCandidate - pad;
+    const paddedMax = maxCandidate + pad;
+
+    let min = Math.floor(paddedMin / 5) * 5;
+    let max = Math.ceil(paddedMax / 5) * 5;
+
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+      min = Math.floor((targetConfig.low - 30) / 5) * 5;
+      max = Math.ceil((targetConfig.high + 30) / 5) * 5;
+    }
+
+    const minSpan = 40;
+    if (max - min < minSpan) {
+      const mid = (min + max) / 2;
+      min = Math.floor((mid - minSpan / 2) / 5) * 5;
+      max = Math.ceil((mid + minSpan / 2) / 5) * 5;
+    }
+
+    if (min < 0) min = 0;
+    return { min, max };
+  })();
+
+  const yMin = yDomain.min;
+  const yMax = yDomain.max;
+
+  const yTicks = (() => {
+    const step = 20;
+    const start = Math.ceil(yMin / step) * step;
+    const end = Math.floor(yMax / step) * step;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end)
+      return undefined;
+    const ticks: number[] = [];
+    for (let v = start; v <= end; v += step) ticks.push(v);
+    return ticks.length > 0 ? ticks : undefined;
+  })();
 
   const breakPointPercentage = (value: number) => {
     if (dataMax === dataMin) return "0%";
@@ -1076,7 +1127,7 @@ export default function GlucoPage() {
                               tickLine={false}
                               axisLine={false}
                               domain={[yMin, yMax]}
-                              ticks={[40, 70, 100, 140, 180, 220, 260, 300]}
+                              ticks={yTicks}
                               orientation="right"
                             />
                             <Tooltip
