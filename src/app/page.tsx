@@ -1245,7 +1245,9 @@ export default function GlucoPage() {
                                 data={scatterData}
                                 dataKey="value"
                                 shape={<SimpleDot />}
-                                isAnimationActive={false}
+                                isAnimationActive={enableAnimation}
+                                animationDuration={enableAnimation ? 500 : 0}
+                                animationEasing="ease-in-out"
                               />
                             )}
                           </AreaChart>
