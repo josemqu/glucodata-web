@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowUp,
@@ -35,6 +35,7 @@ import Cookies from "js-cookie";
 import {
   AreaChart,
   Area,
+  Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -294,6 +295,115 @@ export default function GlucoPage() {
   const [timeRange, setTimeRange] = useState(24); // hours
   const [showLine, setShowLine] = useState(true);
 
+  const graph = data?.graph;
+
+  const windowEnd = Date.now();
+  const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
+
+  const normalizedGraph = useMemo(() => {
+    return (graph || []).map((p: any) => ({
+      ...p,
+      time:
+        typeof p?.time === "number"
+          ? p.time
+          : typeof p?.time === "string"
+          ? new Date(p.time).getTime()
+          : Number(p.time),
+    }));
+  }, [graph]);
+
+  const filteredGraph = useMemo(() => {
+    return normalizedGraph.filter((p: any) => {
+      if (!p || typeof p.time !== "number" || Number.isNaN(p.time))
+        return false;
+      return p.time >= windowStart && p.time <= windowEnd;
+    });
+  }, [normalizedGraph, windowStart, windowEnd]);
+
+  const filteredGraphWithValues = useMemo(() => {
+    return filteredGraph.filter(
+      (p: any) => p.value !== null && p.value !== undefined
+    );
+  }, [filteredGraph]);
+
+  const chartGraph = useMemo(() => {
+    const cleaned = normalizedGraph
+      .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
+      .sort((a: any, b: any) => a.time - b.time)
+      .filter(
+        (p: any, idx: number, arr: any[]) =>
+          idx === 0 || p.time !== arr[idx - 1].time
+      );
+
+    const maxPoints = 650;
+    if (cleaned.length <= maxPoints) {
+      return [
+        ...cleaned,
+        { time: windowStart, value: null },
+        { time: windowEnd, value: null },
+      ];
+    }
+
+    const start = cleaned[0]?.time;
+    const end = cleaned[cleaned.length - 1]?.time;
+    if (typeof start !== "number" || typeof end !== "number" || start >= end) {
+      return [
+        ...cleaned.slice(-maxPoints),
+        { time: windowStart, value: null },
+        { time: windowEnd, value: null },
+      ];
+    }
+
+    const bucketMs = Math.max(1, Math.floor((end - start) / maxPoints));
+
+    const sampled: any[] = [];
+    let i = 0;
+    while (i < cleaned.length) {
+      const bucketStart = cleaned[i].time;
+      const bucketEnd = bucketStart + bucketMs;
+
+      let minP: any | null = null;
+      let maxP: any | null = null;
+
+      while (i < cleaned.length && cleaned[i].time < bucketEnd) {
+        const p = cleaned[i];
+        const v = p?.value;
+        if (v !== null && v !== undefined) {
+          if (!minP || v < minP.value) minP = p;
+          if (!maxP || v > maxP.value) maxP = p;
+        }
+        i++;
+      }
+
+      if (minP && maxP) {
+        if (minP.time <= maxP.time) {
+          sampled.push(minP);
+          if (maxP.time !== minP.time) sampled.push(maxP);
+        } else {
+          sampled.push(maxP);
+          sampled.push(minP);
+        }
+      } else if (minP) {
+        sampled.push(minP);
+      } else if (maxP) {
+        sampled.push(maxP);
+      }
+
+      if (i === cleaned.length) break;
+    }
+
+    const unique = sampled
+      .filter((p) => typeof p?.time === "number" && !Number.isNaN(p.time))
+      .sort((a, b) => a.time - b.time)
+      .filter((p, idx, arr) => idx === 0 || p.time !== arr[idx - 1].time);
+
+    return [
+      ...unique,
+      { time: windowStart, value: null },
+      { time: windowEnd, value: null },
+    ];
+  }, [normalizedGraph, windowStart, windowEnd]);
+
   useEffect(() => {
     const saved = Cookies.get("gluco_chart_prefs");
     if (!saved) return;
@@ -444,34 +554,12 @@ export default function GlucoPage() {
 
   if (!data) return null;
 
-  const { glucose, patient, graph } = data;
+  const { glucose, patient } = data;
   const unit = glucose?.unit || "mg/dL";
-  const status = getGlucoseStatus(glucose.value);
-
-  const windowEnd = Date.now();
-  const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
-
-  const filteredGraph = graph
-    ? graph.filter((p: any) => {
-        const hoursAgo = (new Date().getTime() - p.time) / (1000 * 60 * 60);
-        return hoursAgo <= timeRange;
-      })
-    : [];
-
-  const filteredGraphWithValues = filteredGraph.filter(
-    (p: any) => p.value !== null && p.value !== undefined
-  );
-
-  const chartGraph = [
-    ...filteredGraph,
-    { time: windowStart, value: null },
-    { time: windowEnd, value: null },
-  ]
-    .sort((a: any, b: any) => a.time - b.time)
-    .filter(
-      (p: any, idx: number, arr: any[]) =>
-        idx === 0 || p.time !== arr[idx - 1].time
-    );
+  const status =
+    typeof glucose?.value === "number"
+      ? getGlucoseStatus(glucose.value)
+      : getGlucoseStatus(targetConfig.low);
 
   const stats =
     filteredGraphWithValues.length > 0
@@ -513,6 +601,36 @@ export default function GlucoPage() {
     if (dataMax === dataMin) return "0%";
     const percentage = ((value - dataMin) / (dataMax - dataMin)) * 100;
     return `${Math.max(0, Math.min(100, percentage))}%`;
+  };
+
+  const showDots = chartGraph.length <= 220;
+  const enableAnimation = chartGraph.length <= 900;
+
+  const scatterDataRaw = chartGraph.filter(
+    (p: any) => p?.value !== null && p?.value !== undefined
+  );
+
+  const maxScatterPoints = 250;
+  const scatterStep = Math.max(
+    1,
+    Math.ceil(scatterDataRaw.length / maxScatterPoints)
+  );
+  const scatterData =
+    scatterStep === 1
+      ? scatterDataRaw
+      : scatterDataRaw.filter((_: any, idx: number) => idx % scatterStep === 0);
+
+  const SimpleDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    const val = payload?.value;
+    if (
+      cx === undefined ||
+      cy === undefined ||
+      val === undefined ||
+      val === null
+    )
+      return null;
+    return <circle cx={cx} cy={cy} r={2} fill={getGlucoseColor(val)} />;
   };
 
   const CustomDot = (props: any) => {
@@ -937,6 +1055,7 @@ export default function GlucoPage() {
                               dataKey="time"
                               type="number"
                               domain={[windowStart, windowEnd]}
+                              allowDataOverflow={true}
                               tickFormatter={(t) =>
                                 new Date(t).toLocaleTimeString([], {
                                   hour: "2-digit",
@@ -1104,18 +1223,31 @@ export default function GlucoPage() {
                               strokeOpacity={showLine ? 1 : 0}
                               fill="url(#colorGluc)"
                               baseValue={yMin}
-                              animationDuration={300}
-                              animationEasing="linear"
-                              isAnimationActive={true}
+                              animationDuration={enableAnimation ? 500 : 0}
+                              animationEasing="ease-in-out"
+                              isAnimationActive={enableAnimation}
                               connectNulls={true}
-                              dot={<CustomDot />}
-                              activeDot={{
-                                r: 4,
-                                strokeWidth: 2,
-                                fill: "#94a3b8",
-                                stroke: "var(--background)",
-                              }}
+                              dot={showDots ? <CustomDot /> : false}
+                              activeDot={
+                                showDots
+                                  ? {
+                                      r: 4,
+                                      strokeWidth: 2,
+                                      fill: "#94a3b8",
+                                      stroke: "var(--background)",
+                                    }
+                                  : false
+                              }
                             />
+
+                            {!showLine && (
+                              <Scatter
+                                data={scatterData}
+                                dataKey="value"
+                                shape={<SimpleDot />}
+                                isAnimationActive={false}
+                              />
+                            )}
                           </AreaChart>
                         </ResponsiveContainer>
                       </div>
