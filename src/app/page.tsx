@@ -50,6 +50,8 @@ export default function GlucoPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [graphPoints, setGraphPoints] = useState<any[]>([]);
+  const [windowEndMs, setWindowEndMs] = useState<number>(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -74,6 +76,7 @@ export default function GlucoPage() {
   const inFlightRef = useRef(false);
   const credentialsRef = useRef(credentials);
   const sessionRef = useRef(session);
+  const graphPointsRef = useRef<any[]>(graphPoints);
 
   useEffect(() => {
     credentialsRef.current = credentials;
@@ -82,6 +85,10 @@ export default function GlucoPage() {
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  useEffect(() => {
+    graphPointsRef.current = graphPoints;
+  }, [graphPoints]);
 
   // Load session and config
   useEffect(() => {
@@ -133,6 +140,49 @@ export default function GlucoPage() {
         setIsLoggedIn(true);
         setLastFetch(new Date());
 
+        const incomingGraphRaw = Array.isArray(result.data?.graph)
+          ? result.data.graph
+          : [];
+
+        const incomingGraph = incomingGraphRaw
+          .map((p: any) => ({
+            ...p,
+            time:
+              typeof p?.time === "number"
+                ? p.time
+                : typeof p?.time === "string"
+                ? new Date(p.time).getTime()
+                : Number(p.time),
+          }))
+          .filter(
+            (p: any) => p && typeof p.time === "number" && !Number.isNaN(p.time)
+          )
+          .sort((a: any, b: any) => a.time - b.time)
+          .filter(
+            (p: any, idx: number, arr: any[]) =>
+              idx === 0 || p.time !== arr[idx - 1].time
+          );
+
+        const prev = graphPointsRef.current;
+        const prevLastTime = prev.length > 0 ? prev[prev.length - 1]?.time : -1;
+        const newPoints =
+          prev.length === 0
+            ? incomingGraph
+            : incomingGraph.filter((p: any) => p.time > prevLastTime);
+
+        if (newPoints.length > 0) {
+          setGraphPoints((current) => {
+            const next =
+              current.length === 0 ? newPoints : [...current, ...newPoints];
+            const maxKeep = 5000;
+            return next.length > maxKeep ? next.slice(-maxKeep) : next;
+          });
+          const nextWindowEnd = newPoints[newPoints.length - 1].time;
+          setWindowEndMs((curr) =>
+            nextWindowEnd > curr ? nextWindowEnd : curr
+          );
+        }
+
         const newSession = result.data?.session;
         if (newSession && newSession.token) {
           setSession(newSession);
@@ -156,6 +206,8 @@ export default function GlucoPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setGraphPoints([]);
+    setWindowEndMs(Date.now());
     fetchData().finally(() => {
       nextRefreshAtRef.current = Date.now() + 60000;
       setSecondsUntilRefresh(60);
@@ -166,6 +218,8 @@ export default function GlucoPage() {
     Cookies.remove("gluco_session");
     setIsLoggedIn(false);
     setData(null);
+    setGraphPoints([]);
+    setWindowEndMs(Date.now());
     setSession(null);
     setCredentials({ email: "", password: "" });
     setActiveView("dashboard");
@@ -295,30 +349,16 @@ export default function GlucoPage() {
   const [timeRange, setTimeRange] = useState(24); // hours
   const [showLine, setShowLine] = useState(true);
 
-  const graph = data?.graph;
-
-  const windowEnd = Date.now();
+  const windowEnd = windowEndMs;
   const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
 
-  const normalizedGraph = useMemo(() => {
-    return (graph || []).map((p: any) => ({
-      ...p,
-      time:
-        typeof p?.time === "number"
-          ? p.time
-          : typeof p?.time === "string"
-          ? new Date(p.time).getTime()
-          : Number(p.time),
-    }));
-  }, [graph]);
-
   const filteredGraph = useMemo(() => {
-    return normalizedGraph.filter((p: any) => {
+    return graphPoints.filter((p: any) => {
       if (!p || typeof p.time !== "number" || Number.isNaN(p.time))
         return false;
       return p.time >= windowStart && p.time <= windowEnd;
     });
-  }, [normalizedGraph, windowStart, windowEnd]);
+  }, [graphPoints, windowStart, windowEnd]);
 
   const filteredGraphWithValues = useMemo(() => {
     return filteredGraph.filter(
@@ -327,7 +367,7 @@ export default function GlucoPage() {
   }, [filteredGraph]);
 
   const chartGraph = useMemo(() => {
-    const cleaned = normalizedGraph
+    const cleaned = graphPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
       .sort((a: any, b: any) => a.time - b.time)
       .filter(
@@ -402,7 +442,7 @@ export default function GlucoPage() {
       { time: windowStart, value: null },
       { time: windowEnd, value: null },
     ];
-  }, [normalizedGraph, windowStart, windowEnd]);
+  }, [graphPoints, windowStart, windowEnd]);
 
   useEffect(() => {
     const saved = Cookies.get("gluco_chart_prefs");
