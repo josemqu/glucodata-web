@@ -352,6 +352,31 @@ export default function GlucoPage() {
   const windowEnd = windowEndMs;
   const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
 
+  const xTicks = useMemo(() => {
+    const stepMs = 10 * 60 * 1000;
+    const start = Math.ceil(windowStart / stepMs) * stepMs;
+
+    const ticks: number[] = [];
+    for (let t = start; t <= windowEnd; t += stepMs) {
+      ticks.push(t);
+    }
+    return ticks;
+  }, [windowStart, windowEnd]);
+
+  const xHourTicks = useMemo(() => {
+    const stepMs = 60 * 60 * 1000;
+    const d = new Date(windowStart);
+    d.setMinutes(0, 0, 0);
+    let t = d.getTime();
+    if (t < windowStart) t += stepMs;
+
+    const ticks: number[] = [];
+    for (; t <= windowEnd; t += stepMs) {
+      ticks.push(t);
+    }
+    return ticks;
+  }, [windowStart, windowEnd]);
+
   const filteredGraph = useMemo(() => {
     return graphPoints.filter((p: any) => {
       if (!p || typeof p.time !== "number" || Number.isNaN(p.time))
@@ -974,7 +999,7 @@ export default function GlucoPage() {
                       {/* Time Filters */}
                       <div className="flex items-center gap-2">
                         <div className="flex items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
-                          {[1, 6, 12, 24].map((h) => (
+                          {[1, 3, 6, 12, 24].map((h) => (
                             <button
                               key={h}
                               onClick={() => setTimeRange(h)}
@@ -1142,23 +1167,45 @@ export default function GlucoPage() {
                               stroke="var(--muted)"
                               opacity={0.15}
                             />
+
+                            {xHourTicks.map((t) => (
+                              <ReferenceLine
+                                key={t}
+                                x={t}
+                                ifOverflow="extendDomain"
+                                stroke="var(--muted-foreground)"
+                                strokeOpacity={0.08}
+                                strokeWidth={1}
+                              />
+                            ))}
                             <XAxis
                               dataKey="time"
                               type="number"
                               domain={[windowStart, windowEnd]}
                               allowDataOverflow={true}
+                              ticks={xTicks}
+                              interval={0}
+                              tickMargin={10}
                               tickFormatter={(t) =>
-                                new Date(t).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
+                                new Date(t).getMinutes() === 0
+                                  ? new Date(t).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                    })
+                                  : ""
                               }
                               stroke="var(--foreground)"
                               fontSize={10}
                               fontWeight="600"
-                              tickLine={false}
-                              axisLine={false}
-                              minTickGap={40}
+                              tickLine={{
+                                stroke: "var(--muted-foreground)",
+                                opacity: 0.6,
+                              }}
+                              axisLine={{
+                                stroke: "var(--muted-foreground)",
+                                opacity: 0.6,
+                                strokeWidth: 1,
+                              }}
+                              minTickGap={0}
                             />
                             <YAxis
                               stroke="var(--foreground)"
