@@ -1802,9 +1802,14 @@ export default function GlucoPage() {
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-1.5 opacity-40">
               <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[7px] font-bold tracking-[0.2em] uppercase text-emerald-500">
-                Secure AES-256 Protocol
-              </span>
+              <a
+                href="https://github.com/josemqu"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[7px] font-bold tracking-[0.2em] uppercase text-emerald-500 hover:underline"
+              >
+                Hecho con ♥ por josemqu
+              </a>
             </div>
           </div>
         </div>
