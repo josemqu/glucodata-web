@@ -1074,7 +1074,7 @@ export default function GlucoPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex-1 p-0 pt-2 flex flex-col">
-                      <div className="flex-1 min-h-0">
+                      <div className="flex-1 min-h-[360px] lg:min-h-0">
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart
                             data={chartGraph}
@@ -1462,115 +1462,117 @@ export default function GlucoPage() {
 
                 {/* Right Column - Sidemenu */}
                 <div className="lg:col-span-3 flex flex-col gap-3">
-                  <Card className="border bg-card/30">
-                    <CardContent className="py-3.5 space-y-2">
-                      <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                        Health Diagnostics
-                      </p>
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                    <Card className="border bg-card/30">
+                      <CardContent className="py-3.5 space-y-2">
+                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                          Health Diagnostics
+                        </p>
 
-                      <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Last sync
-                        </span>
-                        <span className="text-[10px] font-black tabular-nums font-numbers">
-                          {glucose
-                            ? new Date(glucose.time).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "--:--"}
-                        </span>
-                      </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                            Last sync
+                          </span>
+                          <span className="text-[10px] font-black tabular-nums font-numbers">
+                            {glucose
+                              ? new Date(glucose.time).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "--:--"}
+                          </span>
+                        </div>
 
-                      <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Auto-sync
-                        </span>
-                        <span className="text-[10px] font-black tabular-nums font-numbers text-primary">
-                          {secondsUntilRefresh}s
-                        </span>
-                      </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                            Auto-sync
+                          </span>
+                          <span className="text-[10px] font-black tabular-nums font-numbers text-primary">
+                            {secondsUntilRefresh}s
+                          </span>
+                        </div>
 
-                      <Button
-                        className="w-full h-7 text-[8px] font-bold uppercase tracking-[0.15em] shadow-sm active:scale-95 transition-transform"
-                        onClick={() => fetchData()}
-                        disabled={loading}
-                        variant="secondary"
-                      >
-                        <RefreshCw
-                          className={`w-3.5 h-3.5 mr-2 ${
-                            loading ? "animate-spin" : ""
-                          }`}
-                        />
-                        Sync Manual
-                      </Button>
-                    </CardContent>
-                  </Card>
+                        <Button
+                          className="w-full h-7 text-[8px] font-bold uppercase tracking-[0.15em] shadow-sm active:scale-95 transition-transform"
+                          onClick={() => fetchData()}
+                          disabled={loading}
+                          variant="secondary"
+                        >
+                          <RefreshCw
+                            className={`w-3.5 h-3.5 mr-2 ${
+                              loading ? "animate-spin" : ""
+                            }`}
+                          />
+                          Sync Manual
+                        </Button>
+                      </CardContent>
+                    </Card>
 
-                  <Card className="border bg-card/30">
-                    <CardContent className="p-3.5 space-y-2">
-                      <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                        Time in Ranges
-                      </p>
-                      <div className="space-y-1.5">
-                        {(
-                          [
-                            {
-                              key: "veryHigh",
-                              label: "Muy Alta",
-                              color: "bg-red-500",
-                              text: "text-red-500",
-                            },
-                            {
-                              key: "high",
-                              label: "Alta",
-                              color: "bg-amber-500",
-                              text: "text-amber-500",
-                            },
-                            {
-                              key: "inRange",
-                              label: "Objetivo",
-                              color: "bg-emerald-500",
-                              text: "text-emerald-500",
-                            },
-                            {
-                              key: "low",
-                              label: "Baja",
-                              color: "bg-amber-500",
-                              text: "text-amber-500",
-                            },
-                            {
-                              key: "veryLow",
-                              label: "Muy Baja",
-                              color: "bg-red-500",
-                              text: "text-red-500",
-                            },
-                          ] as const
-                        ).map((r) => (
-                          <div key={r.key} className="space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                                {r.label}
-                              </span>
-                              <span
-                                className={`text-[10px] font-black tabular-nums font-numbers ${r.text}`}
-                              >
-                                {rangeStats?.[r.key]?.pct ?? 0}%
-                              </span>
+                    <Card className="border bg-card/30">
+                      <CardContent className="p-3.5 space-y-2">
+                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                          Time in Ranges
+                        </p>
+                        <div className="space-y-1.5">
+                          {(
+                            [
+                              {
+                                key: "veryHigh",
+                                label: "Muy Alta",
+                                color: "bg-red-500",
+                                text: "text-red-500",
+                              },
+                              {
+                                key: "high",
+                                label: "Alta",
+                                color: "bg-amber-500",
+                                text: "text-amber-500",
+                              },
+                              {
+                                key: "inRange",
+                                label: "Objetivo",
+                                color: "bg-emerald-500",
+                                text: "text-emerald-500",
+                              },
+                              {
+                                key: "low",
+                                label: "Baja",
+                                color: "bg-amber-500",
+                                text: "text-amber-500",
+                              },
+                              {
+                                key: "veryLow",
+                                label: "Muy Baja",
+                                color: "bg-red-500",
+                                text: "text-red-500",
+                              },
+                            ] as const
+                          ).map((r) => (
+                            <div key={r.key} className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                                  {r.label}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-black tabular-nums font-numbers ${r.text}`}
+                                >
+                                  {rangeStats?.[r.key]?.pct ?? 0}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
+                                <div
+                                  className={`${r.color} h-full`}
+                                  style={{
+                                    width: `${rangeStats?.[r.key]?.pct ?? 0}%`,
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
-                              <div
-                                className={`${r.color} h-full`}
-                                style={{
-                                  width: `${rangeStats?.[r.key]?.pct ?? 0}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
 
                   {/* Patient Profile Snapshot */}
                   <Card className="border shadow-none mt-auto bg-muted/10">
