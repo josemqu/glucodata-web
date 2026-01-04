@@ -1216,6 +1216,7 @@ export default function GlucoPage() {
                               domain={[yMin, yMax]}
                               ticks={yTicks}
                               orientation="right"
+                              width={30}
                             />
                             <Tooltip
                               cursor={{
