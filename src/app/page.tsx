@@ -937,8 +937,8 @@ export default function GlucoPage() {
                 {/* Left Column - Main View */}
                 <div className="lg:col-span-9 flex flex-col gap-3 min-w-0 h-full">
                   {/* Top Metrics Bar */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <Card className="relative overflow-hidden border bg-card/50 shadow-sm md:col-span-4">
+                  <div className="grid grid-cols-2 md:grid-cols-12 gap-3">
+                    <Card className="relative overflow-hidden border bg-card/50 shadow-sm col-span-2 md:col-span-4">
                       <div
                         className={`absolute top-0 left-0 bottom-0 w-1 ${
                           status.label === "OBJETIVO"
@@ -987,7 +987,7 @@ export default function GlucoPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30 md:col-span-4">
+                    <Card className="border bg-card/30 col-span-1 md:col-span-4">
                       <CardContent className="p-3.5 space-y-1.5">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                           Time in Range
@@ -1009,7 +1009,7 @@ export default function GlucoPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30 md:col-span-4">
+                    <Card className="border bg-card/30 col-span-1 md:col-span-4">
                       <CardContent className="p-3.5 space-y-1">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                           Avg Glucose
