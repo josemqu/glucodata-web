@@ -703,14 +703,24 @@ export default function GlucoPage() {
   const yMax = yDomain.max;
 
   const yTicks = (() => {
-    const step = 20;
-    const start = 0;
-    const end = Math.floor(yMax / step) * step;
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end)
-      return undefined;
-    const ticks: number[] = [];
-    for (let v = start; v <= end; v += step) ticks.push(v);
-    return ticks.length > 0 ? ticks : undefined;
+    const candidates = [
+      targetConfig.hypo,
+      targetConfig.low,
+      targetConfig.high,
+      targetConfig.hyper,
+      yMax,
+    ];
+
+    const uniqueSorted = Array.from(
+      new Set(
+        candidates
+          .filter((v) => typeof v === "number" && Number.isFinite(v))
+          .map((v) => Math.round(v))
+          .filter((v) => v >= yMin && v <= yMax)
+      )
+    ).sort((a, b) => a - b);
+
+    return uniqueSorted.length > 0 ? uniqueSorted : undefined;
   })();
 
   const breakPointPercentage = (value: number) => {
@@ -1211,6 +1221,8 @@ export default function GlucoPage() {
                               stroke="var(--foreground)"
                               fontSize={10}
                               fontWeight="600"
+                              interval={0}
+                              minTickGap={0}
                               tickLine={false}
                               axisLine={false}
                               domain={[yMin, yMax]}
