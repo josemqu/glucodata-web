@@ -648,6 +648,42 @@ export default function GlucoPage() {
         }
       : null;
 
+  const rangeStats =
+    filteredGraphWithValues.length > 0
+      ? (() => {
+          const total = filteredGraphWithValues.length;
+          const veryLow = filteredGraphWithValues.filter(
+            (p: any) => p.value <= targetConfig.hypo
+          ).length;
+          const low = filteredGraphWithValues.filter(
+            (p: any) =>
+              p.value > targetConfig.hypo && p.value < targetConfig.low
+          ).length;
+          const inRange = filteredGraphWithValues.filter(
+            (p: any) =>
+              p.value >= targetConfig.low && p.value <= targetConfig.high
+          ).length;
+          const high = filteredGraphWithValues.filter(
+            (p: any) =>
+              p.value > targetConfig.high && p.value < targetConfig.hyper
+          ).length;
+          const veryHigh = filteredGraphWithValues.filter(
+            (p: any) => p.value >= targetConfig.hyper
+          ).length;
+
+          const toPct = (n: number) => Math.round((n / total) * 100);
+
+          return {
+            total,
+            veryLow: { count: veryLow, pct: toPct(veryLow) },
+            low: { count: low, pct: toPct(low) },
+            inRange: { count: inRange, pct: toPct(inRange) },
+            high: { count: high, pct: toPct(high) },
+            veryHigh: { count: veryHigh, pct: toPct(veryHigh) },
+          };
+        })()
+      : null;
+
   // Calculate the actual range of values in the current data set
   // This is used for the "User Approach" to normalize the gradient
   const dataMin =
@@ -902,7 +938,7 @@ export default function GlucoPage() {
                 <div className="lg:col-span-9 flex flex-col gap-3 min-w-0 h-full">
                   {/* Top Metrics Bar */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <Card className="relative overflow-hidden border bg-card/50 shadow-sm md:col-span-6">
+                    <Card className="relative overflow-hidden border bg-card/50 shadow-sm md:col-span-4">
                       <div
                         className={`absolute top-0 left-0 bottom-0 w-1 ${
                           status.label === "OBJETIVO"
@@ -951,7 +987,7 @@ export default function GlucoPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30 md:col-span-3">
+                    <Card className="border bg-card/30 md:col-span-4">
                       <CardContent className="p-3.5 space-y-1.5">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                           Time in Range
@@ -973,7 +1009,7 @@ export default function GlucoPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30 md:col-span-3">
+                    <Card className="border bg-card/30 md:col-span-4">
                       <CardContent className="p-3.5 space-y-1">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                           Avg Glucose
@@ -1426,110 +1462,112 @@ export default function GlucoPage() {
 
                 {/* Right Column - Sidemenu */}
                 <div className="lg:col-span-3 flex flex-col gap-3">
-                  <Card className="border shadow-none bg-card/40">
-                    <CardHeader className="py-2.5 px-4 border-b bg-muted/10">
+                  <Card className="border bg-card/30">
+                    <CardContent className="py-3.5 space-y-2">
                       <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                         Health Diagnostics
                       </p>
-                    </CardHeader>
-                    <CardContent className="p-4 space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 border border-orange-500/10">
-                          <Clock className="w-4 h-4 text-orange-600" />
-                        </div>
-                        <div>
-                          <p className="text-[8px] font-bold text-muted-foreground uppercase leading-none mb-1 opacity-60">
-                            Last sync
-                          </p>
-                          <p className="text-base font-black tabular-nums font-numbers">
-                            {glucose
-                              ? new Date(glucose.time).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "--:--"}
-                          </p>
-                        </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                          Last sync
+                        </span>
+                        <span className="text-[10px] font-black tabular-nums font-numbers">
+                          {glucose
+                            ? new Date(glucose.time).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "--:--"}
+                        </span>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/10">
-                          <RefreshCw
-                            className={`w-4 h-4 text-emerald-600 ${
-                              loading ? "animate-spin" : ""
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <p className="text-[8px] font-bold text-muted-foreground uppercase leading-none mb-1 opacity-60">
-                            Telemetry Status
-                          </p>
-                          <p className="text-xs font-bold text-emerald-600 uppercase tracking-tight">
-                            Active link
-                          </p>
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                          Auto-sync
+                        </span>
+                        <span className="text-[10px] font-black tabular-nums font-numbers text-primary">
+                          {secondsUntilRefresh}s
+                        </span>
                       </div>
 
-                      <Separator className="opacity-30" />
+                      <Button
+                        className="w-full h-7 text-[8px] font-bold uppercase tracking-[0.15em] shadow-sm active:scale-95 transition-transform"
+                        onClick={() => fetchData()}
+                        disabled={loading}
+                        variant="secondary"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 mr-2 ${
+                            loading ? "animate-spin" : ""
+                          }`}
+                        />
+                        Sync Manual
+                      </Button>
+                    </CardContent>
+                  </Card>
 
-                      <div className="space-y-3 pt-1">
-                        {/* Countdown indicator */}
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
-                          <div className="relative w-10 h-10 shrink-0">
-                            <svg
-                              className="w-10 h-10 -rotate-90"
-                              viewBox="0 0 36 36"
-                            >
-                              <circle
-                                cx="18"
-                                cy="18"
-                                r="16"
-                                fill="none"
-                                className="stroke-muted"
-                                strokeWidth="2"
-                              />
-                              <circle
-                                cx="18"
-                                cy="18"
-                                r="16"
-                                fill="none"
-                                className="stroke-primary"
-                                strokeWidth="2"
-                                strokeDasharray={`${
-                                  (secondsUntilRefresh / 60) * 100
-                                } 100`}
-                                strokeLinecap="round"
-                              />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-[9px] font-black tabular-nums font-numbers text-primary">
-                                {secondsUntilRefresh}
+                  <Card className="border bg-card/30">
+                    <CardContent className="p-3.5 space-y-2">
+                      <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                        Time in Ranges
+                      </p>
+                      <div className="space-y-1.5">
+                        {(
+                          [
+                            {
+                              key: "veryHigh",
+                              label: "Muy Alta",
+                              color: "bg-red-500",
+                              text: "text-red-500",
+                            },
+                            {
+                              key: "high",
+                              label: "Alta",
+                              color: "bg-amber-500",
+                              text: "text-amber-500",
+                            },
+                            {
+                              key: "inRange",
+                              label: "Objetivo",
+                              color: "bg-emerald-500",
+                              text: "text-emerald-500",
+                            },
+                            {
+                              key: "low",
+                              label: "Baja",
+                              color: "bg-amber-500",
+                              text: "text-amber-500",
+                            },
+                            {
+                              key: "veryLow",
+                              label: "Muy Baja",
+                              color: "bg-red-500",
+                              text: "text-red-500",
+                            },
+                          ] as const
+                        ).map((r) => (
+                          <div key={r.key} className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
+                                {r.label}
+                              </span>
+                              <span
+                                className={`text-[10px] font-black tabular-nums font-numbers ${r.text}`}
+                              >
+                                {rangeStats?.[r.key]?.pct ?? 0}%
                               </span>
                             </div>
+                            <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
+                              <div
+                                className={`${r.color} h-full`}
+                                style={{
+                                  width: `${rangeStats?.[r.key]?.pct ?? 0}%`,
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[8px] font-bold text-muted-foreground uppercase leading-none mb-1 opacity-60">
-                              Auto-Sync
-                            </p>
-                            <p className="text-[10px] font-bold text-foreground">
-                              Actualización en {secondsUntilRefresh}s
-                            </p>
-                          </div>
-                        </div>
-
-                        <Button
-                          className="w-full h-9 text-[9px] font-bold uppercase tracking-[0.15em] shadow-sm active:scale-95 transition-transform"
-                          onClick={() => fetchData()}
-                          disabled={loading}
-                          variant="secondary"
-                        >
-                          <RefreshCw
-                            className={`w-3.5 h-3.5 mr-2 ${
-                              loading ? "animate-spin" : ""
-                            }`}
-                          />
-                          Sync Manual
-                        </Button>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
