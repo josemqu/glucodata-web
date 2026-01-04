@@ -17,6 +17,8 @@ import {
   Settings,
   ArrowLeft,
   ShieldCheck,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   Card,
@@ -1032,19 +1034,19 @@ export default function GlucoPage() {
 
                   {/* Chart Card */}
                   <Card className="shadow-sm border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20">
-                    <CardHeader className="flex flex-row items-center justify-between py-2 px-4 border-b bg-muted/20">
-                      <div className="flex flex-col">
+                    <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
+                      <div className="flex flex-col w-full sm:w-auto">
                         <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
                           Historial Analítico
-                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                          <span className="hidden sm:inline-flex text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                             {timeRange}H Window
                           </span>
                         </CardTitle>
                       </div>
 
                       {/* Time Filters */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
+                      <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
                           {[1, 3, 6, 12, 24].map((h) => (
                             <button
                               key={h}
@@ -1061,15 +1063,22 @@ export default function GlucoPage() {
                         </div>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className={`h-7 px-3 text-[9px] font-bold uppercase tracking-wider border transition-all ${
+                          size="icon"
+                          className={`h-7 w-7 border transition-all ${
                             showLine
                               ? "bg-primary/10 text-primary border-primary/20"
                               : "text-muted-foreground border-border/50 hover:bg-muted"
                           }`}
                           onClick={() => setShowLine(!showLine)}
+                          aria-label={
+                            showLine ? "Ocultar línea" : "Mostrar línea"
+                          }
                         >
-                          {showLine ? "Ocultar Línea" : "Mostrar Línea"}
+                          {showLine ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
                         </Button>
                       </div>
                     </CardHeader>
