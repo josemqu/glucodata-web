@@ -33,6 +33,9 @@ export const metadata: Metadata = {
   },
   description: "Panel de monitoreo y sincronización de glucosa.",
   applicationName: "GlucoWeb",
+  icons: {
+    icon: "/icon",
+  },
   alternates: {
     canonical: "/",
   },
