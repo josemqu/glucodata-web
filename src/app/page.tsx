@@ -967,7 +967,7 @@ export default function GlucoPage() {
                             </span>
                           </div>
                         </div>
-                        <div className="hidden min-[420px]:flex flex-col items-end gap-1.5">
+                        <div className="flex flex-col items-end gap-1.5">
                           <div className="flex gap-1.5">
                             <Badge
                               variant={
