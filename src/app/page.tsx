@@ -699,12 +699,12 @@ export default function GlucoPage() {
     return { min, max };
   })();
 
-  const yMin = yDomain.min;
+  const yMin = 0;
   const yMax = yDomain.max;
 
   const yTicks = (() => {
     const step = 20;
-    const start = Math.ceil(yMin / step) * step;
+    const start = 0;
     const end = Math.floor(yMax / step) * step;
     if (!Number.isFinite(start) || !Number.isFinite(end) || start > end)
       return undefined;
@@ -1302,7 +1302,7 @@ export default function GlucoPage() {
                                 fill: "#ef4444",
                                 fontSize: 9,
                                 fontWeight: "900",
-                                dy: -10,
+                                dy: -16,
                               }}
                             />
                             <ReferenceLine
@@ -1317,7 +1317,7 @@ export default function GlucoPage() {
                                 fill: "#f59e0b",
                                 fontSize: 9,
                                 fontWeight: "900",
-                                dy: -10,
+                                dy: -16,
                               }}
                             />
                             <ReferenceLine
@@ -1332,7 +1332,7 @@ export default function GlucoPage() {
                                 fill: "#f59e0b",
                                 fontSize: 9,
                                 fontWeight: "900",
-                                dy: -10,
+                                dy: -16,
                               }}
                             />
                             {targetConfig.hypo > 40 && (
@@ -1348,7 +1348,7 @@ export default function GlucoPage() {
                                   fill: "#ef4444",
                                   fontSize: 9,
                                   fontWeight: "900",
-                                  dy: 10,
+                                  dy: 16,
                                 }}
                               />
                             )}
