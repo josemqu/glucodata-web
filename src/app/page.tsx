@@ -402,7 +402,7 @@ export default function GlucoPage() {
           idx === 0 || p.time !== arr[idx - 1].time
       );
 
-    const maxPoints = 650;
+    const maxPoints = 1000;
     if (cleaned.length <= maxPoints) {
       return [
         ...cleaned,
