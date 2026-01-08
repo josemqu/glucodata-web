@@ -310,6 +310,87 @@
       font-size: 14px;
     }
 
+    .blacklist-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .blacklist-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--input-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .blacklist-item:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .blacklist-item span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: 8px;
+    }
+
+    .btn-remove {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 18px;
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .btn-remove:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--error);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .blacklist-add {
+      display: flex;
+      gap: 8px;
+    }
+
+    .blacklist-add input {
+      flex: 1;
+    }
+
+    .btn-add {
+      flex: 0 0 auto;
+      width: auto;
+      padding: 0 16px;
+      font-size: 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+    }
+
+    .btn-add:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
     @media (max-width: 480px) {
       .card {
         padding: 20px;
@@ -372,9 +453,15 @@
       <div class="section">
         <div class="section-title">Exclusiones</div>
         <div class="form-group">
-          <label for="blacklist">Lista negra de URLs</label>
-          <textarea id="blacklist" rows="3" placeholder="ejemplo.com&#10;otra-web.org"></textarea>
-          <div class="hint">Una URL por línea. El badge no aparecerá en estos sitios.</div>
+          <label>Sitios en lista negra</label>
+          <div id="blacklistContainer" class="blacklist-list">
+            <!-- Items injected by JS -->
+          </div>
+          <div class="blacklist-add">
+            <input id="newBlacklistUrl" type="text" placeholder="nueva-url.com" />
+            <button id="addBlacklist" class="btn-add">Agregar</button>
+          </div>
+          <div class="hint">El badge no aparecerá en estos sitios.</div>
         </div>
       </div>
 

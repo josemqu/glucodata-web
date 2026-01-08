@@ -47,6 +47,54 @@ function updateValidationUI(id, state) {
   el.classList.add("visible");
 }
 
+let currentBlacklist = [];
+
+function renderBlacklist() {
+  const container = $("blacklistContainer");
+  if (!container) return;
+  container.innerHTML = "";
+  
+  currentBlacklist.forEach((url, index) => {
+    const item = document.createElement("div");
+    item.className = "blacklist-item";
+    
+    const span = document.createElement("span");
+    span.textContent = url;
+    
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-remove";
+    removeBtn.innerHTML = "&times;";
+    removeBtn.title = "Eliminar de la lista negra";
+    removeBtn.onclick = async () => {
+      currentBlacklist.splice(index, 1);
+      renderBlacklist();
+      // Persist immediately on delete
+      await chrome.storage.sync.set({ blacklist: currentBlacklist });
+    };
+    
+    item.appendChild(span);
+    item.appendChild(removeBtn);
+    container.appendChild(item);
+  });
+}
+
+function addBlacklistEntry() {
+  const input = $("newBlacklistUrl");
+  const url = input.value.trim();
+  if (url) {
+    if (!currentBlacklist.includes(url)) {
+      currentBlacklist.push(url);
+      renderBlacklist();
+      input.value = "";
+      // Persist immediately on add
+      chrome.storage.sync.set({ blacklist: currentBlacklist });
+    } else {
+      setStatus("La URL ya está en la lista", "err");
+      setTimeout(() => setStatus(""), 3000);
+    }
+  }
+}
+
 let validationTimeout = null;
 function debounceValidation() {
   const apiToken = $("apiToken").value.trim();
@@ -84,7 +132,9 @@ async function load() {
   $("apiToken").value = settings.apiToken || "";
   $("refreshSeconds").value = String(settings.refreshSeconds || 60);
   $("enabled").checked = !!settings.enabled;
-  $("blacklist").value = (settings.blacklist || []).join("\n");
+  
+  currentBlacklist = settings.blacklist || [];
+  renderBlacklist();
   
   if (settings.apiUrl && settings.apiToken) {
     debounceValidation();
@@ -96,10 +146,7 @@ async function save() {
   const apiToken = $("apiToken").value.trim();
   const refreshSeconds = Math.max(30, Number($("refreshSeconds").value || 60));
   const enabled = $("enabled").checked;
-  const blacklist = $("blacklist")
-    .value.split("\n")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  const blacklist = currentBlacklist;
 
   await chrome.storage.sync.set({
     apiUrl,
@@ -164,6 +211,14 @@ $("test").addEventListener("click", () => {
 
 $("apiToken").addEventListener("input", debounceValidation);
 $("apiUrl").addEventListener("input", debounceValidation);
+
+$("addBlacklist").addEventListener("click", addBlacklistEntry);
+$("newBlacklistUrl").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addBlacklistEntry();
+  }
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   load().catch((e) => setStatus(e?.message || "Error", "err"));
