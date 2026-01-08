@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import {
   JetBrains_Mono,
-  Plus_Jakarta_Sans,
-  Space_Grotesk,
+  Outfit,
 } from "next/font/google";
 import "./globals.css";
 
-const appSans = Plus_Jakarta_Sans({
+const appSans = Outfit({
   variable: "--font-app-sans",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
 });
 
 const appMono = JetBrains_Mono({
@@ -16,9 +16,10 @@ const appMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-const appNumbers = Space_Grotesk({
+const appNumbers = Outfit({
   variable: "--font-app-numbers",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL

@@ -978,7 +978,7 @@ export default function GlucoPage() {
                               key={glucose.value}
                               initial={{ opacity: 0, scale: 0.9 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className={`text-5xl font-black tabular-nums font-numbers tracking-tighter ${status.color}`}
+                              className={`text-5xl font-extrabold tabular-nums font-numbers tracking-tighter ${status.color}`}
                             >
                               {glucose.value}
                             </motion.span>

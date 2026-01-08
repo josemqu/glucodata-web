@@ -128,6 +128,6 @@
 }
 
 .font-numbers {
-  font-family: var(--font-numbers), var(--font-sans);
+  font-family: var(--font-app-numbers), sans-serif;
   font-variant-numeric: tabular-nums;
 }
