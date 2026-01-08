@@ -42,12 +42,14 @@ function ensureRoot() {
 
   const style = document.createElement("style");
   style.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
     #${ROOT_ID} {
       position: fixed;
       right: 16px;
       bottom: 16px;
       z-index: 2147483647;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      font-family: 'Outfit', ui-sans-serif, system-ui, -apple-system, sans-serif;
       --gluco-emerald: #10b981;
       --gluco-amber: #f59e0b;
       --gluco-red: #ef4444;
@@ -86,17 +88,19 @@ function ensureRoot() {
       box-shadow: 0 13px 36px rgba(0,0,0,0.38);
     }
     #${ROOT_ID} .gluco-value {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 0.2px;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
       line-height: 1;
       color: var(--gluco-emerald);
     }
     #${ROOT_ID} .gluco-unit {
-      font-size: 11px;
+      font-size: 10px;
       opacity: 0.8;
-      margin-left: 4px;
-      font-weight: 600;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      margin-right: 4px;
+      flex: 0 0 auto;
     }
     #${ROOT_ID} .gluco-arrow {
       font-size: 18px;
@@ -356,6 +360,7 @@ function ensureRoot() {
   copyBtn.textContent = "Copiar";
   copyBtn.style.display = "none";
 
+  details.appendChild(unitEl);
   details.appendChild(dot);
   details.appendChild(meta);
   details.appendChild(refreshBtn);
@@ -364,7 +369,6 @@ function ensureRoot() {
   details.appendChild(copyBtn);
 
   card.appendChild(valueEl);
-  card.appendChild(unitEl);
   card.appendChild(arrowEl);
   card.appendChild(details);
   root.appendChild(card);
