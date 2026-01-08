@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gluco Badge - Opciones</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html {
+        min-width: 360px;
+        min-height: 520px;
+      }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial;
+        padding: 18px;
+        max-width: 720px;
+        margin: 0 auto;
+        min-width: 360px;
+        min-height: 520px;
+        overflow-y: auto;
+      }
+      .row {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      label {
+        font-weight: 700;
+      }
+      input {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(120, 120, 120, 0.35);
+        width: 100%;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 10px;
+      }
+      button {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(120, 120, 120, 0.35);
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .hint {
+        opacity: 0.8;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .status {
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .status.ok {
+        color: #16a34a;
+      }
+      .status.err {
+        color: #dc2626;
+      }
+      .check {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      @media (max-width: 420px) {
+        body {
+          padding: 14px;
+        }
+        h1 {
+          margin: 6px 0 12px;
+          font-size: 22px;
+        }
+        .hint {
+          font-size: 11px;
+        }
+        button {
+          padding: 9px 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gluco Badge</h1>
+
+    <div class="row">
+      <label for="apiUrl">API URL</label>
+      <input id="apiUrl" placeholder="http://localhost:3000/api/latest" />
+      <div class="hint">
+        Debe ser el endpoint Next.js: <code>/api/latest</code>.
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="apiToken">API Token</label>
+      <input id="apiToken" placeholder="Pegá tu token" />
+      <div class="hint">
+        Debe coincidir con <code>GLUCO_API_TOKEN</code> configurado en el
+        servidor.
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="refreshSeconds">Refresco (segundos)</label>
+      <input id="refreshSeconds" type="number" min="30" step="1" />
+    </div>
+
+    <div class="row check">
+      <input id="enabled" type="checkbox" />
+      <label for="enabled">Habilitado</label>
+    </div>
+
+    <div class="actions">
+      <button id="save" type="button">Guardar</button>
+      <button id="test" type="button">Probar</button>
+      <div id="status" class="status"></div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

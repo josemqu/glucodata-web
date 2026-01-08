@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Gluco Badge",
+  "version": "0.1.0",
+  "description": "Muestra la glucemia actual y su tendencia en un badge flotante.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "icons/glucoweb.svg",
+    "32": "icons/glucoweb.svg",
+    "48": "icons/glucoweb.svg",
+    "128": "icons/glucoweb.svg"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Gluco Badge",
+    "default_popup": "options.html",
+    "default_icon": {
+      "16": "icons/glucoweb.svg",
+      "32": "icons/glucoweb.svg"
+    }
+  }
+}
