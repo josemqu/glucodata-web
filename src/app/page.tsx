@@ -36,7 +36,7 @@ import { getLatestGlucoseAction } from "./actions";
 import Cookies from "js-cookie";
 import { supabase } from "@/lib/supabase";
 import {
-  AreaChart,
+  ComposedChart,
   Area,
   Scatter,
   XAxis,
@@ -1105,7 +1105,7 @@ export default function GlucoPage() {
                     <CardContent className="flex-1 p-0 pt-2 flex flex-col">
                       <div className="flex-1 min-h-[360px] lg:min-h-0">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
+                          <ComposedChart
                             data={chartGraph}
                             margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
                           >
@@ -1298,42 +1298,50 @@ export default function GlucoPage() {
                             <Tooltip
                               cursor={{
                                 stroke: "var(--muted-foreground)",
-                                strokeOpacity: 0.25,
-                                strokeWidth: 1,
-                                strokeDasharray: "3 3",
+                                strokeOpacity: 0.15,
+                                strokeWidth: 1.5,
+                                strokeDasharray: "4 4",
                               }}
-                              contentStyle={{
-                                backgroundColor: "var(--card)",
-                                borderColor: "var(--border)",
-                                borderRadius: "6px",
-                                fontSize: "10px",
-                                padding: "10px",
-                                boxShadow:
-                                  "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                              content={({ active, payload, label }) => {
+                                if (active && payload && payload.length) {
+                                  const glucoseItem = payload.find(p => p.dataKey === "value");
+                                  if (!glucoseItem || glucoseItem.value === null) return null;
+                                  
+                                  const val = Number(glucoseItem.value);
+                                  const status = getGlucoseStatus(val);
+                                  
+                                  return (
+                                    <div className="bg-card/95 border border-border/50 rounded-lg p-2 shadow-xl min-w-[130px] backdrop-blur-md ring-1 ring-white/10">
+                                      <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center justify-between border-b border-border/40 pb-1.5 px-1">
+                                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.1em]">
+                                            {label ? new Date(label as number).toLocaleString([], {
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                              day: "numeric",
+                                              month: "short"
+                                            }) : "--:--"}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-baseline justify-between gap-3 px-1">
+                                          <div className="flex items-baseline gap-1">
+                                            <span className={`text-xl font-black tabular-nums font-numbers tracking-tighter ${status.color}`}>
+                                              {val}
+                                            </span>
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40">
+                                              {unit}
+                                            </span>
+                                          </div>
+                                          <span className={`text-[12px] font-black uppercase tracking-wider ${status.color}`}>
+                                            {status.label}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
                               }}
-                              itemStyle={{
-                                color: "var(--foreground)",
-                                padding: "0",
-                              }}
-                              labelStyle={{
-                                color: "var(--muted-foreground)",
-                                fontWeight: "bold",
-                                marginBottom: "4px",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                              }}
-                              labelFormatter={(t) =>
-                                new Date(t).toLocaleString([], {
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              }
-                              formatter={(v: any) => [
-                                `${v} ${unit}`,
-                                "GLUCOSA",
-                              ]}
                             />
 
                             {/* Background Bands */}
@@ -1431,42 +1439,43 @@ export default function GlucoPage() {
                               />
                             )}
 
-                            <Area
-                              type="monotone"
-                              dataKey="value"
-                              stroke="url(#lineGluc)"
-                              strokeWidth={3}
-                              strokeOpacity={showLine ? 1 : 0}
-                              fill="url(#colorGluc)"
-                              baseValue={yMin}
-                              animationDuration={enableAnimation ? 500 : 0}
-                              animationEasing="ease-in-out"
-                              isAnimationActive={enableAnimation}
-                              connectNulls={true}
-                              dot={showDots ? <CustomDot /> : false}
-                              activeDot={
-                                showDots
-                                  ? {
-                                      r: 4,
-                                      strokeWidth: 2,
-                                      fill: "#94a3b8",
-                                      stroke: "var(--background)",
-                                    }
-                                  : false
-                              }
-                            />
-
-                            {!showLine && (
+                            {showLine ? (
+                              <Area
+                                type="monotone"
+                                dataKey="value"
+                                name="GLUCOSA"
+                                stroke="url(#lineGluc)"
+                                strokeWidth={3}
+                                fill="url(#colorGluc)"
+                                baseValue={yMin}
+                                animationDuration={enableAnimation ? 500 : 0}
+                                animationEasing="ease-in-out"
+                                isAnimationActive={enableAnimation}
+                                connectNulls={true}
+                                dot={showDots ? <CustomDot /> : false}
+                                activeDot={
+                                  showDots
+                                    ? {
+                                        r: 4,
+                                        strokeWidth: 2,
+                                        fill: "#94a3b8",
+                                        stroke: "var(--background)",
+                                      }
+                                    : false
+                                }
+                              />
+                            ) : (
                               <Scatter
                                 data={scatterData}
                                 dataKey="value"
+                                name="GLUCOSA"
                                 shape={<SimpleDot />}
                                 isAnimationActive={enableAnimation}
                                 animationDuration={enableAnimation ? 500 : 0}
                                 animationEasing="ease-in-out"
                               />
                             )}
-                          </AreaChart>
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </div>
 
