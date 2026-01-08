@@ -178,6 +178,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     fetchLatest().then(() => sendResponse({ ok: true }));
     return true;
   }
+  if (msg?.type === "GLUCO_OPEN_DASHBOARD") {
+    getSettings().then((settings) => {
+      let urlToOpen = "https://glucodata-web.vercel.app";
+      if (settings.apiUrl) {
+        try {
+          const url = new URL(settings.apiUrl);
+          urlToOpen = url.origin;
+        } catch (e) {}
+      }
+      chrome.tabs.create({ url: urlToOpen, active: true });
+    });
+    return true;
+  }
 });
 
 // --- HOT RELOAD FOR DEVELOPMENT ---

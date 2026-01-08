@@ -107,18 +107,8 @@ $("optionsBtn").addEventListener("click", () => {
   chrome.runtime.openOptionsPage();
 });
 
-$("goHomeBtn").addEventListener("click", async () => {
-  const { apiUrl } = await chrome.storage.sync.get({ apiUrl: "" });
-  if (apiUrl) {
-    try {
-      const url = new URL(apiUrl);
-      chrome.tabs.create({ url: url.origin });
-    } catch (e) {
-      chrome.tabs.create({ url: "https://glucodata-web.vercel.app" });
-    }
-  } else {
-    chrome.tabs.create({ url: "https://glucodata-web.vercel.app" });
-  }
+$("goHomeBtn").addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: "GLUCO_OPEN_DASHBOARD" });
 });
 
 // Sync UI on start

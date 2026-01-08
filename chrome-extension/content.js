@@ -314,19 +314,7 @@ function ensureRoot() {
     </svg>
   `;
   openAppBtn.addEventListener("click", () => {
-    const url = "https://glucodata-web.vercel.app/";
-    const win = window.open(
-      url,
-      "_blank",
-      "popup=yes,width=420,height=800,noopener,noreferrer"
-    );
-    if (win) {
-      try {
-        win.opener = null;
-      } catch (_e) {
-        // ignore
-      }
-    }
+    chrome.runtime.sendMessage({ type: "GLUCO_OPEN_DASHBOARD" });
   });
 
   const hideBtn = document.createElement("button");
