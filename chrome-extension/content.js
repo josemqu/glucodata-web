@@ -20,6 +20,11 @@ function clamp(n, min, max) {
 }
 
 function ensureRoot() {
+  // Evitar renderizar el badge en la propia app
+  if (location.origin === "https://glucodata-web.vercel.app") {
+    return null;
+  }
+
   let root = document.getElementById(ROOT_ID);
   if (root) return root;
 
@@ -398,6 +403,8 @@ function ensureRoot() {
 
 function setState(payload) {
   const root = ensureRoot();
+  if (!root) return; // No renderizar en la propia app
+
   const { dot, valueEl, unitEl, arrowEl, sub, copyBtn, refreshBtn } =
     root.__gluco;
   const card = root.querySelector(".gluco-card");
