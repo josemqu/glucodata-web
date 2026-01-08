@@ -3,6 +3,7 @@ const DEFAULTS = {
   apiToken: "",
   refreshSeconds: 60,
   enabled: true,
+  blacklist: [],
 };
 
 async function getSettings() {

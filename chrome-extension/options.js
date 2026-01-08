@@ -3,6 +3,7 @@ const DEFAULTS = {
   apiToken: "",
   refreshSeconds: 60,
   enabled: true,
+  blacklist: [],
 };
 
 function $(id) {
@@ -11,8 +12,19 @@ function $(id) {
 
 function setStatus(text, kind) {
   const el = $("status");
+  if (!text) {
+    el.style.display = "none";
+    return;
+  }
   el.textContent = text;
-  el.className = `status ${kind || ""}`.trim();
+  el.className = `status-msg ${kind || ""}`.trim();
+  el.style.display = "block";
+  
+  if (kind === "ok") {
+    setTimeout(() => {
+      el.style.display = "none";
+    }, 3000);
+  }
 }
 
 async function load() {
@@ -21,6 +33,7 @@ async function load() {
   $("apiToken").value = settings.apiToken || "";
   $("refreshSeconds").value = String(settings.refreshSeconds || 60);
   $("enabled").checked = !!settings.enabled;
+  $("blacklist").value = (settings.blacklist || []).join("\n");
 }
 
 async function save() {
@@ -28,40 +41,54 @@ async function save() {
   const apiToken = $("apiToken").value.trim();
   const refreshSeconds = Math.max(30, Number($("refreshSeconds").value || 60));
   const enabled = $("enabled").checked;
+  const blacklist = $("blacklist")
+    .value.split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
-  await chrome.storage.sync.set({ apiUrl, apiToken, refreshSeconds, enabled });
-  setStatus("Guardado", "ok");
+  await chrome.storage.sync.set({
+    apiUrl,
+    apiToken,
+    refreshSeconds,
+    enabled,
+    blacklist,
+  });
+  setStatus("¡Configuración guardada!", "ok");
 }
 
 async function test() {
-  setStatus("Probando...", "");
-  const settings = await chrome.storage.sync.get(DEFAULTS);
+  setStatus("Probando conexión...", "");
+  const apiUrl = $("apiUrl").value.trim();
+  const apiToken = $("apiToken").value.trim();
 
-  if (!settings.apiUrl || !settings.apiToken) {
-    setStatus("Falta apiUrl o apiToken", "err");
+  if (!apiUrl || !apiToken) {
+    setStatus("Falta URL o Token", "err");
     return;
   }
 
   try {
-    const res = await fetch(settings.apiUrl, {
-      headers: { Authorization: `Bearer ${settings.apiToken}` },
+    const res = await fetch(apiUrl, {
+      headers: { Authorization: `Bearer ${apiToken}` },
       cache: "no-store",
     });
-    const json = await res.json().catch(() => null);
+    
     if (!res.ok) {
-      setStatus(json?.error || `HTTP ${res.status}`, "err");
+      const json = await res.json().catch(() => null);
+      setStatus(json?.error || `Error HTTP ${res.status}`, "err");
       return;
     }
+    
+    const json = await res.json();
     const value = json?.data?.value;
     const trend = json?.data?.trend;
-    setStatus(
-      typeof value === "number"
-        ? `OK: ${value} (trend ${trend})`
-        : "OK: sin datos",
-      "ok"
-    );
+    
+    if (typeof value === "number") {
+      setStatus(`Conexión exitosa: ${value} mg/dL (tendencia ${trend})`, "ok");
+    } else {
+      setStatus("Conectado, pero el servidor no devolvió valores", "err");
+    }
   } catch (e) {
-    setStatus(e?.message || "Error", "err");
+    setStatus("Error de red: " + (e?.message || "Servidor no alcanzable"), "err");
   }
 }
 
@@ -73,4 +100,6 @@ $("test").addEventListener("click", () => {
   test().catch((e) => setStatus(e?.message || "Error", "err"));
 });
 
-load().catch((e) => setStatus(e?.message || "Error", "err"));
+document.addEventListener("DOMContentLoaded", () => {
+  load().catch((e) => setStatus(e?.message || "Error", "err"));
+});

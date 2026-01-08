@@ -22,6 +22,7 @@
 - API URL: `http://localhost:3000/api/latest` (o tu dominio)
 - API Token: el mismo que `GLUCO_API_TOKEN`
 - Refresco: en segundos
+- Lista negra: URLs donde no querés que aparezca el badge (una por línea). Podés ocultarlo directamente desde el badge con el botón "X".
 
 ## Notas
 

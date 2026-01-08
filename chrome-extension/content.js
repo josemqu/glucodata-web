@@ -19,12 +19,20 @@ function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
-function ensureRoot() {
-  // Evitar renderizar el badge en la propia app
-  if (location.origin === "https://glucodata-web.vercel.app") {
-    return null;
+async function isBlacklisted() {
+  try {
+    const origin = location.origin;
+    if (origin === "https://glucodata-web.vercel.app") return true;
+    const res = await chrome.storage.sync.get({ blacklist: [], enabled: true });
+    if (!res.enabled) return true;
+    const blacklist = res.blacklist || [];
+    return blacklist.some((item) => origin.includes(item));
+  } catch (_e) {
+    return false;
   }
+}
 
+function ensureRoot() {
   let root = document.getElementById(ROOT_ID);
   if (root) return root;
 
@@ -317,6 +325,31 @@ function ensureRoot() {
     }
   });
 
+  const hideBtn = document.createElement("button");
+  hideBtn.className = "gluco-btn gluco-icon-btn";
+  hideBtn.type = "button";
+  hideBtn.title = "Ocultar en este sitio";
+  hideBtn.setAttribute("aria-label", "Ocultar en este sitio");
+  hideBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  `;
+  hideBtn.addEventListener("click", () => {
+    const origin = location.origin;
+    chrome.storage.sync.get({ blacklist: [] }, (res) => {
+      const blacklist = res.blacklist || [];
+      if (!blacklist.includes(origin)) {
+        blacklist.push(origin);
+        chrome.storage.sync.set({ blacklist }, () => {
+          root.remove();
+        });
+      } else {
+        root.remove();
+      }
+    });
+  });
+
   const copyBtn = document.createElement("button");
   copyBtn.className = "gluco-btn";
   copyBtn.type = "button";
@@ -327,6 +360,7 @@ function ensureRoot() {
   details.appendChild(meta);
   details.appendChild(refreshBtn);
   details.appendChild(openAppBtn);
+  details.appendChild(hideBtn);
   details.appendChild(copyBtn);
 
   card.appendChild(valueEl);
@@ -580,14 +614,19 @@ function setState(payload) {
   card.classList.remove("inactive");
 }
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener(async (msg) => {
   if (msg?.type === "GLUCO_UPDATE") {
+    if (await isBlacklisted()) {
+      const root = document.getElementById(ROOT_ID);
+      if (root) root.remove();
+      return;
+    }
     setState(msg.payload);
   }
 });
 
 // initial paint
-chrome.runtime.sendMessage({ type: "GLUCO_GET_LATEST" }, (resp) => {
+chrome.runtime.sendMessage({ type: "GLUCO_GET_LATEST" }, async (resp) => {
   if (chrome.runtime.lastError) {
     setState({
       ok: false,
@@ -596,5 +635,6 @@ chrome.runtime.sendMessage({ type: "GLUCO_GET_LATEST" }, (resp) => {
     });
     return;
   }
+  if (await isBlacklisted()) return;
   setState(resp?.lastResult || null);
 });
