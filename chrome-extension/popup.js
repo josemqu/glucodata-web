@@ -2,10 +2,41 @@ function $(id) {
   return document.getElementById(id);
 }
 
-function formatTime(timestamp) {
-  if (!timestamp) return "Nunca";
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function formatUpdatedRelative(ms) {
+  if (typeof ms !== "number" || Number.isNaN(ms)) return "";
+
+  const diffMs = Date.now() - ms;
+  if (!Number.isFinite(diffMs)) return "";
+
+  const abs = Math.abs(diffMs);
+  const rtf = new Intl.RelativeTimeFormat("es", { numeric: "always" });
+
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (abs < minute) {
+    const seconds = Math.round(diffMs / 1000);
+    return rtf.format(-seconds, "second");
+  }
+  if (abs < hour) {
+    const minutes = Math.round(diffMs / minute);
+    return rtf.format(-minutes, "minute");
+  }
+  if (abs < day) {
+    const hours = Math.round(diffMs / hour);
+    return rtf.format(-hours, "hour");
+  }
+
+  const days = Math.round(diffMs / day);
+  if (Math.abs(days) <= 7) {
+    return rtf.format(-days, "day");
+  }
+
+  return new Intl.DateTimeFormat("es", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(ms));
 }
 
 async function updateUI() {
@@ -13,12 +44,12 @@ async function updateUI() {
   const settings = await chrome.storage.sync.get({ enabled: true, apiUrl: "" });
 
   if (!settings.enabled) {
-    $("connectionStatus").textContent = "Desactivado";
+    $("connectionStatus").textContent = "Badge desactivado";
     $("connectionStatus").className = "status-badge status-err";
-    $("glucoseValue").textContent = "--";
-    $("glucoseTrend").textContent = "";
-    $("lastUpdate").textContent = "La extensión está deshabilitada";
-    return;
+    // We continue showing data even if the on-page badge is disabled
+  } else {
+    $("connectionStatus").textContent = "En línea";
+    $("connectionStatus").className = "status-badge status-ok";
   }
 
   if (!lastResult) {
@@ -64,9 +95,9 @@ async function updateUI() {
     }
 
     $("glucoseUnit").textContent = data.unit || "mg/dL";
-    $("lastUpdate").textContent = "Hace un momento: " + formatTime(data.timestamp || lastResult.receivedAt);
-    $("connectionStatus").textContent = "En línea";
-    $("connectionStatus").className = "status-badge status-ok";
+    const ms = data.time || (data.timestamp ? new Date(data.timestamp).getTime() : lastResult.receivedAt);
+    const rel = formatUpdatedRelative(ms);
+    $("lastUpdate").textContent = rel ? `Actualizado ${rel}` : "Actualizado";
 
     // Color code based on status colorKey if available
     const status = data.status || {};
@@ -111,8 +142,21 @@ $("goHomeBtn").addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "GLUCO_OPEN_DASHBOARD" });
 });
 
+$("connectionStatus").addEventListener("click", async () => {
+  const settings = await chrome.storage.sync.get({ enabled: true });
+  const newState = !settings.enabled;
+  await chrome.storage.sync.set({ enabled: newState });
+  // Update UI immediately
+  updateUI();
+  // Notify background and content scripts immediately
+  chrome.runtime.sendMessage({ type: "GLUCO_TOGGLE_BADGE", enabled: newState });
+});
+
 // Sync UI on start
 updateUI();
+
+// Refresh relative time every 30s
+setInterval(updateUI, 30000);
 
 // Listen for updates from background
 chrome.runtime.onMessage.addListener((msg) => {

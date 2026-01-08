@@ -57,7 +57,6 @@ function normalizeTrendArrow(trend) {
 
 async function fetchLatest() {
   const settings = await getSettings();
-  if (!settings.enabled) return;
 
   if (!settings.apiUrl || !settings.apiToken) {
     const payload = {
@@ -189,6 +188,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       chrome.tabs.create({ url: urlToOpen, active: true });
     });
+    return true;
+  }
+  if (msg?.type === "GLUCO_TOGGLE_BADGE") {
+    getLastResult().then(({ lastResult }) => broadcastUpdate(lastResult));
     return true;
   }
 });

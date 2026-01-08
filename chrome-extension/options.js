@@ -220,6 +220,13 @@ $("newBlacklistUrl").addEventListener("keypress", (e) => {
   }
 });
 
+$("enabled").addEventListener("change", async () => {
+  const enabled = $("enabled").checked;
+  await chrome.storage.sync.set({ enabled });
+  // Force a refresh to update all tabs immediately
+  chrome.runtime.sendMessage({ type: "GLUCO_FORCE_REFRESH" });
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   load().catch((e) => setStatus(e?.message || "Error", "err"));
 });

@@ -608,7 +608,8 @@ function setState(payload) {
 
 chrome.runtime.onMessage.addListener(async (msg) => {
   if (msg?.type === "GLUCO_UPDATE") {
-    if (await isBlacklisted()) {
+    const settings = await chrome.storage.sync.get({ enabled: true });
+    if (!settings.enabled || (await isBlacklisted())) {
       const root = document.getElementById(ROOT_ID);
       if (root) root.remove();
       return;

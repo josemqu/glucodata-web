@@ -172,15 +172,37 @@
     }
 
     .status-badge {
-      padding: 2px 8px;
+      padding: 4px 10px;
       border-radius: 20px;
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      border: 1px solid transparent;
     }
 
-    .status-ok { background: rgba(16, 185, 129, 0.2); color: var(--accent); }
-    .status-err { background: rgba(239, 68, 68, 0.2); color: var(--error); }
+    .status-badge:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.2);
+    }
+
+    .status-badge:active {
+      transform: translateY(0);
+    }
+
+    .status-ok { 
+      background: rgba(16, 185, 129, 0.15); 
+      color: var(--accent);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+    
+    .status-err { 
+      background: rgba(239, 68, 68, 0.15); 
+      color: var(--error);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
 
     .loader {
       width: 16px;
