@@ -76,17 +76,44 @@
       transition: all 0.3s ease;
     }
 
+    #valueContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .value-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     .glucose-value {
-      font-size: 48px;
+      font-size: 56px;
       font-weight: 800;
       line-height: 1;
-      margin-bottom: 4px;
+      letter-spacing: -2px;
     }
 
     .glucose-trend {
-      font-size: 24px;
-      margin-left: 4px;
-      vertical-align: middle;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      margin-left: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .glucose-trend svg {
+      width: 24px;
+      height: 24px;
+      stroke-width: 2.5;
     }
 
     .glucose-unit {
@@ -184,8 +211,10 @@
 
     <div class="main-display" id="display">
       <div id="valueContainer">
-        <span class="glucose-value" id="glucoseValue">--</span>
-        <span class="glucose-trend" id="glucoseTrend"></span>
+        <div class="value-row">
+          <span class="glucose-value" id="glucoseValue">--</span>
+          <span class="glucose-trend" id="glucoseTrend"></span>
+        </div>
         <div class="glucose-unit" id="glucoseUnit">mg/dL</div>
       </div>
       <div class="last-update" id="lastUpdate">Actualizando...</div>

@@ -30,7 +30,39 @@ async function updateUI() {
   if (lastResult.ok && lastResult.data) {
     const data = lastResult.data;
     $("glucoseValue").textContent = data.value;
-    $("glucoseTrend").textContent = data.arrow || "";
+    // Style trend arrow
+    const trend = Number(data.trend);
+    const trendEl = $("glucoseTrend");
+    
+    const getTrendSVG = (t) => {
+      const base = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">`;
+      switch (t) {
+        case 5: return `${base}<path d="M12 19V5M5 12l7-7 7 7"/></svg>`; // ArrowUp
+        case 4: return `${base}<path d="M7 17L17 7M7 7h10v10"/></svg>`; // ArrowUpRight
+        case 3: return `${base}<path d="M5 12h14M12 5l7 7-7 7"/></svg>`; // ArrowRight
+        case 2: return `${base}<path d="M7 7l10 10M17 7v10H7"/></svg>`; // ArrowDownRight
+        case 1: return `${base}<path d="M12 5v14M19 12l-7 7-7-7"/></svg>`; // ArrowDown
+        default: return "";
+      }
+    };
+
+    trendEl.innerHTML = getTrendSVG(trend);
+    
+    // Set trend color matching web app
+    if (trend === 5) {
+      trendEl.style.color = "#ef4444"; // destructive
+    } else if (trend === 4) {
+      trendEl.style.color = "#f97316"; // orange-500
+    } else if (trend === 3) {
+      trendEl.style.color = "#10b981"; // emerald-500
+    } else if (trend === 2) {
+      trendEl.style.color = "#fb923c"; // orange-400
+    } else if (trend === 1) {
+      trendEl.style.color = "#ea580c"; // orange-600
+    } else {
+      trendEl.style.color = "var(--text-dim)";
+    }
+
     $("glucoseUnit").textContent = data.unit || "mg/dL";
     $("lastUpdate").textContent = "Hace un momento: " + formatTime(data.timestamp || lastResult.receivedAt);
     $("connectionStatus").textContent = "En línea";
@@ -53,11 +85,11 @@ async function updateUI() {
     }
   } else {
     $("glucoseValue").textContent = "!!";
+    $("glucoseValue").style.color = "#ef4444";
     $("glucoseTrend").textContent = "";
     $("lastUpdate").textContent = lastResult.error || "Error de conexión";
     $("connectionStatus").textContent = "Error";
     $("connectionStatus").className = "status-badge status-err";
-    $("glucoseValue").style.color = "#ef4444";
   }
 }
 
