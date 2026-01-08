@@ -109,6 +109,8 @@ async function fetchLatest() {
               time: data.time,
               isHigh: !!data.isHigh,
               isLow: !!data.isLow,
+              targets: data.targets || null,
+              status: data.status || null,
             }
           : null,
       receivedAt: Date.now(),

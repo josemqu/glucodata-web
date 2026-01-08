@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getLatestGlucoseAction } from "./actions";
 import Cookies from "js-cookie";
+import { supabase } from "@/lib/supabase";
 import {
   AreaChart,
   Area,
@@ -123,6 +124,25 @@ export default function GlucoPage() {
   const saveConfig = (newConfig: typeof targetConfig) => {
     setTargetConfig(newConfig);
     Cookies.set("gluco_config", JSON.stringify(newConfig), { expires: 365 });
+
+    // Best-effort persist to Supabase for other clients (e.g., Chrome extension)
+    supabase
+      .from("glucose_target_config")
+      .upsert(
+        {
+          id: "default",
+          low: newConfig.low,
+          high: newConfig.high,
+          hypo: newConfig.hypo,
+          hyper: newConfig.hyper,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      )
+      .then((result) => {
+        const error = result?.error;
+        if (error) console.error("Error saving config to Supabase", error);
+      });
   };
 
   const fetchData = async (
