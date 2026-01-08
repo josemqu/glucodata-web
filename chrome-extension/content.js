@@ -84,6 +84,7 @@ function ensureRoot() {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      user-select: text;
     }
     #${ROOT_ID} .gluco-dot {
       width: 9px;
@@ -162,9 +163,16 @@ function ensureRoot() {
     });
   });
 
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "gluco-btn";
+  copyBtn.type = "button";
+  copyBtn.textContent = "Copiar";
+  copyBtn.style.display = "none";
+
   details.appendChild(dot);
   details.appendChild(meta);
   details.appendChild(refreshBtn);
+  details.appendChild(copyBtn);
 
   card.appendChild(valueEl);
   card.appendChild(unitEl);
@@ -172,13 +180,13 @@ function ensureRoot() {
   card.appendChild(details);
   root.appendChild(card);
 
-  root.__gluco = { dot, valueEl, unitEl, arrowEl, sub };
+  root.__gluco = { dot, valueEl, unitEl, arrowEl, sub, copyBtn };
   return root;
 }
 
 function setState(payload) {
   const root = ensureRoot();
-  const { dot, valueEl, unitEl, arrowEl, sub } = root.__gluco;
+  const { dot, valueEl, unitEl, arrowEl, sub, copyBtn } = root.__gluco;
 
   const setValueColor = (color) => {
     valueEl.style.color = color;
@@ -252,6 +260,8 @@ function setState(payload) {
     setValueColor("#fff");
     setArrowColorByTrend(null);
     sub.textContent = "Sin datos";
+    copyBtn.style.display = "none";
+    copyBtn.onclick = null;
     root.querySelector(".gluco-card").classList.add("compact");
     return;
   }
@@ -263,7 +273,26 @@ function setState(payload) {
     arrowEl.textContent = "";
     setValueColor("#fff");
     setArrowColorByTrend(null);
-    sub.textContent = payload.error || "Error";
+    const message = payload.error || "Error";
+    sub.textContent = message;
+    copyBtn.style.display = "";
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(String(message));
+      } catch (_e) {
+        const ta = document.createElement("textarea");
+        ta.value = String(message);
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          ta.remove();
+        }
+      }
+    };
     root.querySelector(".gluco-card").classList.add("compact");
     return;
   }
@@ -276,6 +305,8 @@ function setState(payload) {
     setValueColor("#fff");
     setArrowColorByTrend(null);
     sub.textContent = "No hay mediciones";
+    copyBtn.style.display = "none";
+    copyBtn.onclick = null;
     root.querySelector(".gluco-card").classList.add("compact");
     return;
   }
@@ -312,6 +343,9 @@ function setState(payload) {
       : NaN;
   const rel = formatUpdatedRelative(ms);
   sub.textContent = rel ? `Actualizado ${rel}` : "Actualizado";
+
+  copyBtn.style.display = "none";
+  copyBtn.onclick = null;
 
   root.querySelector(".gluco-card").classList.remove("compact");
 }
