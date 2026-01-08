@@ -179,3 +179,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 });
+
+// --- HOT RELOAD FOR DEVELOPMENT ---
+// This snippet polls a local server to auto-reload the extension during development.
+(function hotReload() {
+  const CHECK_INTERVAL = 1000;
+  const ENDPOINT = "http://localhost:8899/timestamp";
+  let lastTimestamp = null;
+
+  async function check() {
+    try {
+      const res = await fetch(ENDPOINT);
+      const data = await res.json();
+      if (lastTimestamp && data.timestamp > lastTimestamp) {
+        console.log("[HotReload] Change detected, reloading...");
+        chrome.runtime.reload();
+      }
+      lastTimestamp = data.timestamp;
+    } catch (e) {
+      // Watcher not running, ignore
+    } finally {
+      setTimeout(check, CHECK_INTERVAL);
+    }
+  }
+
+  check();
+})();
