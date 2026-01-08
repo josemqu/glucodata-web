@@ -1,5 +1,24 @@
 const ROOT_ID = "gluco-badge-root";
 
+const DEFAULT_BOTTOM_PX = 16;
+const VIEWPORT_PADDING_PX = 16;
+
+function getSiteKey() {
+  try {
+    return String(location.origin);
+  } catch (_e) {
+    return "unknown";
+  }
+}
+
+function getPositionStorageKey() {
+  return `glucoBadgeBottom:${getSiteKey()}`;
+}
+
+function clamp(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
 function ensureRoot() {
   let root = document.getElementById(ROOT_ID);
   if (root) return root;
@@ -26,21 +45,32 @@ function ensureRoot() {
       gap: 10px;
       padding: 8px 10px;
       border-radius: 999px;
-      background: rgba(20, 20, 20, 0.88);
+      background: rgba(20, 20, 20, 0.65);
       color: #fff;
       box-shadow: 0 10px 30px rgba(0,0,0,0.35);
       border: 1px solid rgba(255,255,255,0.10);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      cursor: default;
+      cursor: grab;
       user-select: none;
-      transition: padding 0.2s ease-in-out;
+      transition: background-color 700ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: background-color, box-shadow;
+    }
+    #${ROOT_ID} .gluco-card.dragging {
+      cursor: grabbing;
+    }
+    #${ROOT_ID} .gluco-card .gluco-btn {
+      cursor: pointer;
+    }
+    #${ROOT_ID} .gluco-card.inactive {
+      background: rgba(20, 20, 20, 0.35);
     }
     #${ROOT_ID} .gluco-card.compact {
-      padding: 6px 8px;
+      padding: 8px 10px;
     }
     #${ROOT_ID} .gluco-card:hover {
-      padding: 10px 12px;
+      padding: 8px 10px;
+      box-shadow: 0 13px 36px rgba(0,0,0,0.38);
     }
     #${ROOT_ID} .gluco-value {
       font-size: 18px;
@@ -64,12 +94,21 @@ function ensureRoot() {
       color: #fff;
     }
     #${ROOT_ID} .gluco-details {
-      display: none;
+      display: flex;
       align-items: center;
       gap: 10px;
+      opacity: 0;
+      max-width: 0;
+      overflow: hidden;
+      pointer-events: none;
+      transform: translateX(-2px);
+      transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1), max-width 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
     }
     #${ROOT_ID} .gluco-card:hover .gluco-details {
-      display: flex;
+      opacity: 1;
+      max-width: 500px;
+      pointer-events: auto;
+      transform: translateX(0);
     }
     #${ROOT_ID} .gluco-meta {
       display: flex;
@@ -115,13 +154,41 @@ function ensureRoot() {
       color: #fff;
       font-size: 11px;
       font-weight: 700;
-      cursor: pointer;
     }
     #${ROOT_ID} .gluco-btn:hover {
       background: rgba(255,255,255,0.18);
     }
   `;
   root.appendChild(style);
+
+  const applyClampedBottom = (requestedBottomPx) => {
+    const cardEl = root.querySelector(".gluco-card");
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    const maxBottom = Math.max(
+      VIEWPORT_PADDING_PX,
+      window.innerHeight - VIEWPORT_PADDING_PX - rect.height
+    );
+    const bottom = clamp(
+      Number(requestedBottomPx),
+      VIEWPORT_PADDING_PX,
+      maxBottom
+    );
+    root.style.bottom = `${bottom}px`;
+  };
+
+  const restoreBottom = () => {
+    const key = getPositionStorageKey();
+    chrome.storage.local.get([key], (res) => {
+      void chrome.runtime.lastError;
+      const stored = res?.[key];
+      const bottom =
+        typeof stored === "number" && Number.isFinite(stored)
+          ? stored
+          : DEFAULT_BOTTOM_PX;
+      applyClampedBottom(bottom);
+    });
+  };
 
   const card = document.createElement("div");
   card.className = "gluco-card compact";
@@ -180,6 +247,68 @@ function ensureRoot() {
   card.appendChild(details);
   root.appendChild(card);
 
+  restoreBottom();
+
+  window.addEventListener(
+    "resize",
+    () => {
+      const current = Number.parseFloat(root.style.bottom || "");
+      applyClampedBottom(
+        Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX
+      );
+    },
+    { passive: true }
+  );
+
+  const persistBottom = () => {
+    const key = getPositionStorageKey();
+    const current = Number.parseFloat(root.style.bottom || "");
+    const bottom = Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX;
+    chrome.storage.local.set({ [key]: bottom }, () => {
+      void chrome.runtime.lastError;
+    });
+  };
+
+  let dragStartClientY = null;
+  let dragStartBottomPx = null;
+  card.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const target = e.target;
+    if (target && target.closest && target.closest("button")) return;
+
+    dragStartClientY = e.clientY;
+    const current = Number.parseFloat(root.style.bottom || "");
+    dragStartBottomPx = Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX;
+
+    try {
+      card.setPointerCapture(e.pointerId);
+    } catch (_err) {
+      // ignore
+    }
+
+    card.classList.add("dragging");
+
+    e.preventDefault();
+  });
+
+  card.addEventListener("pointermove", (e) => {
+    if (dragStartClientY == null || dragStartBottomPx == null) return;
+    const dy = e.clientY - dragStartClientY;
+    const nextBottom = dragStartBottomPx - dy;
+    applyClampedBottom(nextBottom);
+  });
+
+  const endDrag = () => {
+    if (dragStartClientY == null || dragStartBottomPx == null) return;
+    dragStartClientY = null;
+    dragStartBottomPx = null;
+    card.classList.remove("dragging");
+    persistBottom();
+  };
+
+  card.addEventListener("pointerup", endDrag);
+  card.addEventListener("pointercancel", endDrag);
+
   root.__gluco = { dot, valueEl, unitEl, arrowEl, sub, copyBtn };
   return root;
 }
@@ -187,6 +316,7 @@ function ensureRoot() {
 function setState(payload) {
   const root = ensureRoot();
   const { dot, valueEl, unitEl, arrowEl, sub, copyBtn } = root.__gluco;
+  const card = root.querySelector(".gluco-card");
 
   const setValueColor = (color) => {
     valueEl.style.color = color;
@@ -262,7 +392,8 @@ function setState(payload) {
     sub.textContent = "Sin datos";
     copyBtn.style.display = "none";
     copyBtn.onclick = null;
-    root.querySelector(".gluco-card").classList.add("compact");
+    card.classList.add("compact");
+    card.classList.add("inactive");
     return;
   }
 
@@ -293,7 +424,8 @@ function setState(payload) {
         }
       }
     };
-    root.querySelector(".gluco-card").classList.add("compact");
+    card.classList.add("compact");
+    card.classList.add("inactive");
     return;
   }
 
@@ -307,7 +439,8 @@ function setState(payload) {
     sub.textContent = "No hay mediciones";
     copyBtn.style.display = "none";
     copyBtn.onclick = null;
-    root.querySelector(".gluco-card").classList.add("compact");
+    card.classList.add("compact");
+    card.classList.add("inactive");
     return;
   }
 
@@ -347,7 +480,8 @@ function setState(payload) {
   copyBtn.style.display = "none";
   copyBtn.onclick = null;
 
-  root.querySelector(".gluco-card").classList.remove("compact");
+  card.classList.remove("compact");
+  card.classList.remove("inactive");
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
