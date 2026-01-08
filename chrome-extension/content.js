@@ -67,8 +67,11 @@ function ensureRoot() {
       border-radius: 999px;
       background: rgba(20, 20, 20, 0.65);
       color: #fff;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 
+        0 8px 25px rgba(0,0,0,0.3),
+        inset 0 0.5px 0.5px rgba(255,255,255,0.08),
+        inset 0 -0.5px 0.5px rgba(0,0,0,0.3);
+      border: 0.5px solid rgba(255,255,255,0.05);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       cursor: grab;
@@ -83,12 +86,12 @@ function ensureRoot() {
       position: absolute;
       top: 0;
       left: -150%;
-      width: 40px;
+      width: 50px;
       height: 100%;
       background: linear-gradient(
         to right,
         transparent 0%,
-        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.12) 50%,
         transparent 100%
       );
       transform: skewX(-20deg);
@@ -99,9 +102,26 @@ function ensureRoot() {
     @keyframes gluco-shine {
       0%, 80% {
         left: -150%;
+        border-color: rgba(255, 255, 255, 0.05);
+        box-shadow: 
+          0 8px 25px rgba(0,0,0,0.3),
+          inset 0 0.5px 0.5px rgba(255,255,255,0.08),
+          inset 0 -0.5px 0.5px rgba(0,0,0,0.3);
+      }
+      90% {
+        border-color: rgba(255, 255, 255, 0.45);
+        box-shadow: 
+          0 8px 28px rgba(0,0,0,0.35),
+          inset 0 0.5px 1.5px rgba(255,255,255,0.4),
+          inset 0 -0.5px 0.5px rgba(0,0,0,0.3);
       }
       100% {
         left: 200%;
+        border-color: rgba(255, 255, 255, 0.05);
+        box-shadow: 
+          0 8px 25px rgba(0,0,0,0.3),
+          inset 0 0.5px 0.5px rgba(255,255,255,0.08),
+          inset 0 -0.5px 0.5px rgba(0,0,0,0.3);
       }
     }
     #${ROOT_ID} .gluco-card.dragging {
