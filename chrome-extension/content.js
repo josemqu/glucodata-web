@@ -96,7 +96,7 @@ function ensureRoot() {
     #${ROOT_ID} .gluco-details {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       opacity: 0;
       max-width: 0;
       overflow: hidden;
@@ -146,7 +146,6 @@ function ensureRoot() {
       box-shadow: 0 0 0 4px rgba(248,113,113,0.18);
     }
     #${ROOT_ID} .gluco-btn {
-      margin-left: 6px;
       padding: 6px 10px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.14);
@@ -154,6 +153,49 @@ function ensureRoot() {
       color: #fff;
       font-size: 11px;
       font-weight: 700;
+    }
+    #${ROOT_ID} .gluco-icon-btn {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      position: relative;
+    }
+    #${ROOT_ID} .gluco-icon-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+    #${ROOT_ID} .gluco-spinner {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    #${ROOT_ID} .gluco-spinner::before {
+      content: "";
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: rgba(255,255,255,0.95);
+      animation: gluco-spin 700ms linear infinite;
+    }
+    #${ROOT_ID} .gluco-icon-btn.loading svg {
+      opacity: 0.35;
+    }
+    #${ROOT_ID} .gluco-icon-btn.loading .gluco-spinner {
+      display: inline-flex;
+    }
+    @keyframes gluco-spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
     #${ROOT_ID} .gluco-btn:hover {
       background: rgba(255,255,255,0.18);
@@ -221,13 +263,53 @@ function ensureRoot() {
   meta.appendChild(sub);
 
   const refreshBtn = document.createElement("button");
-  refreshBtn.className = "gluco-btn";
+  refreshBtn.className = "gluco-btn gluco-icon-btn";
   refreshBtn.type = "button";
-  refreshBtn.textContent = "Actualizar";
+  refreshBtn.title = "Actualizar";
+  refreshBtn.setAttribute("aria-label", "Actualizar");
+  refreshBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+    <span class="gluco-spinner" aria-hidden="true"></span>
+  `;
   refreshBtn.addEventListener("click", () => {
+    refreshBtn.classList.add("loading");
+    refreshBtn.disabled = true;
     chrome.runtime.sendMessage({ type: "GLUCO_FORCE_REFRESH" }, () => {
       void chrome.runtime.lastError;
     });
+  });
+
+  const openAppBtn = document.createElement("button");
+  openAppBtn.className = "gluco-btn gluco-icon-btn";
+  openAppBtn.type = "button";
+  openAppBtn.title = "Abrir GlucoData";
+  openAppBtn.setAttribute("aria-label", "Abrir GlucoData");
+  openAppBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M14 3h7v7" />
+      <path d="M10 14L21 3" />
+      <path d="M21 14v7h-7" />
+      <path d="M3 10V3h7" />
+      <path d="M3 14v7h7" />
+    </svg>
+  `;
+  openAppBtn.addEventListener("click", () => {
+    const url = "https://glucodata-web.vercel.app/";
+    const win = window.open(
+      url,
+      "_blank",
+      "popup=yes,width=420,height=800,noopener,noreferrer"
+    );
+    if (win) {
+      try {
+        win.opener = null;
+      } catch (_e) {
+        // ignore
+      }
+    }
   });
 
   const copyBtn = document.createElement("button");
@@ -239,6 +321,7 @@ function ensureRoot() {
   details.appendChild(dot);
   details.appendChild(meta);
   details.appendChild(refreshBtn);
+  details.appendChild(openAppBtn);
   details.appendChild(copyBtn);
 
   card.appendChild(valueEl);
@@ -309,14 +392,20 @@ function ensureRoot() {
   card.addEventListener("pointerup", endDrag);
   card.addEventListener("pointercancel", endDrag);
 
-  root.__gluco = { dot, valueEl, unitEl, arrowEl, sub, copyBtn };
+  root.__gluco = { dot, valueEl, unitEl, arrowEl, sub, copyBtn, refreshBtn };
   return root;
 }
 
 function setState(payload) {
   const root = ensureRoot();
-  const { dot, valueEl, unitEl, arrowEl, sub, copyBtn } = root.__gluco;
+  const { dot, valueEl, unitEl, arrowEl, sub, copyBtn, refreshBtn } =
+    root.__gluco;
   const card = root.querySelector(".gluco-card");
+
+  if (refreshBtn) {
+    refreshBtn.classList.remove("loading");
+    refreshBtn.disabled = false;
+  }
 
   const setValueColor = (color) => {
     valueEl.style.color = color;
