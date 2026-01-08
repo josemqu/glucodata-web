@@ -19,7 +19,12 @@ function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
+function isContextValid() {
+  return !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id);
+}
+
 async function isBlacklisted() {
+  if (!isContextValid()) return true; // Fail safe
   try {
     const origin = location.origin;
     if (origin === "https://glucodata-web.vercel.app") return true;
@@ -70,6 +75,34 @@ function ensureRoot() {
       user-select: none;
       transition: background-color 700ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
       will-change: background-color, box-shadow;
+      position: relative;
+      overflow: hidden;
+    }
+    #${ROOT_ID} .gluco-card::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -150%;
+      width: 40px;
+      height: 100%;
+      background: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(255, 255, 255, 0.15) 50%,
+        transparent 100%
+      );
+      transform: skewX(-20deg);
+      pointer-events: none;
+      animation: gluco-shine 7s infinite ease-in-out;
+      z-index: 10;
+    }
+    @keyframes gluco-shine {
+      0%, 80% {
+        left: -150%;
+      }
+      100% {
+        left: 200%;
+      }
     }
     #${ROOT_ID} .gluco-card.dragging {
       cursor: grabbing;
@@ -237,8 +270,10 @@ function ensureRoot() {
   };
 
   const restoreBottom = () => {
+    if (!isContextValid()) return;
     const key = getPositionStorageKey();
     chrome.storage.local.get([key], (res) => {
+      if (!isContextValid()) return;
       void chrome.runtime.lastError;
       const stored = res?.[key];
       const bottom =
@@ -292,9 +327,14 @@ function ensureRoot() {
     <span class="gluco-spinner" aria-hidden="true"></span>
   `;
   refreshBtn.addEventListener("click", () => {
+    if (!isContextValid()) {
+      alert("La extensión se ha actualizado. Por favor, recarga la página.");
+      return;
+    }
     refreshBtn.classList.add("loading");
     refreshBtn.disabled = true;
     chrome.runtime.sendMessage({ type: "GLUCO_FORCE_REFRESH" }, () => {
+      if (!isContextValid()) return;
       void chrome.runtime.lastError;
     });
   });
@@ -314,6 +354,10 @@ function ensureRoot() {
     </svg>
   `;
   openAppBtn.addEventListener("click", () => {
+    if (!isContextValid()) {
+      alert("La extensión se ha actualizado. Por favor, recarga la página.");
+      return;
+    }
     chrome.runtime.sendMessage({ type: "GLUCO_OPEN_DASHBOARD" });
   });
 
@@ -328,8 +372,16 @@ function ensureRoot() {
     </svg>
   `;
   hideBtn.addEventListener("click", () => {
+    if (!isContextValid()) {
+      root.remove();
+      return;
+    }
     const origin = location.origin;
     chrome.storage.sync.get({ blacklist: [] }, (res) => {
+      if (!isContextValid()) {
+        root.remove();
+        return;
+      }
       const blacklist = res.blacklist || [];
       if (!blacklist.includes(origin)) {
         blacklist.push(origin);
@@ -375,10 +427,12 @@ function ensureRoot() {
   );
 
   const persistBottom = () => {
+    if (!isContextValid()) return;
     const key = getPositionStorageKey();
     const current = Number.parseFloat(root.style.bottom || "");
     const bottom = Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX;
     chrome.storage.local.set({ [key]: bottom }, () => {
+      if (!isContextValid()) return;
       void chrome.runtime.lastError;
     });
   };
@@ -428,6 +482,7 @@ function ensureRoot() {
 }
 
 function setState(payload) {
+  if (!isContextValid()) return;
   const root = ensureRoot();
   if (!root) return; // No renderizar en la propia app
 
@@ -607,8 +662,10 @@ function setState(payload) {
 }
 
 chrome.runtime.onMessage.addListener(async (msg) => {
+  if (!isContextValid()) return;
   if (msg?.type === "GLUCO_UPDATE") {
     const settings = await chrome.storage.sync.get({ enabled: true });
+    if (!isContextValid()) return;
     if (!settings.enabled || (await isBlacklisted())) {
       const root = document.getElementById(ROOT_ID);
       if (root) root.remove();
@@ -619,15 +676,18 @@ chrome.runtime.onMessage.addListener(async (msg) => {
 });
 
 // initial paint
-chrome.runtime.sendMessage({ type: "GLUCO_GET_LATEST" }, async (resp) => {
-  if (chrome.runtime.lastError) {
-    setState({
-      ok: false,
-      error: chrome.runtime.lastError.message,
-      data: null,
-    });
-    return;
-  }
-  if (await isBlacklisted()) return;
-  setState(resp?.lastResult || null);
-});
+if (isContextValid()) {
+  chrome.runtime.sendMessage({ type: "GLUCO_GET_LATEST" }, async (resp) => {
+    if (!isContextValid()) return;
+    if (chrome.runtime.lastError) {
+      setState({
+        ok: false,
+        error: chrome.runtime.lastError.message,
+        data: null,
+      });
+      return;
+    }
+    if (await isBlacklisted()) return;
+    setState(resp?.lastResult || null);
+  });
+}
