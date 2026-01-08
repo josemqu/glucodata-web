@@ -36,10 +36,21 @@ async function updateUI() {
     $("connectionStatus").textContent = "En línea";
     $("connectionStatus").className = "status-badge status-ok";
 
-    // Color code based on levels if available
-    if (data.isLow) $("glucoseValue").style.color = "#ef4444";
-    else if (data.isHigh) $("glucoseValue").style.color = "#f59e0b";
-    else $("glucoseValue").style.color = "#10b981";
+    // Color code based on status colorKey if available
+    const status = data.status || {};
+    const colorKey = status.colorKey || null;
+    
+    if (colorKey === "critical") {
+      $("glucoseValue").style.color = "#ef4444"; // Error/Red
+    } else if (colorKey === "warning") {
+      $("glucoseValue").style.color = "#f59e0b"; // Amber/Warning
+    } else if (colorKey === "ok") {
+      $("glucoseValue").style.color = "#10b981"; // Emerald/OK
+    } else {
+      // Fallback to basic high/low
+      if (data.isLow || data.isHigh) $("glucoseValue").style.color = "#f59e0b";
+      else $("glucoseValue").style.color = "#10b981";
+    }
   } else {
     $("glucoseValue").textContent = "!!";
     $("glucoseTrend").textContent = "";
