@@ -6,10 +6,10 @@
   "permissions": ["storage", "alarms"],
   "host_permissions": ["<all_urls>"],
   "icons": {
-    "16": "icons/glucoweb.svg",
-    "32": "icons/glucoweb.svg",
-    "48": "icons/glucoweb.svg",
-    "128": "icons/glucoweb.svg"
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "background": {
     "service_worker": "background.js",
@@ -27,8 +27,10 @@
     "default_title": "Gluco Badge",
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/glucoweb.svg",
-      "32": "icons/glucoweb.svg"
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   }
 }

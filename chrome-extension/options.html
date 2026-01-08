@@ -125,6 +125,43 @@
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
     }
 
+    /* Validation Status Styles */
+    .input-with-status {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .validation-indicator {
+      position: absolute;
+      right: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      transition: all 0.3s ease;
+      opacity: 0;
+    }
+
+    .validation-indicator.visible {
+      opacity: 1;
+    }
+
+    .validation-indicator svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .status-loading { color: var(--text-dim); animation: spin 1s linear infinite; }
+    .status-success { color: var(--accent); }
+    .status-error { color: var(--error); }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .hint {
       font-size: 12px;
       color: var(--text-dim);
@@ -302,7 +339,12 @@
 
         <div class="form-group">
           <label for="apiToken">Token de Acceso</label>
-          <input id="apiToken" type="text" placeholder="Tu GLUCO_API_TOKEN" />
+          <div class="input-with-status">
+            <input id="apiToken" type="text" placeholder="Tu GLUCO_API_TOKEN" />
+            <div id="tokenStatus" class="validation-indicator">
+              <!-- Icons will be injected here via JS -->
+            </div>
+          </div>
           <div class="hint">Configurado en las variables de entorno de tu servidor.</div>
         </div>
       </div>
