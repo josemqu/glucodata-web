@@ -20,7 +20,11 @@ function clamp(n, min, max) {
 }
 
 function isContextValid() {
-  return !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id);
+  return !!(
+    typeof chrome !== "undefined" &&
+    chrome.runtime &&
+    chrome.runtime.id
+  );
 }
 
 async function isBlacklisted() {
@@ -63,6 +67,7 @@ function ensureRoot() {
       display: flex;
       align-items: center;
       gap: 10px;
+      justify-content: flex-end;
       padding: 8px 10px;
       border-radius: 999px;
       background: rgba(20, 20, 20, 0.65);
@@ -146,6 +151,11 @@ function ensureRoot() {
       letter-spacing: -0.6px;
       line-height: 1;
       color: var(--gluco-emerald);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      display: inline-block;
+      width: 3ch;
+      text-align: right;
     }
     #${ROOT_ID} .gluco-unit {
       font-size: 10px;
@@ -167,16 +177,19 @@ function ensureRoot() {
       display: flex;
       align-items: center;
       gap: 8px;
+      order: -1;
       opacity: 0;
       max-width: 0;
+      margin-right: -10px;
       overflow: hidden;
       pointer-events: none;
-      transform: translateX(-2px);
-      transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1), max-width 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateX(2px);
+      transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1), max-width 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 520ms cubic-bezier(0.16, 1, 0.3, 1), margin-right 520ms cubic-bezier(0.16, 1, 0.3, 1);
     }
     #${ROOT_ID} .gluco-card:hover .gluco-details {
       opacity: 1;
       max-width: 500px;
+      margin-right: 0;
       pointer-events: auto;
       transform: translateX(0);
     }
@@ -311,10 +324,6 @@ function ensureRoot() {
   valueEl.className = "gluco-value";
   valueEl.textContent = "--";
 
-  const unitEl = document.createElement("span");
-  unitEl.className = "gluco-unit";
-  unitEl.textContent = "mg/dL";
-
   const arrowEl = document.createElement("span");
   arrowEl.className = "gluco-arrow";
   arrowEl.textContent = "";
@@ -420,7 +429,6 @@ function ensureRoot() {
   copyBtn.textContent = "Copiar";
   copyBtn.style.display = "none";
 
-  details.appendChild(unitEl);
   details.appendChild(dot);
   details.appendChild(meta);
   details.appendChild(refreshBtn);
@@ -497,7 +505,7 @@ function ensureRoot() {
   card.addEventListener("pointerup", endDrag);
   card.addEventListener("pointercancel", endDrag);
 
-  root.__gluco = { dot, valueEl, unitEl, arrowEl, sub, copyBtn, refreshBtn };
+  root.__gluco = { dot, valueEl, arrowEl, sub, copyBtn, refreshBtn };
   return root;
 }
 
@@ -506,8 +514,7 @@ function setState(payload) {
   const root = ensureRoot();
   if (!root) return; // No renderizar en la propia app
 
-  const { dot, valueEl, unitEl, arrowEl, sub, copyBtn, refreshBtn } =
-    root.__gluco;
+  const { dot, valueEl, arrowEl, sub, copyBtn, refreshBtn } = root.__gluco;
   const card = root.querySelector(".gluco-card");
 
   if (refreshBtn) {
@@ -582,7 +589,6 @@ function setState(payload) {
   if (!payload) {
     dot.className = "gluco-dot err";
     valueEl.textContent = "--";
-    unitEl.textContent = "mg/dL";
     arrowEl.textContent = "";
     setValueColor("#fff");
     setArrowColorByTrend(null);
@@ -597,30 +603,12 @@ function setState(payload) {
   if (!payload.ok) {
     dot.className = "gluco-dot err";
     valueEl.textContent = "--";
-    unitEl.textContent = "mg/dL";
     arrowEl.textContent = "";
     setValueColor("#fff");
     setArrowColorByTrend(null);
-    const message = payload.error || "Error";
-    sub.textContent = message;
-    copyBtn.style.display = "";
-    copyBtn.onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(String(message));
-      } catch (_e) {
-        const ta = document.createElement("textarea");
-        ta.value = String(message);
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-          document.execCommand("copy");
-        } finally {
-          ta.remove();
-        }
-      }
-    };
+    sub.textContent = payload.error ? String(payload.error) : "Error";
+    copyBtn.style.display = "none";
+    copyBtn.onclick = null;
     card.classList.add("compact");
     card.classList.add("inactive");
     return;
@@ -629,11 +617,10 @@ function setState(payload) {
   if (!payload.data) {
     dot.className = "gluco-dot warn";
     valueEl.textContent = "--";
-    unitEl.textContent = "mg/dL";
     arrowEl.textContent = "";
     setValueColor("#fff");
     setArrowColorByTrend(null);
-    sub.textContent = "No hay mediciones";
+    sub.textContent = "Sin datos";
     copyBtn.style.display = "none";
     copyBtn.onclick = null;
     card.classList.add("compact");
@@ -641,12 +628,8 @@ function setState(payload) {
     return;
   }
 
-  dot.className =
-    payload.data.isLow || payload.data.isHigh
-      ? "gluco-dot warn"
-      : "gluco-dot ok";
+  dot.className = "gluco-dot ok";
   valueEl.textContent = String(payload.data.value);
-  unitEl.textContent = payload.data.unit || "mg/dL";
   arrowEl.textContent = payload.data.arrow || "";
 
   const colorKey = payload.data?.status?.colorKey || null;
