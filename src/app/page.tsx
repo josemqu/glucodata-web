@@ -19,6 +19,8 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
+  ChevronsUp,
+  ChevronsDown,
 } from "lucide-react";
 import {
   Card,
@@ -48,6 +50,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import { ModeToggle } from "@/components/mode-toggle";
+import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 
 export default function GlucoPage() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -313,22 +316,46 @@ export default function GlucoPage() {
     };
   }, [isLoggedIn, activeView]);
 
-  const getTrendIcon = (trend: number) => {
-    const className = "w-6 h-6";
-    switch (trend) {
-      case 5:
-        return <ArrowUp className={`${className} text-destructive`} />;
-      case 4:
-        return <ArrowUpRight className={`${className} text-orange-500`} />;
-      case 3:
-        return <ArrowRight className={`${className} text-emerald-500`} />;
-      case 2:
-        return <ArrowDownRight className={`${className} text-orange-400`} />;
-      case 1:
-        return <ArrowDown className={`${className} text-orange-600`} />;
-      default:
-        return null;
+  const getTrendIcon = (trend: TrendState) => {
+    const className = "w-6 h-6 transition-all duration-300";
+    const rotation = getTrendRotation(trend);
+
+    const getColor = (s: TrendState) => {
+      switch (s) {
+        case TrendState.DoubleDown:
+        case TrendState.DoubleUp:
+          return "text-destructive";
+        case TrendState.Down:
+        case TrendState.DownAngledLarge:
+        case TrendState.DownAngled:
+        case TrendState.Up:
+        case TrendState.UpAngledLarge:
+        case TrendState.UpAngled:
+          return "text-orange-500";
+        case TrendState.DownSlight:
+        case TrendState.UpSlight:
+        case TrendState.Flat:
+          return "text-emerald-500";
+        default:
+          return "text-muted-foreground";
+      }
+    };
+
+    const color = getColor(trend);
+
+    if (trend === TrendState.DoubleUp) {
+      return <ChevronsUp className={`${className} ${color}`} />;
     }
+    if (trend === TrendState.DoubleDown) {
+      return <ChevronsDown className={`${className} ${color}`} />;
+    }
+
+    return (
+      <ArrowUp
+        className={`${className} ${color}`}
+        style={{ transform: `rotate(${rotation}deg)` }}
+      />
+    );
   };
 
   const getGlucoseStatus = (val: number) => {
@@ -412,6 +439,10 @@ export default function GlucoPage() {
       (p: any) => p.value !== null && p.value !== undefined
     );
   }, [filteredGraph]);
+
+  const calculatedTrend = useMemo(() => {
+    return calculateTrend(graphPoints, 30);
+  }, [graphPoints]);
 
   const chartGraph = useMemo(() => {
     const cleaned = graphPoints
@@ -1002,7 +1033,7 @@ export default function GlucoPage() {
                               {status.label}
                             </Badge>
                             <div className="p-1.5 bg-muted rounded-md border border-border/50">
-                              {getTrendIcon(glucose.trend)}
+                              {getTrendIcon(calculatedTrend)}
                             </div>
                           </div>
                         </div>
