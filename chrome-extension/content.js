@@ -172,6 +172,14 @@ function ensureRoot() {
       min-width: 18px;
       text-align: center;
       color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #${ROOT_ID} .gluco-arrow svg {
+      width: 20px;
+      height: 20px;
+      display: block;
     }
     #${ROOT_ID} .gluco-value,
     #${ROOT_ID} .gluco-arrow {
@@ -567,27 +575,7 @@ function setState(payload) {
     valueEl.style.color = color;
   };
 
-  const setArrowColorByTrend = (trend) => {
-    switch (Number(trend)) {
-      case 5:
-        arrowEl.style.color = "var(--gluco-red)";
-        return;
-      case 4:
-        arrowEl.style.color = "#f97316";
-        return;
-      case 3:
-        arrowEl.style.color = "var(--gluco-emerald)";
-        return;
-      case 2:
-        arrowEl.style.color = "#fb923c";
-        return;
-      case 1:
-        arrowEl.style.color = "#ea580c";
-        return;
-      default:
-        arrowEl.style.color = "#fff";
-    }
-  };
+
 
   const formatUpdatedRelative = (ms) => {
     if (typeof ms !== "number" || Number.isNaN(ms)) return "";
@@ -663,10 +651,9 @@ function setState(payload) {
     dot.className = "gluco-dot warn";
     valueEl.textContent = "--";
     valueEl.setAttribute("data-content", "--");
-    arrowEl.textContent = "";
+    arrowEl.innerHTML = "";
     arrowEl.setAttribute("data-content", "");
     setValueColor("#fff");
-    setArrowColorByTrend(null);
     sub.textContent = "Sin datos";
     copyBtn.style.display = "none";
     copyBtn.onclick = null;
@@ -675,11 +662,105 @@ function setState(payload) {
     return;
   }
 
+  const TrendState = {
+    DoubleDown: "DoubleDown",
+    Down: "Down",
+    DownAngledLarge: "DownAngledLarge",
+    DownAngled: "DownAngled",
+    DownSlight: "DownSlight",
+    Flat: "Flat",
+    UpSlight: "UpSlight",
+    UpAngled: "UpAngled",
+    UpAngledLarge: "UpAngledLarge",
+    Up: "Up",
+    DoubleUp: "DoubleUp",
+  };
+
+  const getTrendRotation = (state) => {
+    switch (state) {
+      case TrendState.DoubleDown: return 0;
+      case TrendState.Down: return 180;
+      case TrendState.DownAngledLarge: return 150;
+      case TrendState.DownAngled: return 135;
+      case TrendState.DownSlight: return 120;
+      case TrendState.Flat: return 90;
+      case TrendState.UpSlight: return 60;
+      case TrendState.UpAngled: return 45;
+      case TrendState.UpAngledLarge: return 30;
+      case TrendState.Up: return 0;
+      case TrendState.DoubleUp: return 0;
+    }
+    return 0;
+  };
+
+  const getTrendColor = (s, value, targets) => {
+    if (!s) return "#fff";
+    
+    // 1. Determine direction
+    const isUp =
+      s === TrendState.UpSlight ||
+      s === TrendState.UpAngled ||
+      s === TrendState.UpAngledLarge ||
+      s === TrendState.Up ||
+      s === TrendState.DoubleUp;
+
+    const isDown =
+      s === TrendState.DownSlight ||
+      s === TrendState.DownAngled ||
+      s === TrendState.DownAngledLarge ||
+      s === TrendState.Down ||
+      s === TrendState.DoubleDown;
+
+    // 2. Determine value status
+    // Safe defaults if targets missing
+    const t = targets || { low: 70, high: 180, hypo: 60, hyper: 250 };
+    
+    const isHigh = value > t.high;
+    const isLow = value < t.low;
+    const isTarget = !isHigh && !isLow;
+
+    // 3. Logic:
+    if (isTarget) return "var(--gluco-emerald)";
+
+    // If High AND going Down -> Green (Improving)
+    if (isHigh && isDown) return "var(--gluco-emerald)";
+
+    // If Low AND going Up -> Green (Improving)
+    if (isLow && isUp) return "var(--gluco-emerald)";
+
+    // Otherwise, match value color
+    if (value <= t.hypo) return "var(--gluco-red)";
+    if (value < t.low) return "var(--gluco-amber)";
+    if (value >= t.hyper) return "var(--gluco-red)";
+    if (value > t.high) return "var(--gluco-amber)";
+
+    return "#9ca3af"; // muted
+  };
+
   dot.className = "gluco-dot ok";
   valueEl.textContent = String(payload.data.value);
   valueEl.setAttribute("data-content", String(payload.data.value));
-  arrowEl.textContent = payload.data.arrow || "";
-  arrowEl.setAttribute("data-content", payload.data.arrow || "");
+
+  // Render Arrow
+  const trend = payload.data.trendState;
+  const rotation = getTrendRotation(trend);
+  const arrowColor = getTrendColor(trend, payload.data.value, payload.data.targets);
+
+  arrowEl.style.color = arrowColor;
+  arrowEl.style.transform = `rotate(0deg)`; // Reset base transform
+  
+  if (trend === TrendState.DoubleUp) {
+    arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m17 11-5-5-5 5"/><path d="m17 18-5-5-5 5"/></svg>`;
+  } else if (trend === TrendState.DoubleDown) {
+    arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 5 5 5-5"/><path d="m7 13 5 5 5-5"/></svg>`;
+  } else if (trend) {
+     // Single arrow with rotation
+     arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(${rotation}deg); transition: transform 0.3s ease;"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
+  } else {
+     // Fallback to text arrow if trendState missing (legacy)
+     arrowEl.textContent = payload.data.arrow || "";
+     arrowEl.setAttribute("data-content", payload.data.arrow || "");
+  }
 
   const colorKey = payload.data?.status?.colorKey || null;
   if (colorKey === "critical") {
@@ -695,8 +776,7 @@ function setState(payload) {
         : "var(--gluco-emerald)"
     );
   }
-  setArrowColorByTrend(payload.data.trend);
-
+  
   const ms =
     typeof payload.data.time === "number"
       ? payload.data.time
