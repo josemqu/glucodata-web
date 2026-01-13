@@ -70,7 +70,7 @@ function ensureRoot() {
       justify-content: flex-end;
       padding: 8px 10px;
       border-radius: 999px;
-      background: rgba(20, 20, 20, 0.65);
+      background: linear-gradient(135deg, rgba(32, 32, 32, 0.85), rgba(24, 24, 24, 0.9));
       color: #fff;
       box-shadow: 
         0 8px 25px rgba(0,0,0,0.3),
@@ -136,7 +136,7 @@ function ensureRoot() {
       cursor: pointer;
     }
     #${ROOT_ID} .gluco-card.inactive {
-      background: rgba(20, 20, 20, 0.35);
+      background: linear-gradient(135deg, rgba(28, 28, 28, 0.45), rgba(22, 22, 22, 0.5));
     }
     #${ROOT_ID} .gluco-card.compact {
       padding: 8px 10px;
@@ -255,6 +255,7 @@ function ensureRoot() {
       background: #9ca3af;
       box-shadow: 0 0 0 4px rgba(156,163,175,0.18);
       flex: 0 0 auto;
+      margin: 4px;
     }
     #${ROOT_ID} .gluco-dot.ok {
       background: #34d399;
