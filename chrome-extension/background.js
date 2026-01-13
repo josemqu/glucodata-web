@@ -104,6 +104,7 @@ async function fetchLatest() {
               value: data.value,
               unit: data.unit || "mg/dL",
               trend: data.trend,
+              trendState: data.trendState, // Pass through new state
               arrow: normalizeTrendArrow(data.trend),
               timestamp: data.timestamp,
               time: data.time,

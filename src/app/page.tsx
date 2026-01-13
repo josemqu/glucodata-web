@@ -441,7 +441,7 @@ export default function GlucoPage() {
   }, [filteredGraph]);
 
   const calculatedTrend = useMemo(() => {
-    return calculateTrend(graphPoints, 30);
+    return calculateTrend(graphPoints, 60);
   }, [graphPoints]);
 
   const chartGraph = useMemo(() => {

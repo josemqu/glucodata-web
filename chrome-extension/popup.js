@@ -61,37 +61,102 @@ async function updateUI() {
   if (lastResult.ok && lastResult.data) {
     const data = lastResult.data;
     $("glucoseValue").textContent = data.value;
-    // Style trend arrow
-    const trend = Number(data.trend);
+
+    // --- TREND HANDLING ---
     const trendEl = $("glucoseTrend");
-    
-    const getTrendSVG = (t) => {
-      const base = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">`;
-      switch (t) {
-        case 5: return `${base}<path d="M12 19V5M5 12l7-7 7 7"/></svg>`; // ArrowUp
-        case 4: return `${base}<path d="M7 17L17 7M7 7h10v10"/></svg>`; // ArrowUpRight
-        case 3: return `${base}<path d="M5 12h14M12 5l7 7-7 7"/></svg>`; // ArrowRight
-        case 2: return `${base}<path d="M7 7l10 10M17 7v10H7"/></svg>`; // ArrowDownRight
-        case 1: return `${base}<path d="M12 5v14M19 12l-7 7-7-7"/></svg>`; // ArrowDown
-        default: return "";
+    const trendState = data.trendState; // "Flat", "Up", "DoubleUp", etc.
+    const trendNum = Number(data.trend);
+
+    const getTrendRotation = (state) => {
+      switch (state) {
+        case "DoubleDown": return 0;
+        case "Down": return 180;
+        case "DownAngledLarge": return 150;
+        case "DownAngled": return 135;
+        case "DownSlight": return 120;
+        case "Flat": return 90; // Default ArrowUp is at 0 deg (pointing up). Wait.
+          // In page.tsx: ArrowUp is 0. Flat is 90 (pointing right).
+          // If I use ArrowUp as base:
+          // Flat (Right) -> 90 deg
+        case "UpSlight": return 60;
+        case "UpAngled": return 45;
+        case "UpAngledLarge": return 30;
+        case "Up": return 0;
+        case "DoubleUp": return 0;
+        default: return 0;
       }
     };
 
-    trendEl.innerHTML = getTrendSVG(trend);
-    
-    // Set trend color matching web app
-    if (trend === 5) {
-      trendEl.style.color = "#ef4444"; // destructive
-    } else if (trend === 4) {
-      trendEl.style.color = "#f97316"; // orange-500
-    } else if (trend === 3) {
-      trendEl.style.color = "#10b981"; // emerald-500
-    } else if (trend === 2) {
-      trendEl.style.color = "#fb923c"; // orange-400
-    } else if (trend === 1) {
-      trendEl.style.color = "#ea580c"; // orange-600
+    const baseSVG = (content) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${content}</svg>`;
+    const arrowUpPath = `<path d="M12 19V5M5 12l7-7 7 7"/>`;
+    const chevronsUpPath = `<path d="m7 11 5-5 5 5"/><path d="m7 17 5-5 5 5"/>`;
+    const chevronsDownPath = `<path d="m7 7 5 5 5-5"/><path d="m7 13 5 5 5-5"/>`;
+
+    // Clear previous styles
+    trendEl.style.transform = "";
+    trendEl.style.color = "";
+
+    if (trendState) {
+        // NEW SYSTEM
+        let rotation = getTrendRotation(trendState);
+        let svgContent = arrowUpPath;
+        let color = "var(--text-dim)";
+
+        // Determine icon and color
+        switch (trendState) {
+            case "DoubleUp":
+                svgContent = chevronsUpPath;
+                color = "#ef4444"; // destructive
+                break;
+            case "DoubleDown":
+                svgContent = chevronsDownPath;
+                color = "#ef4444"; // destructive
+                break;
+            case "Up":
+            case "UpAngledLarge":
+            case "UpAngled":
+            case "Down":
+            case "DownAngledLarge":
+            case "DownAngled":
+                color = "#f97316"; // orange-500
+                break;
+            case "UpSlight":
+            case "DownSlight":
+            case "Flat":
+                color = "#10b981"; // emerald-500
+                break;
+        }
+
+        trendEl.innerHTML = baseSVG(svgContent);
+        trendEl.style.color = color;
+        // Apply rotation to the inner SVG or the container?
+        // Container has transition, so let's use container.
+        // But Chevrons don't need rotation (or are pre-rotated).
+        if (trendState !== "DoubleUp" && trendState !== "DoubleDown") {
+             trendEl.style.transform = `rotate(${rotation}deg)`;
+        }
+
     } else {
-      trendEl.style.color = "var(--text-dim)";
+        // FALLBACK TO OLD NUMERIC SYSTEM
+        const getTrendSVG = (t) => {
+            const base = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">`;
+            switch (t) {
+                case 5: return `${base}<path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+                case 4: return `${base}<path d="M7 17L17 7M7 7h10v10"/></svg>`;
+                case 3: return `${base}<path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+                case 2: return `${base}<path d="M7 7l10 10M17 7v10H7"/></svg>`;
+                case 1: return `${base}<path d="M12 5v14M19 12l-7 7-7-7"/></svg>`;
+                default: return "";
+            }
+        };
+        trendEl.innerHTML = getTrendSVG(trendNum);
+        
+        if (trendNum === 5) trendEl.style.color = "#ef4444";
+        else if (trendNum === 4) trendEl.style.color = "#f97316";
+        else if (trendNum === 3) trendEl.style.color = "#10b981";
+        else if (trendNum === 2) trendEl.style.color = "#fb923c";
+        else if (trendNum === 1) trendEl.style.color = "#ea580c";
+        else trendEl.style.color = "var(--text-dim)";
     }
 
     $("glucoseUnit").textContent = data.unit || "mg/dL";

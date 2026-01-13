@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { supabase } from "@/lib/supabase";
+import { calculateTrend } from "@/lib/trend";
 
 const DEFAULT_TARGETS = {
   low: 70,
@@ -86,12 +87,14 @@ export async function GET(req: Request) {
     hyper: Number(configRow?.hyper ?? DEFAULT_TARGETS.hyper),
   };
 
-  const { data, error } = await supabase
+  // Fetch last ~70 mins to ensure we have enough points for the 60 min window
+  const startTime = new Date(Date.now() - 70 * 60 * 1000).toISOString();
+
+  const { data: recentData, error } = await supabase
     .from("glucose_measurements")
     .select("timestamp,value,trend,is_high,is_low,unit,patient_id")
-    .order("timestamp", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .gte("timestamp", startTime)
+    .order("timestamp", { ascending: true });
 
   if (error) {
     return NextResponse.json(
@@ -100,14 +103,24 @@ export async function GET(req: Request) {
     );
   }
 
-  if (!data) {
+  if (!recentData || recentData.length === 0) {
     return NextResponse.json(
       { success: true, data: null },
       { status: 200, headers: corsHeaders() }
     );
   }
 
-  const value = Number(data.value);
+  // Latest is the last one in ascending order
+  const latest = recentData[recentData.length - 1];
+
+  const historyForTrend = recentData.map((d) => ({
+    time: new Date(d.timestamp).getTime(),
+    value: Number(d.value),
+  }));
+
+  const calculatedTrend = calculateTrend(historyForTrend, 60);
+
+  const value = Number(latest.value);
   const status = computeStatus(value, targets);
 
   return NextResponse.json(
@@ -115,13 +128,14 @@ export async function GET(req: Request) {
       success: true,
       data: {
         value,
-        trend: data.trend,
-        time: new Date(data.timestamp).getTime(),
-        timestamp: data.timestamp,
-        unit: data.unit,
-        isHigh: data.is_high,
-        isLow: data.is_low,
-        patientId: data.patient_id,
+        trend: latest.trend,
+        trendState: calculatedTrend, // New field for advanced trend
+        time: new Date(latest.timestamp).getTime(),
+        timestamp: latest.timestamp,
+        unit: latest.unit,
+        isHigh: latest.is_high,
+        isLow: latest.is_low,
+        patientId: latest.patient_id,
         targets,
         status,
       },

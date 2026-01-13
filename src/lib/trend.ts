@@ -58,38 +58,33 @@ export function calculateTrend(
   // 3. Map Slope to State
   // Slopes are in mg/dL per minute
   
-  // Standard thresholds often used:
-  // > 3.0: Double Up
-  // > 2.0: Single Up
-  // > 1.0: 45 Up
-  // But we want more granularity:
-  
   if (slope <= -3.5) return TrendState.DoubleDown;
   if (slope <= -2.0) return TrendState.Down;
-  if (slope <= -1.2) return TrendState.DownAngledLarge;
-  if (slope <= -0.6) return TrendState.DownAngled;
-  if (slope <= -0.3) return TrendState.DownSlight;
-  if (slope < 0.3) return TrendState.Flat;
-  if (slope < 0.6) return TrendState.UpSlight;
-  if (slope < 1.2) return TrendState.UpAngled;
-  if (slope < 2.0) return TrendState.UpAngledLarge;
-  if (slope < 3.5) return TrendState.Up;
+  if (slope <= -1.5) return TrendState.DownAngledLarge;
+  if (slope <= -1.0) return TrendState.DownAngled;
+  if (slope <= -0.5) return TrendState.DownSlight;
+  if (slope <= 0.5) return TrendState.Flat;
+  if (slope <= 1.0) return TrendState.UpSlight;
+  if (slope <= 1.5) return TrendState.UpAngled;
+  if (slope <= 2.0) return TrendState.UpAngledLarge;
+  if (slope <= 3.5) return TrendState.Up;
   return TrendState.DoubleUp;
 }
 
 export function getTrendRotation(state: TrendState): number {
     switch (state) {
-        case TrendState.DoubleDown: return 180; // Icon is separate, but if fallback needed
+        case TrendState.DoubleDown: return 0; // Handled by icon
         case TrendState.Down: return 180;
-        case TrendState.DownAngledLarge: return 155;
+        case TrendState.DownAngledLarge: return 150;
         case TrendState.DownAngled: return 135;
-        case TrendState.DownSlight: return 110;
-        case TrendState.Flat: return 90;
-        case TrendState.UpSlight: return 70;
+        case TrendState.DownSlight: return 120; // or 105
+        case TrendState.Flat: return 90; // ArrowRight rotated 90? No, ArrowUp is 0. ArrowRight is 90.
+                                         // Let's assume we use a single ArrowUp icon for all singles.
+        case TrendState.UpSlight: return 60; // or 75
         case TrendState.UpAngled: return 45;
-        case TrendState.UpAngledLarge: return 25;
+        case TrendState.UpAngledLarge: return 30;
         case TrendState.Up: return 0;
-        case TrendState.DoubleUp: return 0; // Icon is separate
+        case TrendState.DoubleUp: return 0; // Handled by icon
     }
-    return 90;
+    return 0;
 }
