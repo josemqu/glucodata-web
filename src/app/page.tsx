@@ -447,6 +447,7 @@ export default function GlucoPage() {
   const chartGraph = useMemo(() => {
     const cleaned = graphPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
+      .filter((p: any) => p.time >= windowStart && p.time <= windowEnd)
       .sort((a: any, b: any) => a.time - b.time)
       .filter(
         (p: any, idx: number, arr: any[]) =>
@@ -1140,372 +1141,402 @@ export default function GlucoPage() {
                             data={chartGraph}
                             margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
                           >
-                            <defs>
-                              <linearGradient
-                                id="lineGluc"
-                                x1="0%"
-                                y1="104%"
-                                x2="0%"
-                                y2="-2%"
-                              >
-                                <stop
-                                  offset="0%"
-                                  stopColor={getGlucoseColor(dataMin)}
-                                />
+                              {(() => {
+                                const gradientId = `lineGluc-${timeRange}-${dataMin}-${dataMax}`;
+                                return (
+                                  <>
+                                    <defs>
+                                      <linearGradient
+                                        id={gradientId}
+                                        x1="0%"
+                                        y1="104%"
+                                        x2="0%"
+                                        y2="-2%"
+                                      >
+                                        <stop
+                                          offset="0%"
+                                          stopColor={getGlucoseColor(dataMin)}
+                                        />
 
-                                {targetConfig.hypo > dataMin &&
-                                  targetConfig.hypo < dataMax && (
-                                    <>
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.hypo
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.hypo - 1
-                                        )}
-                                      />
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.hypo
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.hypo + 1
-                                        )}
-                                      />
-                                    </>
-                                  )}
+                                        {targetConfig.hypo > dataMin &&
+                                          targetConfig.hypo < dataMax && (
+                                            <>
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.hypo
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.hypo - 1
+                                                )}
+                                              />
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.hypo
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.hypo + 1
+                                                )}
+                                              />
+                                            </>
+                                          )}
 
-                                {targetConfig.low > dataMin &&
-                                  targetConfig.low < dataMax && (
-                                    <>
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.low
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.low - 1
-                                        )}
-                                      />
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.low
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.low + 1
-                                        )}
-                                      />
-                                    </>
-                                  )}
+                                        {targetConfig.low > dataMin &&
+                                          targetConfig.low < dataMax && (
+                                            <>
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.low
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.low - 1
+                                                )}
+                                              />
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.low
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.low + 1
+                                                )}
+                                              />
+                                            </>
+                                          )}
 
-                                {targetConfig.high > dataMin &&
-                                  targetConfig.high < dataMax && (
-                                    <>
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.high
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.high - 1
-                                        )}
+                                        {targetConfig.high > dataMin &&
+                                          targetConfig.high < dataMax && (
+                                            <>
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.high
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.high - 1
+                                                )}
+                                              />
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.high
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.high + 1
+                                                )}
+                                              />
+                                            </>
+                                          )}
+
+                                        {targetConfig.hyper > dataMin &&
+                                          targetConfig.hyper < dataMax && (
+                                            <>
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.hyper
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.hyper - 1
+                                                )}
+                                              />
+                                              <stop
+                                                offset={breakPointPercentage(
+                                                  targetConfig.hyper
+                                                )}
+                                                stopColor={getGlucoseColor(
+                                                  targetConfig.hyper + 1
+                                                )}
+                                              />
+                                            </>
+                                          )}
+
+                                        <stop
+                                          offset="100%"
+                                          stopColor={getGlucoseColor(dataMax)}
+                                        />
+                                      </linearGradient>
+
+                                      <linearGradient
+                                        id="colorGluc"
+                                        x1="0"
+                                        y1="0"
+                                        x2="0"
+                                        y2="1"
+                                      >
+                                        <stop
+                                          offset="5%"
+                                          stopColor="var(--muted-foreground)"
+                                          stopOpacity={0.1}
+                                        />
+                                        <stop
+                                          offset="95%"
+                                          stopColor="var(--muted-foreground)"
+                                          stopOpacity={0}
+                                        />
+                                      </linearGradient>
+                                    </defs>
+
+                                    {/* ... rest of chart ... */}
+                                    <CartesianGrid
+                                      strokeDasharray="5 5"
+                                      vertical={false}
+                                      stroke="var(--muted)"
+                                      opacity={0.15}
+                                    />
+
+                                    {xHourTicks.map((t) => (
+                                      <ReferenceLine
+                                        key={t}
+                                        x={t}
+                                        ifOverflow="extendDomain"
+                                        stroke="var(--muted-foreground)"
+                                        strokeOpacity={0.08}
+                                        strokeWidth={1}
                                       />
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.high
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.high + 1
-                                        )}
-                                      />
-                                    </>
-                                  )}
-
-                                {targetConfig.hyper > dataMin &&
-                                  targetConfig.hyper < dataMax && (
-                                    <>
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.hyper
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.hyper - 1
-                                        )}
-                                      />
-                                      <stop
-                                        offset={breakPointPercentage(
-                                          targetConfig.hyper
-                                        )}
-                                        stopColor={getGlucoseColor(
-                                          targetConfig.hyper + 1
-                                        )}
-                                      />
-                                    </>
-                                  )}
-
-                                <stop
-                                  offset="100%"
-                                  stopColor={getGlucoseColor(dataMax)}
-                                />
-                              </linearGradient>
-
-                              <linearGradient
-                                id="colorGluc"
-                                x1="0"
-                                y1="0"
-                                x2="0"
-                                y2="1"
-                              >
-                                <stop
-                                  offset="5%"
-                                  stopColor="var(--muted-foreground)"
-                                  stopOpacity={0.1}
-                                />
-                                <stop
-                                  offset="95%"
-                                  stopColor="var(--muted-foreground)"
-                                  stopOpacity={0}
-                                />
-                              </linearGradient>
-                            </defs>
-
-                            <CartesianGrid
-                              strokeDasharray="5 5"
-                              vertical={false}
-                              stroke="var(--muted)"
-                              opacity={0.15}
-                            />
-
-                            {xHourTicks.map((t) => (
-                              <ReferenceLine
-                                key={t}
-                                x={t}
-                                ifOverflow="extendDomain"
-                                stroke="var(--muted-foreground)"
-                                strokeOpacity={0.08}
-                                strokeWidth={1}
-                              />
-                            ))}
-                            <XAxis
-                              dataKey="time"
-                              type="number"
-                              domain={[windowStart, windowEnd]}
-                              allowDataOverflow={true}
-                              ticks={xTicks}
-                              interval={0}
-                              tickMargin={10}
-                              tickFormatter={(t) =>
-                                new Date(t).getMinutes() === 0
-                                  ? new Date(t).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                    })
-                                  : ""
-                              }
-                              stroke="var(--foreground)"
-                              fontSize={10}
-                              fontWeight="600"
-                              tickLine={{
-                                stroke: "var(--muted-foreground)",
-                                opacity: 0.6,
-                              }}
-                              axisLine={{
-                                stroke: "var(--muted-foreground)",
-                                opacity: 0.6,
-                                strokeWidth: 1,
-                              }}
-                              minTickGap={0}
-                            />
-                            <YAxis
-                              stroke="var(--foreground)"
-                              fontSize={10}
-                              fontWeight="600"
-                              interval={0}
-                              minTickGap={0}
-                              tickLine={false}
-                              axisLine={false}
-                              domain={[yMin, yMax]}
-                              ticks={yTicks}
-                              orientation="right"
-                              width={30}
-                            />
-                            <Tooltip
-                              cursor={{
-                                stroke: "var(--muted-foreground)",
-                                strokeOpacity: 0.15,
-                                strokeWidth: 1.5,
-                                strokeDasharray: "4 4",
-                              }}
-                              content={({ active, payload, label }) => {
-                                if (active && payload && payload.length) {
-                                  const glucoseItem = payload.find(p => p.dataKey === "value");
-                                  if (!glucoseItem || glucoseItem.value === null) return null;
-                                  
-                                  const val = Number(glucoseItem.value);
-                                  const status = getGlucoseStatus(val);
-                                  
-                                  return (
-                                    <div className="bg-card/95 border border-border/50 rounded-lg p-2 shadow-xl min-w-[130px] backdrop-blur-md ring-1 ring-white/10">
-                                      <div className="flex flex-col gap-1.5">
-                                        <div className="flex items-center justify-between border-b border-border/40 pb-1.5 px-1">
-                                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.1em]">
-                                            {label ? new Date(label as number).toLocaleString([], {
+                                    ))}
+                                    <XAxis
+                                      dataKey="time"
+                                      type="number"
+                                      domain={[windowStart, windowEnd]}
+                                      allowDataOverflow={true}
+                                      ticks={xTicks}
+                                      interval={0}
+                                      tickMargin={10}
+                                      tickFormatter={(t) =>
+                                        new Date(t).getMinutes() === 0
+                                          ? new Date(t).toLocaleTimeString([], {
                                               hour: "2-digit",
-                                              minute: "2-digit",
-                                              day: "numeric",
-                                              month: "short"
-                                            }) : "--:--"}
-                                          </p>
-                                        </div>
-                                        <div className="flex items-baseline justify-between gap-3 px-1">
-                                          <div className="flex items-baseline gap-1">
-                                            <span className={`text-xl font-black tabular-nums font-numbers tracking-tighter ${status.color}`}>
-                                              {val}
-                                            </span>
-                                            <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40">
-                                              {unit}
-                                            </span>
-                                          </div>
-                                          <span className={`text-[12px] font-black uppercase tracking-wider ${status.color}`}>
-                                            {status.label}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              }}
-                            />
-
-                            {/* Background Bands */}
-                            <ReferenceArea
-                              y1={targetConfig.hyper}
-                              y2={yMax}
-                              fill="#ef4444"
-                              fillOpacity={0.03}
-                            />
-                            <ReferenceArea
-                              y1={targetConfig.high}
-                              y2={targetConfig.hyper}
-                              fill="#f59e0b"
-                              fillOpacity={0.02}
-                            />
-                            <ReferenceArea
-                              y1={targetConfig.low}
-                              y2={targetConfig.high}
-                              fill="#10b981"
-                              fillOpacity={0.05}
-                            />
-                            <ReferenceArea
-                              y1={targetConfig.hypo}
-                              y2={targetConfig.low}
-                              fill="#f59e0b"
-                              fillOpacity={0.02}
-                            />
-                            <ReferenceArea
-                              y1={yMin}
-                              y2={targetConfig.hypo}
-                              fill="#ef4444"
-                              fillOpacity={0.03}
-                            />
-
-                            <ReferenceLine
-                              y={targetConfig.hyper}
-                              stroke="#ef4444"
-                              strokeDasharray="6 3"
-                              strokeWidth={1}
-                              opacity={0.6}
-                              label={{
-                                value: "HIPER",
-                                position: "insideTopRight",
-                                fill: "#ef4444",
-                                fontSize: 9,
-                                fontWeight: "900",
-                                dy: -16,
-                              }}
-                            />
-                            <ReferenceLine
-                              y={targetConfig.high}
-                              stroke="#f59e0b"
-                              strokeDasharray="6 3"
-                              strokeWidth={1}
-                              opacity={0.6}
-                              label={{
-                                value: "ALTA",
-                                position: "insideTopRight",
-                                fill: "#f59e0b",
-                                fontSize: 9,
-                                fontWeight: "900",
-                                dy: -16,
-                              }}
-                            />
-                            <ReferenceLine
-                              y={targetConfig.low}
-                              stroke="#f59e0b"
-                              strokeDasharray="6 3"
-                              strokeWidth={1}
-                              opacity={0.6}
-                              label={{
-                                value: "BAJA",
-                                position: "insideTopRight",
-                                fill: "#f59e0b",
-                                fontSize: 9,
-                                fontWeight: "900",
-                                dy: -16,
-                              }}
-                            />
-                            {targetConfig.hypo > 40 && (
-                              <ReferenceLine
-                                y={targetConfig.hypo}
-                                stroke="#ef4444"
-                                strokeDasharray="3 2"
-                                strokeWidth={1}
-                                opacity={0.6}
-                                label={{
-                                  value: "HIPO",
-                                  position: "insideBottomRight",
-                                  fill: "#ef4444",
-                                  fontSize: 9,
-                                  fontWeight: "900",
-                                  dy: 16,
-                                }}
-                              />
-                            )}
-
-                            {showLine ? (
-                              <Area
-                                type="monotone"
-                                dataKey="value"
-                                name="GLUCOSA"
-                                stroke="url(#lineGluc)"
-                                strokeWidth={3}
-                                fill="url(#colorGluc)"
-                                baseValue={yMin}
-                                animationDuration={enableAnimation ? 500 : 0}
-                                animationEasing="ease-in-out"
-                                isAnimationActive={enableAnimation}
-                                connectNulls={true}
-                                dot={showDots ? <CustomDot /> : false}
-                                activeDot={
-                                  showDots
-                                    ? {
-                                        r: 4,
-                                        strokeWidth: 2,
-                                        fill: "#94a3b8",
-                                        stroke: "var(--background)",
+                                            })
+                                          : ""
                                       }
-                                    : false
-                                }
-                              />
-                            ) : (
-                              <Scatter
-                                data={scatterData}
-                                dataKey="value"
-                                name="GLUCOSA"
-                                shape={<SimpleDot />}
-                                isAnimationActive={enableAnimation}
-                                animationDuration={enableAnimation ? 500 : 0}
-                                animationEasing="ease-in-out"
-                              />
-                            )}
+                                      stroke="var(--foreground)"
+                                      fontSize={10}
+                                      fontWeight="600"
+                                      tickLine={{
+                                        stroke: "var(--muted-foreground)",
+                                        opacity: 0.6,
+                                      }}
+                                      axisLine={{
+                                        stroke: "var(--muted-foreground)",
+                                        opacity: 0.6,
+                                        strokeWidth: 1,
+                                      }}
+                                      minTickGap={0}
+                                    />
+                                    <YAxis
+                                      stroke="var(--foreground)"
+                                      fontSize={10}
+                                      fontWeight="600"
+                                      interval={0}
+                                      minTickGap={0}
+                                      tickLine={false}
+                                      axisLine={false}
+                                      domain={[yMin, yMax]}
+                                      ticks={yTicks}
+                                      orientation="right"
+                                      width={30}
+                                    />
+                                    <Tooltip
+                                      cursor={{
+                                        stroke: "var(--muted-foreground)",
+                                        strokeOpacity: 0.15,
+                                        strokeWidth: 1.5,
+                                        strokeDasharray: "4 4",
+                                      }}
+                                      content={({ active, payload, label }) => {
+                                        if (
+                                          active &&
+                                          payload &&
+                                          payload.length
+                                        ) {
+                                          const glucoseItem = payload.find(
+                                            (p) => p.dataKey === "value"
+                                          );
+                                          if (
+                                            !glucoseItem ||
+                                            glucoseItem.value === null
+                                          )
+                                            return null;
+
+                                          const val = Number(glucoseItem.value);
+                                          const status = getGlucoseStatus(val);
+
+                                          return (
+                                            <div className="bg-card/95 border border-border/50 rounded-lg p-2 shadow-xl min-w-[130px] backdrop-blur-md ring-1 ring-white/10">
+                                              <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center justify-between border-b border-border/40 pb-1.5 px-1">
+                                                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.1em]">
+                                                    {label
+                                                      ? new Date(
+                                                          label as number
+                                                        ).toLocaleString([], {
+                                                          hour: "2-digit",
+                                                          minute: "2-digit",
+                                                          day: "numeric",
+                                                          month: "short",
+                                                        })
+                                                      : "--:--"}
+                                                  </p>
+                                                </div>
+                                                <div className="flex items-baseline justify-between gap-3 px-1">
+                                                  <div className="flex items-baseline gap-1">
+                                                    <span
+                                                      className={`text-xl font-black tabular-nums font-numbers tracking-tighter ${status.color}`}
+                                                    >
+                                                      {val}
+                                                    </span>
+                                                    <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40">
+                                                      {unit}
+                                                    </span>
+                                                  </div>
+                                                  <span
+                                                    className={`text-[12px] font-black uppercase tracking-wider ${status.color}`}
+                                                  >
+                                                    {status.label}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      }}
+                                    />
+
+                                    {/* Background Bands */}
+                                    <ReferenceArea
+                                      y1={targetConfig.hyper}
+                                      y2={yMax}
+                                      fill="#ef4444"
+                                      fillOpacity={0.03}
+                                    />
+                                    <ReferenceArea
+                                      y1={targetConfig.high}
+                                      y2={targetConfig.hyper}
+                                      fill="#f59e0b"
+                                      fillOpacity={0.02}
+                                    />
+                                    <ReferenceArea
+                                      y1={targetConfig.low}
+                                      y2={targetConfig.high}
+                                      fill="#10b981"
+                                      fillOpacity={0.05}
+                                    />
+                                    <ReferenceArea
+                                      y1={targetConfig.hypo}
+                                      y2={targetConfig.low}
+                                      fill="#f59e0b"
+                                      fillOpacity={0.02}
+                                    />
+                                    <ReferenceArea
+                                      y1={yMin}
+                                      y2={targetConfig.hypo}
+                                      fill="#ef4444"
+                                      fillOpacity={0.03}
+                                    />
+
+                                    <ReferenceLine
+                                      y={targetConfig.hyper}
+                                      stroke="#ef4444"
+                                      strokeDasharray="6 3"
+                                      strokeWidth={1}
+                                      opacity={0.6}
+                                      label={{
+                                        value: "HIPER",
+                                        position: "insideTopRight",
+                                        fill: "#ef4444",
+                                        fontSize: 9,
+                                        fontWeight: "900",
+                                        dy: -16,
+                                      }}
+                                    />
+                                    <ReferenceLine
+                                      y={targetConfig.high}
+                                      stroke="#f59e0b"
+                                      strokeDasharray="6 3"
+                                      strokeWidth={1}
+                                      opacity={0.6}
+                                      label={{
+                                        value: "ALTA",
+                                        position: "insideTopRight",
+                                        fill: "#f59e0b",
+                                        fontSize: 9,
+                                        fontWeight: "900",
+                                        dy: -16,
+                                      }}
+                                    />
+                                    <ReferenceLine
+                                      y={targetConfig.low}
+                                      stroke="#f59e0b"
+                                      strokeDasharray="6 3"
+                                      strokeWidth={1}
+                                      opacity={0.6}
+                                      label={{
+                                        value: "BAJA",
+                                        position: "insideTopRight",
+                                        fill: "#f59e0b",
+                                        fontSize: 9,
+                                        fontWeight: "900",
+                                        dy: -16,
+                                      }}
+                                    />
+                                    {targetConfig.hypo > 40 && (
+                                      <ReferenceLine
+                                        y={targetConfig.hypo}
+                                        stroke="#ef4444"
+                                        strokeDasharray="3 2"
+                                        strokeWidth={1}
+                                        opacity={0.6}
+                                        label={{
+                                          value: "HIPO",
+                                          position: "insideBottomRight",
+                                          fill: "#ef4444",
+                                          fontSize: 9,
+                                          fontWeight: "900",
+                                          dy: 16,
+                                        }}
+                                      />
+                                    )}
+
+                                    {showLine ? (
+                                      <Area
+                                        type="monotone"
+                                        dataKey="value"
+                                        name="GLUCOSA"
+                                        stroke={`url(#${gradientId})`}
+                                        strokeWidth={3}
+                                        fill="url(#colorGluc)"
+                                        baseValue={yMin}
+                                        animationDuration={
+                                          enableAnimation ? 500 : 0
+                                        }
+                                        animationEasing="ease-in-out"
+                                        isAnimationActive={enableAnimation}
+                                        connectNulls={true}
+                                        dot={showDots ? <CustomDot /> : false}
+                                        activeDot={
+                                          showDots
+                                            ? {
+                                                r: 4,
+                                                strokeWidth: 2,
+                                                fill: "#94a3b8",
+                                                stroke: "var(--background)",
+                                              }
+                                            : false
+                                        }
+                                      />
+                                    ) : (
+                                      <Scatter
+                                        data={scatterData}
+                                        dataKey="value"
+                                        name="GLUCOSA"
+                                        shape={<SimpleDot />}
+                                        isAnimationActive={enableAnimation}
+                                        animationDuration={
+                                          enableAnimation ? 500 : 0
+                                        }
+                                        animationEasing="ease-in-out"
+                                      />
+                                    )}
+                                  </>
+                                );
+                              })()}
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
