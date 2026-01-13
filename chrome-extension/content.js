@@ -173,6 +173,46 @@ function ensureRoot() {
       text-align: center;
       color: #fff;
     }
+    #${ROOT_ID} .gluco-value,
+    #${ROOT_ID} .gluco-arrow {
+      position: relative;
+    }
+    #${ROOT_ID} .gluco-value::after,
+    #${ROOT_ID} .gluco-arrow::after {
+      content: attr(data-content);
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      color: transparent;
+      background: linear-gradient(
+        110deg,
+        transparent 30%,
+        rgba(255, 255, 255, 0.9) 45%,
+        transparent 60%
+      );
+      background-size: 60% 100%;
+      background-repeat: no-repeat;
+      background-position: -350% 0;
+      -webkit-background-clip: text;
+      background-clip: text;
+      pointer-events: none;
+      animation: gluco-text-shine 7s infinite ease-in-out;
+    }
+    @keyframes gluco-text-shine {
+      0%, 80% {
+        background-position: -400% 0;
+        opacity: 0;
+      }
+      81% {
+        opacity: 1;
+      }
+      100% {
+        background-position: 200% 0;
+        opacity: 1;
+      }
+    }
     #${ROOT_ID} .gluco-details {
       display: flex;
       align-items: center;
@@ -589,7 +629,9 @@ function setState(payload) {
   if (!payload) {
     dot.className = "gluco-dot err";
     valueEl.textContent = "--";
+    valueEl.setAttribute("data-content", "--");
     arrowEl.textContent = "";
+    arrowEl.setAttribute("data-content", "");
     setValueColor("#fff");
     setArrowColorByTrend(null);
     sub.textContent = "Sin datos";
@@ -603,7 +645,9 @@ function setState(payload) {
   if (!payload.ok) {
     dot.className = "gluco-dot err";
     valueEl.textContent = "--";
+    valueEl.setAttribute("data-content", "--");
     arrowEl.textContent = "";
+    arrowEl.setAttribute("data-content", "");
     setValueColor("#fff");
     setArrowColorByTrend(null);
     sub.textContent = payload.error ? String(payload.error) : "Error";
@@ -617,7 +661,9 @@ function setState(payload) {
   if (!payload.data) {
     dot.className = "gluco-dot warn";
     valueEl.textContent = "--";
+    valueEl.setAttribute("data-content", "--");
     arrowEl.textContent = "";
+    arrowEl.setAttribute("data-content", "");
     setValueColor("#fff");
     setArrowColorByTrend(null);
     sub.textContent = "Sin datos";
@@ -630,7 +676,9 @@ function setState(payload) {
 
   dot.className = "gluco-dot ok";
   valueEl.textContent = String(payload.data.value);
+  valueEl.setAttribute("data-content", String(payload.data.value));
   arrowEl.textContent = payload.data.arrow || "";
+  arrowEl.setAttribute("data-content", payload.data.arrow || "");
 
   const colorKey = payload.data?.status?.colorKey || null;
   if (colorKey === "critical") {
