@@ -447,7 +447,6 @@ export default function GlucoPage() {
   const chartGraph = useMemo(() => {
     const cleaned = graphPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
-      .filter((p: any) => p.time >= windowStart && p.time <= windowEnd)
       .sort((a: any, b: any) => a.time - b.time)
       .filter(
         (p: any, idx: number, arr: any[]) =>
@@ -544,6 +543,17 @@ export default function GlucoPage() {
       expires: 365,
     });
   }, [timeRange, showLine]);
+
+  // Calculate the actual range of values in the current visible data set
+  const dataMin = useMemo(() => {
+    if (filteredGraphWithValues.length === 0) return targetConfig.low;
+    return Math.min(...filteredGraphWithValues.map((p: any) => p.value));
+  }, [filteredGraphWithValues, targetConfig.low]);
+
+  const dataMax = useMemo(() => {
+    if (filteredGraphWithValues.length === 0) return targetConfig.high;
+    return Math.max(...filteredGraphWithValues.map((p: any) => p.value));
+  }, [filteredGraphWithValues, targetConfig.high]);
 
   const getGlucoseColor = (val: number) => {
     if (val === undefined || val === null) return "#94a3b8";
@@ -738,16 +748,7 @@ export default function GlucoPage() {
         })()
       : null;
 
-  // Calculate the actual range of values in the current data set
-  // This is used for the "User Approach" to normalize the gradient
-  const dataMin =
-    filteredGraphWithValues.length > 0
-      ? Math.min(...filteredGraphWithValues.map((p: any) => p.value))
-      : targetConfig.low;
-  const dataMax =
-    filteredGraphWithValues.length > 0
-      ? Math.max(...filteredGraphWithValues.map((p: any) => p.value))
-      : targetConfig.high;
+
 
   const yDomain = (() => {
     const thresholds = [
