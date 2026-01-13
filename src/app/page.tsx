@@ -316,32 +316,51 @@ export default function GlucoPage() {
     };
   }, [isLoggedIn, activeView]);
 
-  const getTrendIcon = (trend: TrendState) => {
+  const getTrendIcon = (trend: TrendState, val: number) => {
     const className = "w-6 h-6 transition-all duration-300";
     const rotation = getTrendRotation(trend);
 
-    const getColor = (s: TrendState) => {
-      switch (s) {
-        case TrendState.DoubleDown:
-        case TrendState.DoubleUp:
-          return "text-destructive";
-        case TrendState.Down:
-        case TrendState.DownAngledLarge:
-        case TrendState.DownAngled:
-        case TrendState.Up:
-        case TrendState.UpAngledLarge:
-        case TrendState.UpAngled:
-          return "text-orange-500";
-        case TrendState.DownSlight:
-        case TrendState.UpSlight:
-        case TrendState.Flat:
-          return "text-emerald-500";
-        default:
-          return "text-muted-foreground";
-      }
+    const getTrendColor = (s: TrendState, value: number) => {
+      // 1. Determine direction
+      const isUp =
+        s === TrendState.UpSlight ||
+        s === TrendState.UpAngled ||
+        s === TrendState.UpAngledLarge ||
+        s === TrendState.Up ||
+        s === TrendState.DoubleUp;
+
+      const isDown =
+        s === TrendState.DownSlight ||
+        s === TrendState.DownAngled ||
+        s === TrendState.DownAngledLarge ||
+        s === TrendState.Down ||
+        s === TrendState.DoubleDown;
+
+      // 2. Determine value status
+      const isHigh = value > targetConfig.high;
+      const isLow = value < targetConfig.low;
+      const isTarget = !isHigh && !isLow;
+
+      // 3. Logic:
+      // If Target -> Green (usually).
+      if (isTarget) return "text-emerald-500";
+
+      // If High (Red/Orange) AND going Down -> Green (Improving)
+      if (isHigh && isDown) return "text-emerald-500";
+
+      // If Low (Red/Orange) AND going Up -> Green (Improving)
+      if (isLow && isUp) return "text-emerald-500";
+
+      // Otherwise, match the value color (Bad direction or Stable in bad zone)
+      if (value <= targetConfig.hypo) return "text-red-500";
+      if (value < targetConfig.low) return "text-amber-500"; // Low but not hypo
+      if (value >= targetConfig.hyper) return "text-red-500";
+      if (value > targetConfig.high) return "text-amber-500"; // High but not hyper
+
+      return "text-muted-foreground"; // Fallback
     };
 
-    const color = getColor(trend);
+    const color = getTrendColor(trend, val);
 
     if (trend === TrendState.DoubleUp) {
       return <ChevronsUp className={`${className} ${color}`} />;
@@ -1035,7 +1054,7 @@ export default function GlucoPage() {
                               {status.label}
                             </Badge>
                             <div className="p-1.5 bg-muted rounded-md border border-border/50">
-                              {getTrendIcon(calculatedTrend)}
+                              {getTrendIcon(calculatedTrend, glucose.value)}
                             </div>
                           </div>
                         </div>
