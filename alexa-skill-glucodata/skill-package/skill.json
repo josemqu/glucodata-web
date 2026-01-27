@@ -1,0 +1,45 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "es-ES": {
+          "name": "GlucoData",
+          "summary": "Consulta tu glucemia actual.",
+          "description": "Skill privada para consultar tu glucemia actual desde tu backend.",
+          "examplePhrases": [
+            "Alexa, abre mi glucemia",
+            "Alexa, pregúntale a mi glucemia cuánta glucemia tengo"
+          ],
+          "keywords": ["glucemia", "glucosa"],
+          "privacyPolicyUrl": "https://example.com/privacy",
+          "termsOfUseUrl": "https://example.com/terms"
+        }
+      },
+      "isAvailableWorldwide": false,
+      "testingInstructions": "Skill privada. Usar solo en modo Development.",
+      "category": "HEALTH_AND_FITNESS"
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "arn:aws:lambda:REGION:ACCOUNT_ID:function:FUNCTION_NAME"
+        }
+      }
+    },
+    "permissions": [],
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false,
+      "locales": {
+        "es-ES": {
+          "privacyPolicyUrl": "https://example.com/privacy",
+          "termsOfUseUrl": "https://example.com/terms"
+        }
+      }
+    }
+  }
+}

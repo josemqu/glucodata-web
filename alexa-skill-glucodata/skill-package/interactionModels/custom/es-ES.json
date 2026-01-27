@@ -1,0 +1,39 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "mi glucemia",
+      "intents": [
+        {
+          "name": "GetGlucoseIntent",
+          "slots": [],
+          "samples": [
+            "cuanta glucemia tengo",
+            "cuánta glucemia tengo",
+            "cuanta glucosa tengo",
+            "cuál es mi glucemia",
+            "decime mi glucemia",
+            "glucemia actual",
+            "glucosa actual"
+          ]
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        }
+      ],
+      "types": []
+    }
+  }
+}

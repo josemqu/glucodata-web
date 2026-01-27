@@ -63,9 +63,19 @@ async function updateUI() {
     $("glucoseValue").textContent = data.value;
 
     // --- TREND HANDLING ---
+    // --- TREND HANDLING ---
     const trendEl = $("glucoseTrend");
     const trendState = data.trendState; // "Flat", "Up", "DoubleUp", etc.
     const trendNum = Number(data.trend);
+    const value = Number(data.value);
+
+    // Default configuration (same as web app default)
+    const targetConfig = {
+      low: 70,
+      high: 180,
+      hypo: 60,
+      hyper: 250,
+    };
 
     const getTrendRotation = (state) => {
       switch (state) {
@@ -74,10 +84,7 @@ async function updateUI() {
         case "DownAngledLarge": return 150;
         case "DownAngled": return 135;
         case "DownSlight": return 120;
-        case "Flat": return 90; // Default ArrowUp is at 0 deg (pointing up). Wait.
-          // In page.tsx: ArrowUp is 0. Flat is 90 (pointing right).
-          // If I use ArrowUp as base:
-          // Flat (Right) -> 90 deg
+        case "Flat": return 90;
         case "UpSlight": return 60;
         case "UpAngled": return 45;
         case "UpAngledLarge": return 30;
@@ -87,12 +94,14 @@ async function updateUI() {
       }
     };
 
-    const baseSVG = (content) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${content}</svg>`;
+    const baseSVG = (content, rotation = 0) => 
+      `<svg style="transform: rotate(${rotation}deg); transition: transform 0.3s ease;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${content}</svg>`;
+    
     const arrowUpPath = `<path d="M12 19V5M5 12l7-7 7 7"/>`;
     const chevronsUpPath = `<path d="m7 11 5-5 5 5"/><path d="m7 17 5-5 5 5"/>`;
     const chevronsDownPath = `<path d="m7 7 5 5 5-5"/><path d="m7 13 5 5 5-5"/>`;
 
-    // Clear previous styles
+    // Clear previous styles/transform on container
     trendEl.style.transform = "";
     trendEl.style.color = "";
 
@@ -100,41 +109,49 @@ async function updateUI() {
         // NEW SYSTEM
         let rotation = getTrendRotation(trendState);
         let svgContent = arrowUpPath;
-        let color = "var(--text-dim)";
-
-        // Determine icon and color
-        switch (trendState) {
-            case "DoubleUp":
-                svgContent = chevronsUpPath;
-                color = "#ef4444"; // destructive
-                break;
-            case "DoubleDown":
-                svgContent = chevronsDownPath;
-                color = "#ef4444"; // destructive
-                break;
-            case "Up":
-            case "UpAngledLarge":
-            case "UpAngled":
-            case "Down":
-            case "DownAngledLarge":
-            case "DownAngled":
-                color = "#f97316"; // orange-500
-                break;
-            case "UpSlight":
-            case "DownSlight":
-            case "Flat":
-                color = "#10b981"; // emerald-500
-                break;
+        
+        // Determine icons
+        if (trendState === "DoubleUp") {
+          svgContent = chevronsUpPath;
+          rotation = 0;
+        } else if (trendState === "DoubleDown") {
+          svgContent = chevronsDownPath;
+          rotation = 0;
         }
 
-        trendEl.innerHTML = baseSVG(svgContent);
+        // Determine Color Logic (Matching page.tsx)
+        const isUp = [
+          "UpSlight", "UpAngled", "UpAngledLarge", "Up", "DoubleUp"
+        ].includes(trendState);
+
+        const isDown = [
+          "DownSlight", "DownAngled", "DownAngledLarge", "Down", "DoubleDown"
+        ].includes(trendState);
+
+        const isHigh = value > targetConfig.high;
+        const isLow = value < targetConfig.low;
+        const isTarget = !isHigh && !isLow;
+
+        let color = "#94a3b8"; // text-muted-foreground
+
+        if (isTarget) {
+          color = "#10b981"; // emerald-500
+        } else if (isHigh && isDown) {
+          color = "#10b981"; // emerald-500 (Improving)
+        } else if (isLow && isUp) {
+          color = "#10b981"; // emerald-500 (Improving)
+        } else if (value <= targetConfig.hypo) {
+          color = "#ef4444"; // red-500
+        } else if (value < targetConfig.low) {
+          color = "#f59e0b"; // amber-500
+        } else if (value >= targetConfig.hyper) {
+          color = "#ef4444"; // red-500
+        } else if (value > targetConfig.high) {
+          color = "#f59e0b"; // amber-500
+        }
+
+        trendEl.innerHTML = baseSVG(svgContent, rotation);
         trendEl.style.color = color;
-        // Apply rotation to the inner SVG or the container?
-        // Container has transition, so let's use container.
-        // But Chevrons don't need rotation (or are pre-rotated).
-        if (trendState !== "DoubleUp" && trendState !== "DoubleDown") {
-             trendEl.style.transform = `rotate(${rotation}deg)`;
-        }
 
     } else {
         // FALLBACK TO OLD NUMERIC SYSTEM
