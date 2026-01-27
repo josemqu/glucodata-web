@@ -11,8 +11,8 @@ function getSiteKey() {
   }
 }
 
-function getPositionStorageKey() {
-  return `glucoBadgeBottom:${getSiteKey()}`;
+function getPositionStorageKey(isFullscreen) {
+  return `glucoBadgeBottom:${getSiteKey()}:${isFullscreen ? "fs" : "normal"}`;
 }
 
 function clamp(n, min, max) {
@@ -387,9 +387,22 @@ function ensureRoot() {
     root.style.bottom = `${bottom}px`;
   };
 
-  const restoreBottom = () => {
+  const getIsFullscreen = () => {
+    return !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+  };
+
+  const restoreBottom = (isFullscreenOverride) => {
     if (!isContextValid()) return;
-    const key = getPositionStorageKey();
+    const isFs =
+      typeof isFullscreenOverride === "boolean"
+        ? isFullscreenOverride
+        : getIsFullscreen();
+    const key = getPositionStorageKey(isFs);
     chrome.storage.local.get([key], (res) => {
       if (!isContextValid()) return;
       void chrome.runtime.lastError;
@@ -526,7 +539,7 @@ function ensureRoot() {
   card.appendChild(details);
   root.appendChild(card);
 
-  restoreBottom();
+  restoreBottom(getIsFullscreen());
 
   window.addEventListener(
     "resize",
@@ -540,13 +553,24 @@ function ensureRoot() {
   );
 
   const updateFullscreenMode = () => {
-    const isFs = !!(
-      document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.mozFullScreenElement ||
-      document.msFullscreenElement
-    );
-    root.classList.toggle("gluco-fullscreen", isFs);
+    const nextIsFs = getIsFullscreen();
+    const prevIsFs = root.classList.contains("gluco-fullscreen");
+
+    if (prevIsFs !== nextIsFs) {
+      const current = Number.parseFloat(root.style.bottom || "");
+      const bottom = Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX;
+      const prevKey = getPositionStorageKey(prevIsFs);
+      chrome.storage.local.set({ [prevKey]: bottom }, () => {
+        if (!isContextValid()) return;
+        void chrome.runtime.lastError;
+      });
+    }
+
+    root.classList.toggle("gluco-fullscreen", nextIsFs);
+
+    if (prevIsFs !== nextIsFs) {
+      restoreBottom(nextIsFs);
+    }
   };
 
   document.addEventListener("fullscreenchange", updateFullscreenMode, {
@@ -559,7 +583,9 @@ function ensureRoot() {
 
   const persistBottom = () => {
     if (!isContextValid()) return;
-    const key = getPositionStorageKey();
+    const key = getPositionStorageKey(
+      root.classList.contains("gluco-fullscreen"),
+    );
     const current = Number.parseFloat(root.style.bottom || "");
     const bottom = Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX;
     chrome.storage.local.set({ [key]: bottom }, () => {
