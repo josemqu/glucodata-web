@@ -332,6 +332,42 @@ function ensureRoot() {
     #${ROOT_ID} .gluco-btn:hover {
       background: rgba(255,255,255,0.18);
     }
+
+    #${ROOT_ID}.gluco-fullscreen .gluco-card {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      padding: 4px 6px;
+      gap: 0;
+      overflow: visible;
+      cursor: grab;
+      pointer-events: auto;
+      user-select: none;
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-card::after {
+      display: none;
+      animation: none;
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-details,
+    #${ROOT_ID}.gluco-fullscreen .gluco-arrow {
+      display: none;
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-value {
+      width: auto;
+      text-align: right;
+      font-size: 22px;
+      letter-spacing: -0.7px;
+      opacity: 0.92;
+      text-shadow:
+        0 1px 1px rgba(0,0,0,0.55),
+        0 6px 20px rgba(0,0,0,0.40);
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-value::after {
+      animation: none;
+      opacity: 0;
+    }
   `;
   root.appendChild(style);
 
@@ -341,12 +377,12 @@ function ensureRoot() {
     const rect = cardEl.getBoundingClientRect();
     const maxBottom = Math.max(
       VIEWPORT_PADDING_PX,
-      window.innerHeight - VIEWPORT_PADDING_PX - rect.height
+      window.innerHeight - VIEWPORT_PADDING_PX - rect.height,
     );
     const bottom = clamp(
       Number(requestedBottomPx),
       VIEWPORT_PADDING_PX,
-      maxBottom
+      maxBottom,
     );
     root.style.bottom = `${bottom}px`;
   };
@@ -497,11 +533,29 @@ function ensureRoot() {
     () => {
       const current = Number.parseFloat(root.style.bottom || "");
       applyClampedBottom(
-        Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX
+        Number.isFinite(current) ? current : DEFAULT_BOTTOM_PX,
       );
     },
-    { passive: true }
+    { passive: true },
   );
+
+  const updateFullscreenMode = () => {
+    const isFs = !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+    root.classList.toggle("gluco-fullscreen", isFs);
+  };
+
+  document.addEventListener("fullscreenchange", updateFullscreenMode, {
+    passive: true,
+  });
+  document.addEventListener("webkitfullscreenchange", updateFullscreenMode, {
+    passive: true,
+  });
+  updateFullscreenMode();
 
   const persistBottom = () => {
     if (!isContextValid()) return;
@@ -574,8 +628,6 @@ function setState(payload) {
   const setValueColor = (color) => {
     valueEl.style.color = color;
   };
-
-
 
   const formatUpdatedRelative = (ms) => {
     if (typeof ms !== "number" || Number.isNaN(ms)) return "";
@@ -678,24 +730,35 @@ function setState(payload) {
 
   const getTrendRotation = (state) => {
     switch (state) {
-      case TrendState.DoubleDown: return 0;
-      case TrendState.Down: return 180;
-      case TrendState.DownAngledLarge: return 150;
-      case TrendState.DownAngled: return 135;
-      case TrendState.DownSlight: return 120;
-      case TrendState.Flat: return 90;
-      case TrendState.UpSlight: return 60;
-      case TrendState.UpAngled: return 45;
-      case TrendState.UpAngledLarge: return 30;
-      case TrendState.Up: return 0;
-      case TrendState.DoubleUp: return 0;
+      case TrendState.DoubleDown:
+        return 0;
+      case TrendState.Down:
+        return 180;
+      case TrendState.DownAngledLarge:
+        return 150;
+      case TrendState.DownAngled:
+        return 135;
+      case TrendState.DownSlight:
+        return 120;
+      case TrendState.Flat:
+        return 90;
+      case TrendState.UpSlight:
+        return 60;
+      case TrendState.UpAngled:
+        return 45;
+      case TrendState.UpAngledLarge:
+        return 30;
+      case TrendState.Up:
+        return 0;
+      case TrendState.DoubleUp:
+        return 0;
     }
     return 0;
   };
 
   const getTrendColor = (s, value, targets) => {
     if (!s) return "#fff";
-    
+
     // 1. Determine direction
     const isUp =
       s === TrendState.UpSlight ||
@@ -714,7 +777,7 @@ function setState(payload) {
     // 2. Determine value status
     // Safe defaults if targets missing
     const t = targets || { low: 70, high: 180, hypo: 60, hyper: 250 };
-    
+
     const isHigh = value > t.high;
     const isLow = value < t.low;
     const isTarget = !isHigh && !isLow;
@@ -744,22 +807,26 @@ function setState(payload) {
   // Render Arrow
   const trend = payload.data.trendState;
   const rotation = getTrendRotation(trend);
-  const arrowColor = getTrendColor(trend, payload.data.value, payload.data.targets);
+  const arrowColor = getTrendColor(
+    trend,
+    payload.data.value,
+    payload.data.targets,
+  );
 
   arrowEl.style.color = arrowColor;
   arrowEl.style.transform = `rotate(0deg)`; // Reset base transform
-  
+
   if (trend === TrendState.DoubleUp) {
     arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m17 11-5-5-5 5"/><path d="m17 18-5-5-5 5"/></svg>`;
   } else if (trend === TrendState.DoubleDown) {
     arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m7 6 5 5 5-5"/><path d="m7 13 5 5 5-5"/></svg>`;
   } else if (trend) {
-     // Single arrow with rotation
-     arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(${rotation}deg); transition: transform 0.3s ease;"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
+    // Single arrow with rotation
+    arrowEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(${rotation}deg); transition: transform 0.3s ease;"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>`;
   } else {
-     // Fallback to text arrow if trendState missing (legacy)
-     arrowEl.textContent = payload.data.arrow || "";
-     arrowEl.setAttribute("data-content", payload.data.arrow || "");
+    // Fallback to text arrow if trendState missing (legacy)
+    arrowEl.textContent = payload.data.arrow || "";
+    arrowEl.setAttribute("data-content", payload.data.arrow || "");
   }
 
   const colorKey = payload.data?.status?.colorKey || null;
@@ -773,16 +840,16 @@ function setState(payload) {
     setValueColor(
       payload.data.isLow || payload.data.isHigh
         ? "var(--gluco-amber)"
-        : "var(--gluco-emerald)"
+        : "var(--gluco-emerald)",
     );
   }
-  
+
   const ms =
     typeof payload.data.time === "number"
       ? payload.data.time
       : payload.data.timestamp
-      ? new Date(payload.data.timestamp).getTime()
-      : NaN;
+        ? new Date(payload.data.timestamp).getTime()
+        : NaN;
   const rel = formatUpdatedRelative(ms);
   sub.textContent = rel ? `Actualizado ${rel}` : "Actualizado";
 
