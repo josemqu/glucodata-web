@@ -728,10 +728,24 @@ export default function GlucoPage() {
     !!glucoseTime &&
     glucose?.isRealtime === true &&
     Date.now() - glucoseTime <= onlineThresholdMs;
-  const displayGlucose = isOnline ? glucose : null;
+  const lastGlucose = data?.lastGlucose ?? null;
+  const lastGlucoseThresholdMs = 5 * 60 * 1000;
+  const lastGlucoseTime =
+    typeof lastGlucose?.time === "number" ? lastGlucose.time : null;
+  const canUseLastGlucose =
+    !isOnline &&
+    !!lastGlucoseTime &&
+    Number.isFinite(lastGlucoseTime) &&
+    Date.now() - lastGlucoseTime <= lastGlucoseThresholdMs;
+  const sensingGlucose = isOnline
+    ? glucose
+    : canUseLastGlucose
+      ? lastGlucose
+      : null;
+  const displayGlucose = sensingGlucose;
   const status =
-    typeof displayGlucose?.value === "number"
-      ? getGlucoseStatus(displayGlucose.value)
+    typeof sensingGlucose?.value === "number"
+      ? getGlucoseStatus(sensingGlucose.value)
       : getGlucoseStatus(targetConfig.low);
 
   const stats =

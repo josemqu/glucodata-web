@@ -75,10 +75,48 @@ export async function getLatestGlucoseAction(
         });
       }
 
+      const lastGlucoseThresholdMs = 5 * 60 * 1000;
+      const { data: lastRow, error: lastRowError } = await supabase
+        .from("glucose_measurements")
+        .select("timestamp,value,trend,is_high,is_low,unit")
+        .eq("patient_id", patientId)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastRowError) {
+        console.error("Error fetching last measurement from Supabase:", {
+          message: lastRowError.message,
+          code: (lastRowError as any).code,
+          details: (lastRowError as any).details,
+        });
+      }
+
+      const lastGlucoseTime = lastRow?.timestamp
+        ? new Date(lastRow.timestamp).getTime()
+        : null;
+      const lastGlucoseIsFresh =
+        typeof lastGlucoseTime === "number" &&
+        Number.isFinite(lastGlucoseTime) &&
+        requestTime - lastGlucoseTime <= lastGlucoseThresholdMs;
+
+      const lastGlucose = lastGlucoseIsFresh
+        ? ({
+            value: Number(lastRow?.value),
+            trend: Number(lastRow?.trend),
+            time: lastGlucoseTime as number,
+            isHigh: Boolean(lastRow?.is_high),
+            isLow: Boolean(lastRow?.is_low),
+            unit: String(lastRow?.unit ?? "mg/dL"),
+            isRealtime: false,
+          } satisfies GlucoseData)
+        : null;
+
       return {
         success: true,
         data: {
           glucose: null,
+          lastGlucose,
           graph: [],
           patient: connections[0],
           session: currentSession,
