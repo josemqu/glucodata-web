@@ -8,6 +8,7 @@ export interface GlucoseData {
   isHigh: boolean;
   isLow: boolean;
   unit: string;
+  isRealtime?: boolean; // true = live sensor reading, false = historical/backfill data
 }
 
 export interface Patient {
@@ -16,16 +17,80 @@ export interface Patient {
   lastName: string;
 }
 
-function parseLibreTimestamp(value: unknown): number {
+/**
+ * Parse FactoryTimestamp (UTC) from LibreLinkUp API.
+ * Format: "M/d/y h:m:s a" in UTC (e.g., "11/10/2023 3:45:16 PM")
+ * This is the sensor's actual measurement time and should be used as the source of truth.
+ */
+function parseFactoryTimestamp(value: unknown): number {
   if (typeof value === "number") return value;
-  if (typeof value !== "string" || value.trim() === "") return Date.now();
+  if (typeof value !== "string" || value.trim() === "") return 0;
 
   const raw = value.trim();
+
+  // LibreLinkUp format: "M/d/y h:m:s a" (e.g., "11/10/2023 3:45:16 PM")
+  // This is in UTC, we need to parse it as such
+  const match = raw.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})\s+(AM|PM)$/i,
+  );
+  if (match) {
+    const [, month, day, year, hourStr, minute, second, ampm] = match;
+    let hour = parseInt(hourStr, 10);
+    if (ampm.toUpperCase() === "PM" && hour !== 12) hour += 12;
+    if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
+
+    // Create date in UTC
+    const utcMs = Date.UTC(
+      parseInt(year, 10),
+      parseInt(month, 10) - 1,
+      parseInt(day, 10),
+      hour,
+      parseInt(minute, 10),
+      parseInt(second, 10),
+    );
+    return Number.isFinite(utcMs) ? utcMs : 0;
+  }
+
+  // Fallback: try ISO parsing with UTC assumption
   const hasTimeZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
   const isoish = hasTimeZone ? raw : `${raw}Z`;
-
   const ms = new Date(isoish).getTime();
-  return Number.isFinite(ms) ? ms : Date.now();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/**
+ * Parse local Timestamp as fallback (only used if FactoryTimestamp is missing).
+ */
+function parseLocalTimestamp(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string" || value.trim() === "") return 0;
+
+  const raw = value.trim();
+
+  // LibreLinkUp format: "M/d/y h:m:s a" in local time
+  const match = raw.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})\s+(AM|PM)$/i,
+  );
+  if (match) {
+    const [, month, day, year, hourStr, minute, second, ampm] = match;
+    let hour = parseInt(hourStr, 10);
+    if (ampm.toUpperCase() === "PM" && hour !== 12) hour += 12;
+    if (ampm.toUpperCase() === "AM" && hour === 12) hour = 0;
+
+    // Create date in local time
+    const date = new Date(
+      parseInt(year, 10),
+      parseInt(month, 10) - 1,
+      parseInt(day, 10),
+      hour,
+      parseInt(minute, 10),
+      parseInt(second, 10),
+    );
+    return Number.isFinite(date.getTime()) ? date.getTime() : 0;
+  }
+
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 export class LibreLinkUpClient {
@@ -42,7 +107,7 @@ export class LibreLinkUpClient {
     private password?: string,
     region?: string,
     token?: string,
-    userId?: string
+    userId?: string,
   ) {
     if (region) this.region = region;
     if (token) this.token = token;
@@ -92,7 +157,7 @@ export class LibreLinkUpClient {
     endpoint: string,
     method: string = "GET",
     body?: any,
-    lastError4Type: string = ""
+    lastError4Type: string = "",
   ): Promise<any> {
     const url = this.getUrl(endpoint);
     const response = await fetch(url, {
@@ -123,13 +188,13 @@ export class LibreLinkUpClient {
       }
 
       throw new Error(
-        data.error?.message || `Required action: ${type || "Accept Terms"}`
+        data.error?.message || `Required action: ${type || "Accept Terms"}`,
       );
     }
 
     if (data.status !== 0) {
       throw new Error(
-        data.error?.message || `API error with status ${data.status}`
+        data.error?.message || `API error with status ${data.status}`,
       );
     }
 
@@ -164,33 +229,54 @@ export class LibreLinkUpClient {
   }
 
   async getGlucose(
-    patientId: string
+    patientId: string,
   ): Promise<{ measurement: GlucoseData | null; graph: GlucoseData[] }> {
     if (!this.token) await this.login();
     const data = await this.request(`/llu/connections/${patientId}/graph`);
 
     const mapMeasurement = (m: any): GlucoseData | null => {
       if (!m) return null;
+      // Use FactoryTimestamp (UTC sensor time) as source of truth, like GlucoDataHandler does
+      // This prevents duplicate entries when the API returns the same measurement multiple times
+      const factoryTime = parseFactoryTimestamp(m.FactoryTimestamp);
+      const localTime = parseLocalTimestamp(m.Timestamp);
+      const time = factoryTime > 0 ? factoryTime : localTime;
+
+      // If we can't get a valid time, skip this measurement
+      if (time <= 0) return null;
+
       return {
         value: m.ValueInMgPerDl,
         trend: m.TrendArrow,
-        time: parseLibreTimestamp(m.Timestamp),
+        time,
         isHigh: m.isHigh,
         isLow: m.isLow,
         unit: m.GlucoseUnits === 1 ? "mg/dL" : "mmol/L",
+        isRealtime: false, // Will be set to true for glucoseMeasurement
       };
     };
 
-    const measurement = mapMeasurement(data.data.connection.glucoseMeasurement);
+    const rawMeasurement = mapMeasurement(
+      data.data.connection.glucoseMeasurement,
+    );
+    // Mark the real-time measurement as such
+    const measurement = rawMeasurement
+      ? { ...rawMeasurement, isRealtime: true }
+      : null;
+
     const graphData = (data.data.connection.graphData || [])
       .map(mapMeasurement)
       .filter((m: any): m is GlucoseData => m !== null)
       .sort((a: any, b: any) => a.time - b.time);
 
+    // If no real-time measurement, use the last graph point as fallback (marked as historical)
+    const fallbackMeasurement =
+      !measurement && graphData.length > 0
+        ? { ...graphData[graphData.length - 1], isRealtime: false }
+        : null;
+
     return {
-      measurement:
-        measurement ||
-        (graphData.length > 0 ? graphData[graphData.length - 1] : null),
+      measurement: measurement || fallbackMeasurement,
       graph: graphData,
     };
   }
