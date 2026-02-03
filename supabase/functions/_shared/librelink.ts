@@ -1,4 +1,4 @@
-import crypto from "https://deno.land/std@0.177.0/node/crypto.ts";
+import { createHash } from "node:crypto";
 
 export interface GlucoseData {
   value: number;
@@ -123,7 +123,7 @@ export class LibreLinkUpClient {
   }
 
   private encryptSHA256(value: string): string {
-    return crypto.createHash("sha256").update(value.trim()).digest("hex");
+    return createHash("sha256").update(value.trim()).digest("hex");
   }
 
   private getUrl(endpoint: string): string {
@@ -269,14 +269,8 @@ export class LibreLinkUpClient {
       .filter((m: any): m is GlucoseData => m !== null)
       .sort((a: any, b: any) => a.time - b.time);
 
-    // If no real-time measurement, use the last graph point as fallback (marked as historical)
-    const fallbackMeasurement =
-      !measurement && graphData.length > 0
-        ? { ...graphData[graphData.length - 1], isRealtime: false }
-        : null;
-
     return {
-      measurement: measurement || fallbackMeasurement,
+      measurement,
       graph: graphData,
     };
   }

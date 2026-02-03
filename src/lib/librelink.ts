@@ -280,14 +280,8 @@ export class LibreLinkUpClient {
       .filter((m: any): m is GlucoseData => m !== null)
       .sort((a: any, b: any) => a.time - b.time);
 
-    // If no real-time measurement, use the last graph point as fallback (marked as historical)
-    const fallbackMeasurement =
-      !measurement && graphData.length > 0
-        ? { ...graphData[graphData.length - 1], isRealtime: false }
-        : null;
-
     return {
-      measurement: measurement || fallbackMeasurement,
+      measurement,
       graph: graphData,
     };
   }

@@ -705,12 +705,13 @@ export default function GlucoPage() {
 
   const { glucose, patient } = data;
   const unit = glucose?.unit || "mg/dL";
-  const staleMs = 12 * 60 * 1000;
+  const onlineThresholdMs = 60 * 1000;
   const glucoseTime = typeof glucose?.time === "number" ? glucose.time : null;
-  const isStale = !glucoseTime || Date.now() - glucoseTime > staleMs;
-  // Show glucose if not stale, but indicate if it's historical (not real-time)
-  const displayGlucose = !isStale ? glucose : null;
-  const isHistorical = displayGlucose && displayGlucose.isRealtime === false;
+  const isOnline =
+    !!glucoseTime &&
+    glucose?.isRealtime === true &&
+    Date.now() - glucoseTime <= onlineThresholdMs;
+  const displayGlucose = isOnline ? glucose : null;
   const status =
     typeof displayGlucose?.value === "number"
       ? getGlucoseStatus(displayGlucose.value)
@@ -1021,20 +1022,16 @@ export default function GlucoPage() {
                       <div
                         className={`absolute top-0 left-0 bottom-0 w-1 ${
                           displayGlucose
-                            ? isHistorical
-                              ? "bg-amber-500"
-                              : status.label === "OBJETIVO"
-                                ? "bg-emerald-500"
-                                : status.badge
+                            ? status.label === "OBJETIVO"
+                              ? "bg-emerald-500"
+                              : status.badge
                             : "bg-muted-foreground/40"
                         }`}
                       />
                       <CardContent className="p-3.5 flex items-center justify-between">
                         <div>
                           <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                            {isHistorical
-                              ? "Último Registro"
-                              : "Sensing Real-Time"}
+                            Sensing Real-Time
                           </p>
                           <div className="flex items-baseline gap-1.5">
                             <motion.span
@@ -1060,23 +1057,15 @@ export default function GlucoPage() {
                               }
                               className={`${
                                 displayGlucose
-                                  ? isHistorical
-                                    ? "text-amber-600 border-amber-500/50 bg-amber-500/20"
-                                    : status.badge
+                                  ? status.badge
                                   : "text-muted-foreground border-border/50 bg-muted/30"
                               } ${
-                                displayGlucose &&
-                                !isHistorical &&
-                                status.label !== "OBJETIVO"
+                                displayGlucose && status.label !== "OBJETIVO"
                                   ? "text-white"
                                   : ""
                               } px-2 py-0.5 text-[8px] font-bold rounded-sm uppercase tracking-wider`}
                             >
-                              {displayGlucose
-                                ? isHistorical
-                                  ? "HISTÓRICO"
-                                  : status.label
-                                : "SIN DATOS"}
+                              {displayGlucose ? status.label : "SIN DATOS"}
                             </Badge>
                             <div className="p-1.5 bg-muted rounded-md border border-border/50">
                               {displayGlucose ? (
