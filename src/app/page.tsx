@@ -165,13 +165,30 @@ export default function GlucoPage() {
         setIsLoggedIn(true);
         setLastFetch(new Date());
 
+        if (!result.data?.glucose) {
+          setGraphPoints([]);
+          setWindowEndMs(Date.now());
+          return;
+        }
+
         const incomingGraphRaw = Array.isArray(result.data?.graph)
           ? result.data.graph
           : [];
 
-        const incomingGraph = incomingGraphRaw
+        const graphFallback =
+          incomingGraphRaw.length > 0
+            ? incomingGraphRaw
+            : [result.data.glucose];
+
+        const incomingGraph = graphFallback
           .map((p: any) => ({
             ...p,
+            value:
+              typeof p?.value === "number"
+                ? p.value
+                : typeof p?.ValueInMgPerDl === "number"
+                  ? p.ValueInMgPerDl
+                  : Number(p?.value ?? p?.ValueInMgPerDl),
             time:
               typeof p?.time === "number"
                 ? p.time
@@ -1176,8 +1193,8 @@ export default function GlucoPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex-1 p-0 pt-2 flex flex-col">
-                      <div className="flex-1 min-h-[360px] lg:min-h-0">
-                        <ResponsiveContainer width="100%" height="100%">
+                      <div className="flex-1 min-h-[360px] min-w-0">
+                        <ResponsiveContainer width="100%" height={360}>
                           <ComposedChart
                             data={chartGraph}
                             margin={{ top: 5, right: 10, left: -15, bottom: 5 }}

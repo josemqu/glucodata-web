@@ -23,7 +23,10 @@ export interface Patient {
  * This is the sensor's actual measurement time and should be used as the source of truth.
  */
 function parseFactoryTimestamp(value: unknown): number {
-  if (typeof value === "number") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return 0;
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
   if (typeof value !== "string" || value.trim() === "") return 0;
 
   const raw = value.trim();
@@ -62,7 +65,10 @@ function parseFactoryTimestamp(value: unknown): number {
  * Parse local Timestamp as fallback (only used if FactoryTimestamp is missing).
  */
 function parseLocalTimestamp(value: unknown): number {
-  if (typeof value === "number") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return 0;
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
   if (typeof value !== "string" || value.trim() === "") return 0;
 
   const raw = value.trim();

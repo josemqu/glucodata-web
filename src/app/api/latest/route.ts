@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { supabase } from "@/lib/supabase";
 import { calculateTrend } from "@/lib/trend";
+import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_TARGETS = {
   low: 70,
@@ -41,7 +41,7 @@ function corsHeaders() {
 function unauthorized() {
   return NextResponse.json(
     { success: false, error: "Unauthorized" },
-    { status: 401, headers: corsHeaders() }
+    { status: 401, headers: corsHeaders() },
   );
 }
 
@@ -54,9 +54,26 @@ export async function GET(req: Request) {
   if (!apiToken) {
     return NextResponse.json(
       { success: false, error: "Server is missing GLUCO_API_TOKEN" },
-      { status: 500, headers: corsHeaders() }
+      { status: 500, headers: corsHeaders() },
     );
   }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Server is missing NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY",
+      },
+      { status: 500, headers: corsHeaders() },
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.toLowerCase().startsWith("bearer ")
@@ -76,7 +93,7 @@ export async function GET(req: Request) {
   if (configError) {
     return NextResponse.json(
       { success: false, error: configError.message },
-      { status: 500, headers: corsHeaders() }
+      { status: 500, headers: corsHeaders() },
     );
   }
 
@@ -99,14 +116,14 @@ export async function GET(req: Request) {
   if (error) {
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500, headers: corsHeaders() }
+      { status: 500, headers: corsHeaders() },
     );
   }
 
   if (!recentData || recentData.length === 0) {
     return NextResponse.json(
       { success: true, data: null },
-      { status: 200, headers: corsHeaders() }
+      { status: 200, headers: corsHeaders() },
     );
   }
 
@@ -140,6 +157,6 @@ export async function GET(req: Request) {
         status,
       },
     },
-    { status: 200, headers: corsHeaders() }
+    { status: 200, headers: corsHeaders() },
   );
 }
