@@ -81,6 +81,18 @@ async function fetchLatest() {
 
     const json = await res.json().catch(() => null);
 
+    if (res.ok && json && json.success === false) {
+      const payload = {
+        ok: false,
+        error: json?.error || "Respuesta inválida del servidor",
+        data: null,
+        receivedAt: Date.now(),
+      };
+      await setLastResult(payload);
+      broadcastUpdate(payload);
+      return;
+    }
+
     if (!res.ok) {
       const payload = {
         ok: false,
@@ -95,13 +107,20 @@ async function fetchLatest() {
     }
 
     const data = json?.data || null;
+    const valueRaw = data?.value;
+    const valueNum =
+      typeof valueRaw === "number"
+        ? valueRaw
+        : typeof valueRaw === "string"
+          ? Number(valueRaw)
+          : NaN;
     const payload = {
       ok: true,
       error: null,
       data:
-        data && typeof data.value === "number"
+        data && Number.isFinite(valueNum)
           ? {
-              value: data.value,
+              value: valueNum,
               unit: data.unit || "mg/dL",
               trend: data.trend,
               trendState: data.trendState, // Pass through new state
@@ -133,13 +152,23 @@ async function fetchLatest() {
 
 async function ensureAlarm() {
   const settings = await getSettings();
-  const periodMinutes = Math.max(
-    1,
-    Math.round(Number(settings.refreshSeconds) / 60)
-  );
-  await chrome.alarms.create("gluco_refresh", {
-    periodInMinutes: periodMinutes,
-  });
+  const refreshSecondsRaw = Number(settings.refreshSeconds);
+  const refreshSeconds = Number.isFinite(refreshSecondsRaw)
+    ? refreshSecondsRaw
+    : DEFAULTS.refreshSeconds;
+  const periodMinutes = Math.max(1, Math.round(refreshSeconds / 60));
+
+  try {
+    await chrome.alarms.create("gluco_refresh", {
+      periodInMinutes: periodMinutes,
+    });
+  } catch (e) {
+    console.error("[GlucoBadge] Failed to create alarm", {
+      refreshSeconds: settings.refreshSeconds,
+      periodMinutes,
+      error: e?.message || String(e),
+    });
+  }
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
