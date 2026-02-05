@@ -53,7 +53,7 @@ export async function getLatestGlucoseAction(
     const { measurement: rawGlucose, graph: apiGraph } =
       await client.getGlucose(patientId);
 
-    const onlineThresholdMs = 60 * 1000;
+    const onlineThresholdMs = 5 * 60 * 1000;
     const isRecentOnline =
       !!rawGlucose &&
       typeof rawGlucose.time === "number" &&

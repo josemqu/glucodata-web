@@ -592,6 +592,65 @@ export default function GlucoPage() {
     return Math.max(...filteredGraphWithValues.map((p: any) => p.value));
   }, [filteredGraphWithValues, targetConfig.high]);
 
+  const timeStats = useMemo(() => {
+    if (filteredGraphWithValues.length === 0) return null;
+
+    // Time-weighted statistics calculation
+    // This provides accurate Time in Range (TIR) even with variable sampling rates
+    const sorted = [...filteredGraphWithValues].sort((a: any, b: any) => a.time - b.time);
+    
+    let totalDuration = 0;
+    const dur = {
+      veryLow: 0,
+      low: 0,
+      inRange: 0,
+      high: 0,
+      veryHigh: 0,
+    };
+
+    const MAX_VALIDITY = 15 * 60 * 1000; // Max 15 mins between points
+    const DEFAULT_DURATION = 5 * 60 * 1000; // Default 5 mins for last point
+
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
+      const next = sorted[i + 1];
+      
+      let duration = 0;
+      if (next) {
+        duration = next.time - p.time;
+      } else {
+        duration = DEFAULT_DURATION;
+      }
+
+      // Cap gaps to avoid skewing data with offline periods
+      if (duration > MAX_VALIDITY) duration = MAX_VALIDITY;
+      if (duration < 0) duration = 0;
+
+      totalDuration += duration;
+      const val = p.value;
+
+      if (val <= targetConfig.hypo) dur.veryLow += duration;
+      else if (val < targetConfig.low) dur.low += duration;
+      else if (val >= targetConfig.hyper) dur.veryHigh += duration;
+      else if (val > targetConfig.high) dur.high += duration;
+      else dur.inRange += duration;
+    }
+
+    const toPct = (ms: number) => totalDuration > 0 ? Math.round((ms / totalDuration) * 100) : 0;
+
+    return {
+      avg: Math.round(
+        sorted.reduce((acc: number, p: any) => acc + p.value, 0) / sorted.length
+      ),
+      max: Math.max(...sorted.map((p: any) => p.value)),
+      min: Math.min(...sorted.map((p: any) => p.value)),
+      inRangePct: toPct(dur.inRange),
+      durations: dur,
+      totalDuration,
+      toPct
+    };
+  }, [filteredGraphWithValues, targetConfig]);
+
   const getGlucoseColor = (val: number) => {
     if (val === undefined || val === null) return "#94a3b8";
     if (val <= targetConfig.hypo) return "#ef4444";
@@ -722,7 +781,7 @@ export default function GlucoPage() {
 
   const { glucose, patient } = data;
   const unit = glucose?.unit || "mg/dL";
-  const onlineThresholdMs = 60 * 1000;
+  const onlineThresholdMs = 5 * 60 * 1000;
   const glucoseTime = typeof glucose?.time === "number" ? glucose.time : null;
   const isOnline =
     !!glucoseTime &&
@@ -748,63 +807,42 @@ export default function GlucoPage() {
       ? getGlucoseStatus(sensingGlucose.value)
       : getGlucoseStatus(targetConfig.low);
 
-  const stats =
-    filteredGraphWithValues.length > 0
-      ? {
-          avg: Math.round(
-            filteredGraphWithValues.reduce(
-              (acc: number, p: any) => acc + p.value,
-              0,
-            ) / filteredGraphWithValues.length,
-          ),
-          max: Math.max(...filteredGraphWithValues.map((p: any) => p.value)),
-          min: Math.min(...filteredGraphWithValues.map((p: any) => p.value)),
-          inRange: Math.round(
-            (filteredGraphWithValues.filter(
-              (p: any) =>
-                p.value >= targetConfig.low && p.value <= targetConfig.high,
-            ).length /
-              filteredGraphWithValues.length) *
-              100,
-          ),
-        }
-      : null;
 
-  const rangeStats =
-    filteredGraphWithValues.length > 0
-      ? (() => {
-          const total = filteredGraphWithValues.length;
-          const veryLow = filteredGraphWithValues.filter(
-            (p: any) => p.value <= targetConfig.hypo,
-          ).length;
-          const low = filteredGraphWithValues.filter(
-            (p: any) =>
-              p.value > targetConfig.hypo && p.value < targetConfig.low,
-          ).length;
-          const inRange = filteredGraphWithValues.filter(
-            (p: any) =>
-              p.value >= targetConfig.low && p.value <= targetConfig.high,
-          ).length;
-          const high = filteredGraphWithValues.filter(
-            (p: any) =>
-              p.value > targetConfig.high && p.value < targetConfig.hyper,
-          ).length;
-          const veryHigh = filteredGraphWithValues.filter(
-            (p: any) => p.value >= targetConfig.hyper,
-          ).length;
 
-          const toPct = (n: number) => Math.round((n / total) * 100);
+  const stats = timeStats
+    ? {
+        avg: timeStats.avg,
+        max: timeStats.max,
+        min: timeStats.min,
+        inRange: timeStats.inRangePct,
+      }
+    : null;
 
-          return {
-            total,
-            veryLow: { count: veryLow, pct: toPct(veryLow) },
-            low: { count: low, pct: toPct(low) },
-            inRange: { count: inRange, pct: toPct(inRange) },
-            high: { count: high, pct: toPct(high) },
-            veryHigh: { count: veryHigh, pct: toPct(veryHigh) },
-          };
-        })()
-      : null;
+  const rangeStats = timeStats
+    ? {
+        total: timeStats.totalDuration,
+        veryLow: {
+          count: timeStats.durations.veryLow,
+          pct: timeStats.toPct(timeStats.durations.veryLow),
+        },
+        low: {
+          count: timeStats.durations.low,
+          pct: timeStats.toPct(timeStats.durations.low),
+        },
+        inRange: {
+          count: timeStats.durations.inRange,
+          pct: timeStats.toPct(timeStats.durations.inRange),
+        },
+        high: {
+          count: timeStats.durations.high,
+          pct: timeStats.toPct(timeStats.durations.high),
+        },
+        veryHigh: {
+          count: timeStats.durations.veryHigh,
+          pct: timeStats.toPct(timeStats.durations.veryHigh),
+        },
+      }
+    : null;
 
   const yDomain = (() => {
     const thresholds = [
