@@ -61,8 +61,34 @@ export async function getLatestGlucoseAction(
 
     const glucose = isRecentOnline ? rawGlucose : null;
 
-    // If the latest measurement is not online/recent, do not show historical graph
-    // (requested behavior: graph should be empty when device is offline/stale)
+    const twentyFourHoursAgo = new Date(
+      Date.now() - 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const fetchHistory = async () => {
+      const { data: dbHistory, error: dbError } = await supabase
+        .from("glucose_measurements")
+        .select("*")
+        .eq("patient_id", patientId)
+        .gte("timestamp", twentyFourHoursAgo)
+        .order("timestamp", { ascending: true });
+
+      if (dbError) {
+        console.error("Error fetching from Supabase:", dbError);
+        return [];
+      }
+
+      return (dbHistory || []).map((row) => ({
+        value: Number(row.value),
+        trend: row.trend,
+        time: new Date(row.timestamp).getTime(),
+        isHigh: row.is_high,
+        isLow: row.is_low,
+        unit: row.unit,
+      }));
+    };
+
+    // If the latest measurement is not online/recent, we still want to show history
     if (!glucose) {
       const currentSession = client.getSession();
       if (currentSession.token) {
@@ -85,11 +111,7 @@ export async function getLatestGlucoseAction(
         .maybeSingle();
 
       if (lastRowError) {
-        console.error("Error fetching last measurement from Supabase:", {
-          message: lastRowError.message,
-          code: (lastRowError as any).code,
-          details: (lastRowError as any).details,
-        });
+        console.error("Error fetching last measurement from Supabase:", lastRowError);
       }
 
       const lastGlucoseTime = lastRow?.timestamp
@@ -112,12 +134,14 @@ export async function getLatestGlucoseAction(
           } satisfies GlucoseData)
         : null;
 
+      const history = await fetchHistory();
+
       return {
         success: true,
         data: {
           glucose: null,
           lastGlucose,
-          graph: [],
+          graph: history,
           patient: connections[0],
           session: currentSession,
         },
@@ -147,11 +171,7 @@ export async function getLatestGlucoseAction(
           );
 
         if (upsertLatestError) {
-          console.error("Error upserting latest measurement to Supabase:", {
-            message: upsertLatestError.message,
-            code: (upsertLatestError as any).code,
-            details: (upsertLatestError as any).details,
-          });
+          console.error("Error upserting latest measurement to Supabase:", upsertLatestError);
         }
       }
     }
@@ -179,30 +199,7 @@ export async function getLatestGlucoseAction(
       }
     }
 
-    // Obtener historial de las últimas 24 horas desde Supabase
-    const twentyFourHoursAgo = new Date(
-      Date.now() - 24 * 60 * 60 * 1000,
-    ).toISOString();
-    const { data: dbHistory, error: dbError } = await supabase
-      .from("glucose_measurements")
-      .select("*")
-      .eq("patient_id", patientId)
-      .gte("timestamp", twentyFourHoursAgo)
-      .order("timestamp", { ascending: true });
-
-    if (dbError) {
-      console.error("Error fetching from Supabase:", dbError);
-    }
-
-    // Mapear datos de la DB al formato GlucoseData
-    const finalGraph: GlucoseData[] = (dbHistory || []).map((row) => ({
-      value: Number(row.value),
-      trend: row.trend,
-      time: new Date(row.timestamp).getTime(),
-      isHigh: row.is_high,
-      isLow: row.is_low,
-      unit: row.unit,
-    }));
+    const finalGraph = await fetchHistory();
 
     // 7. Persist session for the background Edge Function (avoiding 429 errors)
     const currentSession = client.getSession();

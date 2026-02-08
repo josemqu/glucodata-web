@@ -165,7 +165,8 @@ export default function GlucoPage() {
         setIsLoggedIn(true);
         setLastFetch(new Date());
 
-        if (!result.data?.glucose) {
+        if (!result.data?.glucose && (!result.data?.graph || result.data.graph.length === 0)) {
+          console.log("No glucose and no graph data received");
           setGraphPoints([]);
           setWindowEndMs(Date.now());
           return;
