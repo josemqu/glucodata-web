@@ -99,7 +99,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Metrics Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
