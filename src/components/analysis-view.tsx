@@ -148,6 +148,31 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
     return calculatePercentiles(history);
   }, [history]);
 
+  const { p50Min, p50Max } = useMemo(() => {
+    if (!percentileData.length) return { p50Min: 0, p50Max: 300 };
+    const p50s = percentileData.map(d => d.p50).filter(v => v !== null && v !== undefined) as number[];
+    if (!p50s.length) return { p50Min: 0, p50Max: 300 };
+    return {
+      p50Min: Math.min(...p50s),
+      p50Max: Math.max(...p50s)
+    };
+  }, [percentileData]);
+
+  const getGlucoseColor = (val: number) => {
+    if (val === undefined || val === null) return "#94a3b8";
+    if (val <= targetConfig.hypo) return "#ef4444";
+    if (val < targetConfig.low) return "#f59e0b";
+    if (val >= targetConfig.hyper) return "#ef4444";
+    if (val > targetConfig.high) return "#f59e0b";
+    return "#10b981";
+  };
+
+  const breakPointPercentage = (value: number) => {
+    if (p50Max === p50Min) return "0%";
+    const percentage = ((value - p50Min) / (p50Max - p50Min)) * 100;
+    return `${Math.max(0, Math.min(100, percentage))}%`;
+  };
+
   if (history.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
@@ -217,6 +242,32 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={percentileData}>
                 <defs>
+                  <linearGradient id="colorMedian" x1="0%" y1="104%" x2="0%" y2="-2%">
+                    <stop offset="0%" stopColor={getGlucoseColor(p50Min)} />
+
+                    {targetConfig.hypo > p50Min && targetConfig.hypo < p50Max && (
+                      <>
+                        <stop offset={breakPointPercentage(targetConfig.hypo)} stopColor={getGlucoseColor(targetConfig.hypo - 1)} />
+                        <stop offset={breakPointPercentage(targetConfig.hypo)} stopColor={getGlucoseColor(targetConfig.hypo + 1)} />
+                      </>
+                    )}
+
+                    {targetConfig.low > p50Min && targetConfig.low < p50Max && (
+                      <>
+                        <stop offset={breakPointPercentage(targetConfig.low)} stopColor={getGlucoseColor(targetConfig.low - 1)} />
+                        <stop offset={breakPointPercentage(targetConfig.low)} stopColor={getGlucoseColor(targetConfig.low + 1)} />
+                      </>
+                    )}
+
+                    {targetConfig.high > p50Min && targetConfig.high < p50Max && (
+                      <>
+                        <stop offset={breakPointPercentage(targetConfig.high)} stopColor={getGlucoseColor(targetConfig.high - 1)} />
+                        <stop offset={breakPointPercentage(targetConfig.high)} stopColor={getGlucoseColor(targetConfig.high + 1)} />
+                      </>
+                    )}
+
+                    <stop offset="100%" stopColor={getGlucoseColor(p50Max)} />
+                  </linearGradient>
                   <linearGradient id="colorP25P75" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
@@ -268,7 +319,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
                 <Line
                   type="monotone"
                   dataKey="p50"
-                  stroke="#10b981"
+                  stroke="url(#colorMedian)"
                   strokeWidth={3}
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
