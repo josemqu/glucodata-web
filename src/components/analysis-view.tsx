@@ -153,7 +153,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 pb-6">
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={percentileData}>
@@ -239,7 +239,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           <CardHeader className="pt-6">
             <CardTitle className="text-sm font-bold uppercase tracking-widest">Distribución por Rangos</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pb-6">
             <div className="space-y-4">
               <RangeBar label="Muy Alta (>250)" value={stats?.tar || 0} color="bg-red-600" />
               <RangeBar label="Alta (181-250)" value={stats?.tar || 0} color="bg-amber-500" />
@@ -254,7 +254,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           <CardHeader className="pt-6">
             <CardTitle className="text-sm font-bold uppercase tracking-widest italic">Análisis T1D</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pb-6">
             <p className="text-xs text-muted-foreground leading-relaxed">
               El análisis de los últimos <span className="text-foreground font-bold">{days} días</span> muestra un control 
               { (stats?.tir || 0) > 70 ? ' óptimo' : ' que requiere atención' } según el consenso internacional. 

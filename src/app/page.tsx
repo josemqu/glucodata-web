@@ -102,6 +102,33 @@ export default function GlucoPage() {
     graphPointsRef.current = graphPoints;
   }, [graphPoints]);
 
+  // Sync activeView with URL Hash
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === "monitor" || hash === "dashboard") {
+        setActiveView("dashboard");
+      } else if (hash === "analisis" || hash === "analysis") {
+        setActiveView("analysis");
+      } else if (hash === "settings") {
+        setActiveView("settings");
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    const currentHash = window.location.hash.replace("#", "");
+    const expectedHash = activeView === "dashboard" ? "monitor" : activeView === "analysis" ? "analisis" : "settings";
+    
+    if (currentHash !== expectedHash) {
+      window.history.replaceState(null, "", `#${expectedHash}`);
+    }
+  }, [activeView]);
+
   // Load session and config
   useEffect(() => {
     const savedSession = Cookies.get("gluco_session");
