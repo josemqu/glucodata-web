@@ -1164,9 +1164,9 @@ export default function GlucoPage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="space-y-6"
+              className="h-full flex flex-col space-y-3"
             >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-black italic tracking-tighter uppercase">Análisis Avanzado</h2>
                   <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Clinical Glucose Insights</p>
@@ -1189,7 +1189,7 @@ export default function GlucoPage() {
               </div>
 
               {loadingAnalysis ? (
-                <div className="flex flex-col items-center justify-center h-[400px] gap-4">
+                <div className="flex flex-col items-center justify-center flex-1 gap-4">
                   <RefreshCw className="w-8 h-8 text-primary animate-spin" />
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Procesando Historial...</p>
                 </div>

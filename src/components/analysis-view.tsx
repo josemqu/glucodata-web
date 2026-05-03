@@ -161,9 +161,11 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
+      {/* Left Column - Main View */}
+      <div className="lg:col-span-9 flex flex-col gap-3 min-w-0 h-full">
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard
           title="TIR"
           value={`${stats?.tir}%`}
@@ -199,24 +201,19 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
       </div>
 
       {/* AGP Chart */}
-      <Card className="border-border/40 bg-card/50 backdrop-blur-sm overflow-hidden">
-        <CardHeader className="pt-6 pb-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold flex items-center gap-2">
-                Perfil de Glucosa Ambulatorio (AGP)
-                <Badge variant="outline" className="text-[10px] uppercase tracking-widest font-black">
-                  {days} DÍAS
-                </Badge>
-              </CardTitle>
-              <CardDescription className="text-xs uppercase tracking-tight">
-                Superposición de datos por hora del día
-              </CardDescription>
-            </div>
+      <Card className="border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20 shadow-sm">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
+          <div className="flex flex-col w-full sm:w-auto">
+            <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
+              Perfil de Glucosa Ambulatorio (AGP)
+              <span className="hidden sm:inline-flex text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                {days} DÍAS
+              </span>
+            </CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="pt-4 pb-6">
-          <div className="h-[350px] w-full">
+        <CardContent className="flex-1 flex flex-col p-0 relative min-h-0">
+          <div className="flex-1 w-full min-h-0 p-4 pt-6">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={percentileData}>
                 <defs>
@@ -242,7 +239,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
                   fontSize={10}
                   tickLine={false}
                   axisLine={false}
-                  domain={[0, 350]}
+                  domain={[0, 300]}
                 />
                 <Tooltip 
                   content={<CustomTooltip />} 
@@ -341,55 +338,58 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
             </ResponsiveContainer>
           </div>
 
-          <div className="flex items-center gap-6 mt-6 justify-center">
+          <div className="px-4 py-2 border-t bg-muted/5 flex items-center gap-6 justify-center">
             <LegendItem color="#10b981" label="Mediana (50%)" />
             <LegendItem color="rgba(16, 185, 129, 0.3)" label="25% - 75%" />
             <LegendItem color="rgba(148, 163, 184, 0.1)" label="5% - 95%" />
           </div>
         </CardContent>
       </Card>
+      </div>
 
-      {/* Range Distribution */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pt-6">
-            <CardTitle className="text-sm font-bold uppercase tracking-widest">Distribución por Rangos</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-6">
-            <div className="space-y-4">
-              <RangeBar label="Muy Alta (>250)" value={stats?.veryHigh || 0} color="bg-red-600" />
-              <RangeBar label="Alta (181-250)" value={stats?.high || 0} color="bg-amber-500" />
-              <RangeBar label="En Rango (70-180)" value={stats?.tir || 0} color="bg-emerald-500" />
-              <RangeBar label="Baja (54-69)" value={stats?.low || 0} color="bg-amber-500" />
-              <RangeBar label="Muy Baja (<54)" value={stats?.veryLow || 0} color="bg-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pt-6">
-            <CardTitle className="text-sm font-bold uppercase tracking-widest italic">Análisis T1D</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 pb-6">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              El análisis de los últimos <span className="text-foreground font-bold">{days} días</span> muestra un control 
-              { (stats?.tir || 0) > 70 ? ' óptimo' : ' que requiere atención' } según el consenso internacional. 
-              El GMI de <span className="text-foreground font-bold">{stats?.gmi}%</span> sugiere una hemoglobina glicosilada similar.
-            </p>
-            <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2">
-              <div className="flex items-center gap-2">
-                <Info className="w-3 h-3 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-tighter">Tip del Día</span>
+      {/* Right Column - Sidemenu */}
+      <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
+        <div className="flex flex-col gap-3 h-full">
+          <Card className="border bg-card/30 flex flex-col">
+            <CardHeader className="p-4 pb-0">
+              <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80">Distribución por Rangos</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 flex-1">
+              <div className="space-y-3">
+                <RangeBar label="Muy Alta (>250)" value={stats?.veryHigh || 0} color="bg-red-600" />
+                <RangeBar label="Alta (181-250)" value={stats?.high || 0} color="bg-amber-500" />
+                <RangeBar label="En Rango (70-180)" value={stats?.tir || 0} color="bg-emerald-500" />
+                <RangeBar label="Baja (54-69)" value={stats?.low || 0} color="bg-amber-500" />
+                <RangeBar label="Muy Baja (<54)" value={stats?.veryLow || 0} color="bg-red-600" />
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                { (stats?.cv || 0) > 36 
-                  ? "La variabilidad es alta (>36%). Intenta identificar patrones en las comidas o el ejercicio para estabilizar las curvas."
-                  : "Tu variabilidad está en el objetivo (<36%). ¡Excelente trabajo manteniendo la estabilidad glucémica!"
-                }
+            </CardContent>
+          </Card>
+
+          <Card className="border bg-card/30 flex flex-col flex-1">
+            <CardHeader className="p-4 pb-0">
+              <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 italic">Análisis T1D</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4 flex flex-col flex-1">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                El análisis de los últimos <span className="text-foreground font-bold">{days} días</span> muestra un control 
+                { (stats?.tir || 0) > 70 ? ' óptimo' : ' que requiere atención' }. 
+                El GMI de <span className="text-foreground font-bold">{stats?.gmi}%</span> sugiere una hemoglobina glicosilada similar.
               </p>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2 mt-auto">
+                <div className="flex items-center gap-2">
+                  <Info className="w-3 h-3 text-primary" />
+                  <span className="text-[10px] font-bold uppercase tracking-tighter">Tip del Día</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  { (stats?.cv || 0) > 36 
+                    ? "La variabilidad es alta (>36%). Identifica patrones para estabilizar las curvas."
+                    : "Tu variabilidad está en objetivo (<36%). ¡Excelente trabajo manteniendo la estabilidad!"
+                  }
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
