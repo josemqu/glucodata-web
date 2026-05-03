@@ -229,3 +229,59 @@ export async function getLatestGlucoseAction(
     };
   }
 }
+export async function getHistoricalGlucoseAction(
+  days: number = 7,
+  email?: string,
+  password?: string,
+  sessionData?: { token: string; userId: string; region: string },
+) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const client = new LibreLinkUpClient(
+      email || LIBRE_EMAIL,
+      password || LIBRE_PASSWORD,
+      sessionData?.region,
+      sessionData?.token,
+      sessionData?.userId,
+    );
+
+    if (!sessionData?.token) {
+      await client.login();
+    }
+    const connections = await client.getConnections();
+    if (connections.length === 0) throw new Error("No hay pacientes conectados");
+    const patientId = connections[0].patientId;
+
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: dbHistory, error: dbError } = await supabase
+      .from("glucose_measurements")
+      .select("*")
+      .eq("patient_id", patientId)
+      .gte("timestamp", startDate)
+      .order("timestamp", { ascending: true });
+
+    if (dbError) throw dbError;
+
+    const history = (dbHistory || []).map((row) => ({
+      value: Number(row.value),
+      time: new Date(row.timestamp).getTime(),
+    }));
+
+    return {
+      success: true,
+      data: {
+        history,
+        patient: connections[0],
+        days,
+      },
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

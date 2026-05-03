@@ -21,6 +21,7 @@ import {
   EyeOff,
   ChevronsUp,
   ChevronsDown,
+  Activity,
 } from "lucide-react";
 import {
   Card,
@@ -51,6 +52,8 @@ import {
 } from "recharts";
 import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
+import { getHistoricalGlucoseAction } from "./actions";
+import { AnalysisView } from "@/components/analysis-view";
 
 export default function GlucoPage() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -62,9 +65,12 @@ export default function GlucoPage() {
   const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
-  const [activeView, setActiveView] = useState<"dashboard" | "settings">(
+  const [activeView, setActiveView] = useState<"dashboard" | "analysis" | "settings">(
     "dashboard",
   );
+  const [historicalData, setHistoricalData] = useState<any[]>([]);
+  const [analysisDays, setAnalysisDays] = useState(7);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
 
   const [session, setSession] = useState<any>(null);
 
@@ -268,6 +274,33 @@ export default function GlucoPage() {
     setCredentials({ email: "", password: "" });
     setActiveView("dashboard");
   };
+
+  const fetchHistoricalData = async (days: number = analysisDays) => {
+    setLoadingAnalysis(true);
+    try {
+      const result = await getHistoricalGlucoseAction(
+        days,
+        credentials.email,
+        credentials.password,
+        session,
+      );
+      if (result.success) {
+        setHistoricalData(result.data.history);
+      } else {
+        console.error("Error fetching historical data:", result.error);
+      }
+    } catch (e) {
+      console.error("Error fetching historical data:", e);
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeView === "analysis") {
+      fetchHistoricalData();
+    }
+  }, [activeView, analysisDays]);
 
   useEffect(() => {
     let tick: ReturnType<typeof setInterval> | undefined;
@@ -1015,7 +1048,7 @@ export default function GlucoPage() {
       {/* Header */}
       <header className="flex-none px-4 py-2 border-b bg-background/80 backdrop-blur-md z-10">
         <div className="max-w-[1100px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-6">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/10">
               <Droplets className="w-5 h-5 text-primary-foreground" />
             </div>
@@ -1030,9 +1063,32 @@ export default function GlucoPage() {
                 PRO INTERFACE V2.5
               </span>
             </div>
+            
+            <nav className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border/50">
+              <button
+                onClick={() => setActiveView("dashboard")}
+                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${
+                  activeView === "dashboard" 
+                    ? "bg-background shadow-sm text-primary" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Monitor
+              </button>
+              <button
+                onClick={() => setActiveView("analysis")}
+                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${
+                  activeView === "analysis" 
+                    ? "bg-background shadow-sm text-primary" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Análisis
+              </button>
+            </nav>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <div className="text-right hidden sm:block">
               <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
                 Monitorización Activa
@@ -1041,7 +1097,7 @@ export default function GlucoPage() {
                 {patient.firstName} {patient.lastName}
               </p>
             </div>
-            <div className="flex items-center gap-2 border-l pl-4 border-border/50">
+            <div className="flex items-center gap-2 border-l pl-2 sm:pl-4 border-border/50">
               <ModeToggle />
               <Button
                 variant="ghost"
@@ -1077,7 +1133,48 @@ export default function GlucoPage() {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 md:p-4 bg-muted/5">
         <div className="max-w-[1100px] mx-auto h-full">
-          {activeView === "dashboard" ? (
+          {activeView === "analysis" ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-2">
+                <div>
+                  <h2 className="text-xl font-black italic tracking-tighter uppercase">Análisis Avanzado</h2>
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Clinical Glucose Insights</p>
+                </div>
+                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/40">
+                  {[7, 14, 30, 90].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setAnalysisDays(d)}
+                      className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                        analysisDays === d 
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      }`}
+                    >
+                      {d}D
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loadingAnalysis ? (
+                <div className="flex flex-col items-center justify-center h-[400px] gap-4">
+                  <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Procesando Historial...</p>
+                </div>
+              ) : (
+                <AnalysisView 
+                  history={historicalData} 
+                  targetConfig={targetConfig} 
+                  days={analysisDays} 
+                />
+              )}
+            </motion.div>
+          ) : activeView === "dashboard" ? (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1209,6 +1306,15 @@ export default function GlucoPage() {
 
                       {/* Time Filters */}
                       <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveView("analysis")}
+                          className="h-7 text-[9px] font-black uppercase tracking-widest bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary flex items-center gap-2 mr-2"
+                        >
+                          <Activity className="w-3 h-3" />
+                          Análisis Clínico
+                        </Button>
                         <div className="flex flex-wrap items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
                           {[1, 3, 6, 12, 24].map((h) => (
                             <button
