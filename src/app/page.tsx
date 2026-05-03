@@ -311,7 +311,7 @@ export default function GlucoPage() {
         credentials.password,
         session,
       );
-      if (result.success) {
+      if (result.success && result.data) {
         setHistoricalData(result.data.history);
       } else {
         console.error("Error fetching historical data:", result.error);
