@@ -138,7 +138,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
 
       {/* AGP Chart */}
       <Card className="border-border/40 bg-card/50 backdrop-blur-sm overflow-hidden">
-        <CardHeader className="pb-2">
+        <CardHeader className="pt-6 pb-2">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -236,7 +236,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
       {/* Range Distribution */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="pt-6">
             <CardTitle className="text-sm font-bold uppercase tracking-widest">Distribución por Rangos</CardTitle>
           </CardHeader>
           <CardContent>
@@ -251,7 +251,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
         </Card>
 
         <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="pt-6">
             <CardTitle className="text-sm font-bold uppercase tracking-widest italic">Análisis T1D</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
