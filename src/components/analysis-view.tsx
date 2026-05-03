@@ -51,6 +51,73 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
   const stats = useMemo(() => {
     if (history.length === 0) return null;
 
+    const sorted = [...history].sort((a, b) => a.time - b.time);
+    
+    let totalDuration = 0;
+    const dur = {
+      veryLow: 0,
+      low: 0,
+      inRange: 0,
+      high: 0,
+      veryHigh: 0,
+    };
+
+    const MAX_VALIDITY = 15 * 60 * 1000; // Max 15 mins between points
+    const DEFAULT_DURATION = 5 * 60 * 1000; // Default 5 mins for last point
+
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
+      const next = sorted[i + 1];
+      
+      let duration = 0;
+      if (next) {
+        duration = next.time - p.time;
+      } else {
+        duration = DEFAULT_DURATION;
+      }
+
+      // Cap gaps to avoid skewing data with offline periods
+      if (duration > MAX_VALIDITY) duration = MAX_VALIDITY;
+      if (duration < 0) duration = 0;
+
+      totalDuration += duration;
+      const val = p.value;
+
+      if (val <= targetConfig.hypo) dur.veryLow += duration;
+      else if (val < targetConfig.low) dur.low += duration;
+      else if (val >= targetConfig.hyper) dur.veryHigh += duration;
+      else if (val > targetConfig.high) dur.high += duration;
+      else dur.inRange += duration;
+    }
+
+    const toPct = (ms: number) => totalDuration > 0 ? Math.round((ms / totalDuration) * 100) : 0;
+
+    let pVeryLow = toPct(dur.veryLow);
+    let pLow = toPct(dur.low);
+    let pInRange = toPct(dur.inRange);
+    let pHigh = toPct(dur.high);
+    let pVeryHigh = toPct(dur.veryHigh);
+
+    if (totalDuration > 0) {
+      const sumPct = pVeryLow + pLow + pInRange + pHigh + pVeryHigh;
+      if (sumPct !== 100) {
+        const diff = 100 - sumPct;
+        const valuesArr = [
+          { key: 'pVeryLow', val: pVeryLow },
+          { key: 'pLow', val: pLow },
+          { key: 'pInRange', val: pInRange },
+          { key: 'pHigh', val: pHigh },
+          { key: 'pVeryHigh', val: pVeryHigh }
+        ].sort((a, b) => b.val - a.val);
+
+        if (valuesArr[0].key === 'pVeryLow') pVeryLow += diff;
+        else if (valuesArr[0].key === 'pLow') pLow += diff;
+        else if (valuesArr[0].key === 'pInRange') pInRange += diff;
+        else if (valuesArr[0].key === 'pHigh') pHigh += diff;
+        else if (valuesArr[0].key === 'pVeryHigh') pVeryHigh += diff;
+      }
+    }
+
     const values = history.map(h => h.value);
     const sum = values.reduce((a, b) => a + b, 0);
     const mean = sum / values.length;
@@ -59,26 +126,21 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
       values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / values.length
     );
 
-    const tirCount = values.filter(v => v >= targetConfig.low && v <= targetConfig.high).length;
-    const tir = (tirCount / values.length) * 100;
-    
-    const tbrCount = values.filter(v => v < targetConfig.low).length;
-    const tbr = (tbrCount / values.length) * 100;
-
-    const tarCount = values.filter(v => v > targetConfig.high).length;
-    const tar = (tarCount / values.length) * 100;
-
     const gmi = calculateGMI(mean);
     const cv = calculateCV(mean, stdDev);
 
     return {
       mean: Math.round(mean),
-      tir: Math.round(tir),
-      tbr: Math.round(tbr),
-      tar: Math.round(tar),
+      tir: pInRange,
+      tbr: pLow + pVeryLow,
+      tar: pHigh + pVeryHigh,
+      veryLow: pVeryLow,
+      low: pLow,
+      high: pHigh,
+      veryHigh: pVeryHigh,
       gmi: gmi.toFixed(1),
       cv: Math.round(cv),
-      count: values.length
+      count: history.length
     };
   }, [history, targetConfig]);
 
@@ -241,11 +303,11 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           </CardHeader>
           <CardContent className="pb-6">
             <div className="space-y-4">
-              <RangeBar label="Muy Alta (>250)" value={stats?.tar || 0} color="bg-red-600" />
-              <RangeBar label="Alta (181-250)" value={stats?.tar || 0} color="bg-amber-500" />
+              <RangeBar label="Muy Alta (>250)" value={stats?.veryHigh || 0} color="bg-red-600" />
+              <RangeBar label="Alta (181-250)" value={stats?.high || 0} color="bg-amber-500" />
               <RangeBar label="En Rango (70-180)" value={stats?.tir || 0} color="bg-emerald-500" />
-              <RangeBar label="Baja (54-69)" value={stats?.tbr || 0} color="bg-amber-500" />
-              <RangeBar label="Muy Baja (<54)" value={stats?.tbr || 0} color="bg-red-600" />
+              <RangeBar label="Baja (54-69)" value={stats?.low || 0} color="bg-amber-500" />
+              <RangeBar label="Muy Baja (<54)" value={stats?.veryLow || 0} color="bg-red-600" />
             </div>
           </CardContent>
         </Card>
