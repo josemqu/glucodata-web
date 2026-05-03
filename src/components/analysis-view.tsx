@@ -242,7 +242,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
                   fontSize={10}
                   tickLine={false}
                   axisLine={false}
-                  domain={[40, 300]}
+                  domain={[0, 350]}
                 />
                 <Tooltip 
                   content={<CustomTooltip />} 
@@ -279,10 +279,64 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
                 />
 
                 {/* Reference Lines for Target Range */}
-                <ReferenceLine y={targetConfig.high} stroke="#f59e0b" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <ReferenceLine y={targetConfig.low} stroke="#f59e0b" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <ReferenceLine y={targetConfig.hypo} stroke="#ef4444" strokeDasharray="5 5" strokeOpacity={0.5} />
-                <ReferenceLine y={targetConfig.hyper} stroke="#ef4444" strokeDasharray="5 5" strokeOpacity={0.5} />
+                <ReferenceLine 
+                  y={targetConfig.hyper} 
+                  stroke="#ef4444" 
+                  strokeDasharray="6 3" 
+                  strokeOpacity={0.6} 
+                  label={{
+                    value: "HIPER",
+                    position: "insideTopRight",
+                    fill: "#ef4444",
+                    fontSize: 9,
+                    fontWeight: "900",
+                    dy: -16,
+                  }}
+                />
+                <ReferenceLine 
+                  y={targetConfig.high} 
+                  stroke="#f59e0b" 
+                  strokeDasharray="6 3" 
+                  strokeOpacity={0.6} 
+                  label={{
+                    value: "ALTA",
+                    position: "insideTopRight",
+                    fill: "#f59e0b",
+                    fontSize: 9,
+                    fontWeight: "900",
+                    dy: -16,
+                  }}
+                />
+                <ReferenceLine 
+                  y={targetConfig.low} 
+                  stroke="#f59e0b" 
+                  strokeDasharray="6 3" 
+                  strokeOpacity={0.6} 
+                  label={{
+                    value: "BAJA",
+                    position: "insideTopRight",
+                    fill: "#f59e0b",
+                    fontSize: 9,
+                    fontWeight: "900",
+                    dy: -16,
+                  }}
+                />
+                {targetConfig.hypo > 40 && (
+                  <ReferenceLine 
+                    y={targetConfig.hypo} 
+                    stroke="#ef4444" 
+                    strokeDasharray="3 2" 
+                    strokeOpacity={0.6} 
+                    label={{
+                      value: "HIPO",
+                      position: "insideBottomRight",
+                      fill: "#ef4444",
+                      fontSize: 9,
+                      fontWeight: "900",
+                      dy: 16,
+                    }}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
