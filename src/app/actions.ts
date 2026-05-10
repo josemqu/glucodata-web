@@ -3,10 +3,15 @@
 import { LibreLinkUpClient, GlucoseData, Patient } from "@/lib/librelink";
 import { supabase as supabaseAnon } from "@/lib/supabase";
 import { createClient } from "@supabase/supabase-js";
+import { calculateStats, calculatePercentiles, GlucoseStats, PercentilePoint } from "@/lib/metrics";
 
 // En una app real, estas credenciales vendrían de variables de entorno o de un formulario de login seguro
 const LIBRE_EMAIL = process.env.LIBRE_EMAIL || "";
 const LIBRE_PASSWORD = process.env.LIBRE_PASSWORD || "";
+
+// Simple in-memory cache for analysis results
+const analysisCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 export async function getLatestGlucoseAction(
   email?: string,
@@ -234,6 +239,7 @@ export async function getHistoricalGlucoseAction(
   email?: string,
   password?: string,
   sessionData?: { token: string; userId: string; region: string },
+  targetConfig?: { low: number; high: number; hypo: number; hyper: number }
 ) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -257,6 +263,16 @@ export async function getHistoricalGlucoseAction(
     if (connections.length === 0) throw new Error("No hay pacientes conectados");
     const patientId = connections[0].patientId;
 
+    // Check cache
+    const cacheKey = `${patientId}_${days}_${JSON.stringify(targetConfig)}`;
+    const cached = analysisCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+      return {
+        success: true,
+        data: cached.data
+      };
+    }
+
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: dbHistory, error: dbError } = await supabase
@@ -273,13 +289,25 @@ export async function getHistoricalGlucoseAction(
       time: new Date(row.timestamp).getTime(),
     }));
 
+    const stats = targetConfig ? calculateStats(history, targetConfig) : null;
+    const percentileData = calculatePercentiles(history);
+
+    const resultData = {
+      stats,
+      percentileData,
+      // We still return history but only if specifically needed or for fallback
+      // For now, let's keep it but it could be removed if we are sure the client won't need it
+      history: history.length > 5000 ? [] : history, // Don't send massive history if it's too big
+      patient: connections[0],
+      days,
+    };
+
+    // Update cache
+    analysisCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+
     return {
       success: true,
-      data: {
-        history,
-        patient: connections[0],
-        days,
-      },
+      data: resultData,
     };
   } catch (error: any) {
     return { success: false, error: error.message };

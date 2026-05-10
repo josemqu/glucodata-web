@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import {
   ComposedChart,
   Area,
@@ -25,7 +26,10 @@ import {
   calculateGMI, 
   calculateCV, 
   getTIRStatus, 
-  getCVStatus 
+  getCVStatus,
+  calculateStats,
+  type GlucoseStats,
+  type PercentilePoint
 } from "@/lib/metrics";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -36,117 +40,38 @@ import {
   Clock, 
   Calendar,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  RefreshCw
 } from "lucide-react";
 
 interface AnalysisViewProps {
   history: { value: number; time: number }[];
   targetConfig: { low: number; high: number; hypo: number; hyper: number };
   days: number;
+  preCalculatedStats?: GlucoseStats | null;
+  preCalculatedPercentiles?: PercentilePoint[];
+  loading?: boolean;
 }
 
-export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps) {
+export function AnalysisView({ 
+  history, 
+  targetConfig, 
+  days,
+  preCalculatedStats,
+  preCalculatedPercentiles,
+  loading = false
+}: AnalysisViewProps) {
   const [selectedDays, setSelectedDays] = useState(days);
 
   const stats = useMemo(() => {
-    if (history.length === 0) return null;
-
-    const sorted = [...history].sort((a, b) => a.time - b.time);
-    
-    let totalDuration = 0;
-    const dur = {
-      veryLow: 0,
-      low: 0,
-      inRange: 0,
-      high: 0,
-      veryHigh: 0,
-    };
-
-    const MAX_VALIDITY = 15 * 60 * 1000; // Max 15 mins between points
-    const DEFAULT_DURATION = 5 * 60 * 1000; // Default 5 mins for last point
-
-    for (let i = 0; i < sorted.length; i++) {
-      const p = sorted[i];
-      const next = sorted[i + 1];
-      
-      let duration = 0;
-      if (next) {
-        duration = next.time - p.time;
-      } else {
-        duration = DEFAULT_DURATION;
-      }
-
-      // Cap gaps to avoid skewing data with offline periods
-      if (duration > MAX_VALIDITY) duration = MAX_VALIDITY;
-      if (duration < 0) duration = 0;
-
-      totalDuration += duration;
-      const val = p.value;
-
-      if (val <= targetConfig.hypo) dur.veryLow += duration;
-      else if (val < targetConfig.low) dur.low += duration;
-      else if (val >= targetConfig.hyper) dur.veryHigh += duration;
-      else if (val > targetConfig.high) dur.high += duration;
-      else dur.inRange += duration;
-    }
-
-    const toPct = (ms: number) => totalDuration > 0 ? Math.round((ms / totalDuration) * 100) : 0;
-
-    let pVeryLow = toPct(dur.veryLow);
-    let pLow = toPct(dur.low);
-    let pInRange = toPct(dur.inRange);
-    let pHigh = toPct(dur.high);
-    let pVeryHigh = toPct(dur.veryHigh);
-
-    if (totalDuration > 0) {
-      const sumPct = pVeryLow + pLow + pInRange + pHigh + pVeryHigh;
-      if (sumPct !== 100) {
-        const diff = 100 - sumPct;
-        const valuesArr = [
-          { key: 'pVeryLow', val: pVeryLow },
-          { key: 'pLow', val: pLow },
-          { key: 'pInRange', val: pInRange },
-          { key: 'pHigh', val: pHigh },
-          { key: 'pVeryHigh', val: pVeryHigh }
-        ].sort((a, b) => b.val - a.val);
-
-        if (valuesArr[0].key === 'pVeryLow') pVeryLow += diff;
-        else if (valuesArr[0].key === 'pLow') pLow += diff;
-        else if (valuesArr[0].key === 'pInRange') pInRange += diff;
-        else if (valuesArr[0].key === 'pHigh') pHigh += diff;
-        else if (valuesArr[0].key === 'pVeryHigh') pVeryHigh += diff;
-      }
-    }
-
-    const values = history.map(h => h.value);
-    const sum = values.reduce((a, b) => a + b, 0);
-    const mean = sum / values.length;
-    
-    const stdDev = Math.sqrt(
-      values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / values.length
-    );
-
-    const gmi = calculateGMI(mean);
-    const cv = calculateCV(mean, stdDev);
-
-    return {
-      mean: Math.round(mean),
-      tir: pInRange,
-      tbr: pLow + pVeryLow,
-      tar: pHigh + pVeryHigh,
-      veryLow: pVeryLow,
-      low: pLow,
-      high: pHigh,
-      veryHigh: pVeryHigh,
-      gmi: gmi.toFixed(1),
-      cv: Math.round(cv),
-      count: history.length
-    };
-  }, [history, targetConfig]);
+    if (preCalculatedStats) return preCalculatedStats;
+    return calculateStats(history, targetConfig);
+  }, [history, targetConfig, preCalculatedStats]);
 
   const percentileData = useMemo(() => {
+    if (preCalculatedPercentiles) return preCalculatedPercentiles;
     return calculatePercentiles(history);
-  }, [history]);
+  }, [history, preCalculatedPercentiles]);
 
   const { p50Min, p50Max } = useMemo(() => {
     if (!percentileData.length) return { p50Min: 0, p50Max: 300 };
@@ -198,6 +123,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           status={getTIRStatus(stats?.tir || 0)}
           icon={<Target className="w-4 h-4" />}
           target="> 70%"
+          loading={loading}
         />
         <MetricCard
           title="GMI"
@@ -206,6 +132,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           status="info"
           icon={<Activity className="w-4 h-4" />}
           target="< 7.0%"
+          loading={loading}
         />
         <MetricCard
           title="CV"
@@ -214,6 +141,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           status={getCVStatus(stats?.cv || 0)}
           icon={<TrendingUp className="w-4 h-4" />}
           target="< 36%"
+          loading={loading}
         />
         <MetricCard
           title="Promedio"
@@ -222,6 +150,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
           description="Glucosa Media"
           status="info"
           icon={<Clock className="w-4 h-4" />}
+          loading={loading}
         />
       </div>
 
@@ -234,6 +163,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
               <span className="hidden sm:inline-flex text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                 {days} DÍAS
               </span>
+              {loading && <RefreshCw className="w-3 h-3 text-primary animate-spin" />}
             </CardTitle>
           </div>
         </CardHeader>
@@ -407,11 +337,11 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
             </CardHeader>
             <CardContent className="p-4 flex-1">
               <div className="space-y-3">
-                <RangeBar label="Muy Alta (>250)" value={stats?.veryHigh || 0} color="bg-red-600" />
-                <RangeBar label="Alta (181-250)" value={stats?.high || 0} color="bg-amber-500" />
-                <RangeBar label="En Rango (70-180)" value={stats?.tir || 0} color="bg-emerald-500" />
-                <RangeBar label="Baja (54-69)" value={stats?.low || 0} color="bg-amber-500" />
-                <RangeBar label="Muy Baja (<54)" value={stats?.veryLow || 0} color="bg-red-600" />
+                <RangeBar label="Muy Alta (>250)" value={stats?.veryHigh || 0} color="bg-red-600" loading={loading} />
+                <RangeBar label="Alta (181-250)" value={stats?.high || 0} color="bg-amber-500" loading={loading} />
+                <RangeBar label="En Rango (70-180)" value={stats?.tir || 0} color="bg-emerald-500" loading={loading} />
+                <RangeBar label="Baja (54-69)" value={stats?.low || 0} color="bg-amber-500" loading={loading} />
+                <RangeBar label="Muy Baja (<54)" value={stats?.veryLow || 0} color="bg-red-600" loading={loading} />
               </div>
             </CardContent>
           </Card>
@@ -446,7 +376,7 @@ export function AnalysisView({ history, targetConfig, days }: AnalysisViewProps)
   );
 }
 
-function MetricCard({ title, value, unit, description, status, icon, target }: any) {
+function MetricCard({ title, value, unit, description, status, icon, target, loading }: any) {
   const colors = {
     success: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
     warning: "text-amber-500 bg-amber-500/10 border-amber-500/20",
@@ -459,7 +389,7 @@ function MetricCard({ title, value, unit, description, status, icon, target }: a
       <CardContent className="p-4 pt-4">
         <div className="flex items-center justify-between mb-2">
           <div className={`p-1.5 rounded-lg ${colors[status as keyof typeof colors]}`}>
-            {icon}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
           </div>
           {target && (
             <span className="text-[8px] font-black tracking-widest text-muted-foreground/60 uppercase">
@@ -468,8 +398,12 @@ function MetricCard({ title, value, unit, description, status, icon, target }: a
           )}
         </div>
         <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-black tracking-tighter">{value}</span>
-          {unit && <span className="text-[10px] font-bold text-muted-foreground uppercase">{unit}</span>}
+          {loading ? (
+            <div className="h-8 w-16 rounded bg-muted/40 animate-pulse" />
+          ) : (
+            <span className="text-2xl font-black tracking-tighter">{value}</span>
+          )}
+          {unit && !loading && <span className="text-[10px] font-bold text-muted-foreground uppercase">{unit}</span>}
         </div>
         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
           {description}
@@ -479,19 +413,27 @@ function MetricCard({ title, value, unit, description, status, icon, target }: a
   );
 }
 
-function RangeBar({ label, value, color }: any) {
+function RangeBar({ label, value, color, loading }: any) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
         <span>{label}</span>
-        <span>{value}%</span>
+        {loading ? (
+          <div className="h-3 w-8 rounded bg-muted/40 animate-pulse" />
+        ) : (
+          <span>{value}%</span>
+        )}
       </div>
       <div className="h-2 w-full bg-muted/30 rounded-full overflow-hidden">
-        <motion.div 
-          initial={{ width: 0 }}
-          animate={{ width: `${value}%` }}
-          className={`h-full ${color}`} 
-        />
+        {loading ? (
+          <div className="h-full w-full bg-muted/20 animate-pulse" />
+        ) : (
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${value}%` }}
+            className={`h-full ${color}`} 
+          />
+        )}
       </div>
     </div>
   );

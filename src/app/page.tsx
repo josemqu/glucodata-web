@@ -69,6 +69,8 @@ export default function GlucoPage() {
     "dashboard",
   );
   const [historicalData, setHistoricalData] = useState<any[]>([]);
+  const [analysisStats, setAnalysisStats] = useState<any>(null);
+  const [analysisPercentiles, setAnalysisPercentiles] = useState<any[]>([]);
   const [analysisDays, setAnalysisDays] = useState(7);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
 
@@ -310,9 +312,12 @@ export default function GlucoPage() {
         credentials.email,
         credentials.password,
         session,
+        targetConfig
       );
       if (result.success && result.data) {
-        setHistoricalData(result.data.history);
+        setHistoricalData(result.data.history || []);
+        setAnalysisStats(result.data.stats);
+        setAnalysisPercentiles(result.data.percentileData || []);
       } else {
         console.error("Error fetching historical data:", result.error);
       }
@@ -1188,18 +1193,16 @@ export default function GlucoPage() {
                 </div>
               </div>
 
-              {loadingAnalysis ? (
-                <div className="flex flex-col items-center justify-center flex-1 gap-4">
-                  <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Procesando Historial...</p>
-                </div>
-              ) : (
-                <AnalysisView 
-                  history={historicalData} 
-                  targetConfig={targetConfig} 
-                  days={analysisDays} 
-                />
-              )}
+              <div className="flex-1 flex flex-col min-h-0">
+                  <AnalysisView 
+                    history={historicalData} 
+                    targetConfig={targetConfig} 
+                    days={analysisDays} 
+                    preCalculatedStats={analysisStats}
+                    preCalculatedPercentiles={analysisPercentiles}
+                    loading={loadingAnalysis}
+                  />
+              </div>
             </motion.div>
           ) : activeView === "dashboard" ? (
             <motion.div
