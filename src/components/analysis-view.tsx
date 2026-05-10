@@ -85,9 +85,9 @@ export function AnalysisView({
 
   const getGlucoseColor = (val: number) => {
     if (val === undefined || val === null) return "#94a3b8";
-    if (val <= targetConfig.hypo) return "#ef4444";
+    if (val <= targetConfig.hypo) return "#dc2626";
     if (val < targetConfig.low) return "#f59e0b";
-    if (val >= targetConfig.hyper) return "#ef4444";
+    if (val >= targetConfig.hyper) return "#dc2626";
     if (val > targetConfig.high) return "#f59e0b";
     return "#10b981";
   };
@@ -172,7 +172,7 @@ export function AnalysisView({
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={percentileData}>
                 <defs>
-                  <linearGradient id="colorMedian" x1="0%" y1="104%" x2="0%" y2="-2%">
+                  <linearGradient id="colorMedian" x1="0" y1="1" x2="0" y2="0">
                     <stop offset="0%" stopColor={getGlucoseColor(p50Min)} />
 
                     {targetConfig.hypo > p50Min && targetConfig.hypo < p50Max && (
@@ -193,6 +193,13 @@ export function AnalysisView({
                       <>
                         <stop offset={breakPointPercentage(targetConfig.high)} stopColor={getGlucoseColor(targetConfig.high - 1)} />
                         <stop offset={breakPointPercentage(targetConfig.high)} stopColor={getGlucoseColor(targetConfig.high + 1)} />
+                      </>
+                    )}
+
+                    {targetConfig.hyper > p50Min && targetConfig.hyper < p50Max && (
+                      <>
+                        <stop offset={breakPointPercentage(targetConfig.hyper)} stopColor={getGlucoseColor(targetConfig.hyper - 1)} />
+                        <stop offset={breakPointPercentage(targetConfig.hyper)} stopColor={getGlucoseColor(targetConfig.hyper + 1)} />
                       </>
                     )}
 
@@ -259,13 +266,13 @@ export function AnalysisView({
                 {/* Reference Lines for Target Range */}
                 <ReferenceLine 
                   y={targetConfig.hyper} 
-                  stroke="#ef4444" 
+                  stroke="#dc2626" 
                   strokeDasharray="6 3" 
                   strokeOpacity={0.6} 
                   label={{
                     value: "HIPER",
                     position: "insideTopRight",
-                    fill: "#ef4444",
+                    fill: "#dc2626",
                     fontSize: 9,
                     fontWeight: "900",
                     dy: -16,
@@ -302,13 +309,13 @@ export function AnalysisView({
                 {targetConfig.hypo > 40 && (
                   <ReferenceLine 
                     y={targetConfig.hypo} 
-                    stroke="#ef4444" 
+                    stroke="#dc2626" 
                     strokeDasharray="3 2" 
                     strokeOpacity={0.6} 
                     label={{
                       value: "HIPO",
                       position: "insideBottomRight",
-                      fill: "#ef4444",
+                      fill: "#dc2626",
                       fontSize: 9,
                       fontWeight: "900",
                       dy: 16,
