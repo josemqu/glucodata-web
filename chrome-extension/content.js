@@ -340,7 +340,7 @@ function ensureRoot() {
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
       padding: 4px 6px;
-      gap: 0;
+      gap: 4px;
       overflow: visible;
       cursor: grab;
       pointer-events: auto;
@@ -350,9 +350,25 @@ function ensureRoot() {
       display: none;
       animation: none;
     }
-    #${ROOT_ID}.gluco-fullscreen .gluco-details,
-    #${ROOT_ID}.gluco-fullscreen .gluco-arrow {
+    #${ROOT_ID}.gluco-fullscreen .gluco-details {
       display: none;
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-arrow {
+      display: flex;
+      font-size: 16px;
+      min-width: 16px;
+      opacity: 0.92;
+      filter:
+        drop-shadow(0 1px 1px rgba(0,0,0,0.55))
+        drop-shadow(0 6px 20px rgba(0,0,0,0.40));
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-arrow svg {
+      width: 18px;
+      height: 18px;
+    }
+    #${ROOT_ID}.gluco-fullscreen .gluco-arrow::after {
+      animation: none;
+      opacity: 0;
     }
     #${ROOT_ID}.gluco-fullscreen .gluco-value {
       width: auto;

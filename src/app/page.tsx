@@ -550,6 +550,7 @@ export default function GlucoPage() {
   const chartGraph = useMemo(() => {
     const cleaned = graphPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
+      .filter((p: any) => p.time >= windowStart && p.time <= windowEnd)
       .sort((a: any, b: any) => a.time - b.time)
       .filter(
         (p: any, idx: number, arr: any[]) =>
@@ -719,9 +720,9 @@ export default function GlucoPage() {
 
   const getGlucoseColor = (val: number) => {
     if (val === undefined || val === null) return "#94a3b8";
-    if (val <= targetConfig.hypo) return "#ef4444";
+    if (val <= targetConfig.hypo) return "#dc2626";
     if (val < targetConfig.low) return "#f59e0b";
-    if (val >= targetConfig.hyper) return "#ef4444";
+    if (val >= targetConfig.hyper) return "#dc2626";
     if (val > targetConfig.high) return "#f59e0b";
     return "#10b981";
   };
@@ -1395,10 +1396,10 @@ export default function GlucoPage() {
                                   <defs>
                                     <linearGradient
                                       id={gradientId}
-                                      x1="0%"
-                                      y1="104%"
-                                      x2="0%"
-                                      y2="-2%"
+                                      x1="0"
+                                      y1="1"
+                                      x2="0"
+                                      y2="0"
                                     >
                                       <stop
                                         offset="0%"
@@ -1646,7 +1647,7 @@ export default function GlucoPage() {
                                   <ReferenceArea
                                     y1={targetConfig.hyper}
                                     y2={yMax}
-                                    fill="#ef4444"
+                                    fill="#dc2626"
                                     fillOpacity={0.03}
                                   />
                                   <ReferenceArea
@@ -1670,20 +1671,20 @@ export default function GlucoPage() {
                                   <ReferenceArea
                                     y1={yMin}
                                     y2={targetConfig.hypo}
-                                    fill="#ef4444"
+                                    fill="#dc2626"
                                     fillOpacity={0.03}
                                   />
 
                                   <ReferenceLine
                                     y={targetConfig.hyper}
-                                    stroke="#ef4444"
+                                    stroke="#dc2626"
                                     strokeDasharray="6 3"
                                     strokeWidth={1}
                                     opacity={0.6}
                                     label={{
                                       value: "HIPER",
                                       position: "insideTopRight",
-                                      fill: "#ef4444",
+                                      fill: "#dc2626",
                                       fontSize: 9,
                                       fontWeight: "900",
                                       dy: -16,
@@ -1722,14 +1723,14 @@ export default function GlucoPage() {
                                   {targetConfig.hypo > 40 && (
                                     <ReferenceLine
                                       y={targetConfig.hypo}
-                                      stroke="#ef4444"
+                                      stroke="#dc2626"
                                       strokeDasharray="3 2"
                                       strokeWidth={1}
                                       opacity={0.6}
                                       label={{
                                         value: "HIPO",
                                         position: "insideBottomRight",
-                                        fill: "#ef4444",
+                                        fill: "#dc2626",
                                         fontSize: 9,
                                         fontWeight: "900",
                                         dy: 16,
