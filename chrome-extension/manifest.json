@@ -3,7 +3,7 @@
   "name": "Gluco Badge",
   "version": "0.1.0",
   "description": "Muestra la glucemia actual y su tendencia en un badge flotante.",
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "clipboardWrite"],
   "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "icons/icon16.png",

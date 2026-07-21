@@ -27,6 +27,115 @@ function isContextValid() {
   );
 }
 
+function drawTrendOnCanvas(ctx, trendState, legacyArrow, centerX, centerY, color) {
+  const rotations = {
+    Down: 180,
+    DownAngledLarge: 150,
+    DownAngled: 135,
+    DownSlight: 120,
+    Flat: 90,
+    UpSlight: 60,
+    UpAngled: 45,
+    UpAngledLarge: 30,
+    Up: 0,
+  };
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (trendState === "DoubleUp" || trendState === "DoubleDown") {
+    const direction = trendState === "DoubleUp" ? -1 : 1;
+    for (const offset of [-5, 3]) {
+      ctx.beginPath();
+      ctx.moveTo(-6, offset - direction * 3);
+      ctx.lineTo(0, offset + direction * 3);
+      ctx.lineTo(6, offset - direction * 3);
+      ctx.stroke();
+    }
+  } else if (Object.prototype.hasOwnProperty.call(rotations, trendState)) {
+    ctx.rotate((rotations[trendState] * Math.PI) / 180);
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.lineTo(0, -8);
+    ctx.moveTo(-6, -2);
+    ctx.lineTo(0, -8);
+    ctx.lineTo(6, -2);
+    ctx.stroke();
+  } else if (legacyArrow) {
+    ctx.font = "800 22px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(legacyArrow, 0, 0);
+  }
+
+  ctx.restore();
+}
+
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("No se pudo generar la imagen"));
+    }, "image/png");
+  });
+}
+
+async function copyCompactBadgePng(data, valueColor, arrowColor) {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    throw new Error("El portapapeles de imágenes no está disponible en esta página");
+  }
+
+  const scale = 2;
+  const width = 132;
+  const height = 48;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No se pudo crear la imagen");
+  ctx.scale(scale, scale);
+
+  const radius = height / 2;
+  ctx.beginPath();
+  ctx.roundRect(0.5, 0.5, width - 1, height - 1, radius);
+  const background = ctx.createLinearGradient(0, 0, width, height);
+  background.addColorStop(0, "#202020");
+  background.addColorStop(1, "#181818");
+  ctx.fillStyle = background;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
+  ctx.font = "800 25px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = valueColor;
+  ctx.fillText(String(data.value), 88, height / 2 + 1);
+  ctx.shadowColor = "transparent";
+
+  drawTrendOnCanvas(
+    ctx,
+    data.trendState,
+    data.arrow,
+    108,
+    height / 2,
+    arrowColor,
+  );
+
+  const blob = await canvasToPngBlob(canvas);
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+}
+
 async function isBlacklisted() {
   if (!isContextValid()) return true; // Fail safe
   try {
@@ -538,10 +647,48 @@ function ensureRoot() {
   });
 
   const copyBtn = document.createElement("button");
-  copyBtn.className = "gluco-btn";
+  copyBtn.className = "gluco-btn gluco-icon-btn";
   copyBtn.type = "button";
-  copyBtn.textContent = "Copiar";
+  copyBtn.title = "Copiar badge como PNG";
+  copyBtn.setAttribute("aria-label", "Copiar badge como PNG");
+  copyBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  `;
   copyBtn.style.display = "none";
+  copyBtn.addEventListener("click", async () => {
+    const data = root.__gluco?.currentData;
+    if (!data || copyBtn.disabled) return;
+
+    const originalMarkup = copyBtn.innerHTML;
+    copyBtn.disabled = true;
+    try {
+      await copyCompactBadgePng(
+        data,
+        getComputedStyle(valueEl).color,
+        getComputedStyle(arrowEl).color,
+      );
+      copyBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m5 12 4 4L19 6" />
+        </svg>
+      `;
+      copyBtn.title = "Badge copiado como PNG";
+    } catch (error) {
+      console.error("[GlucoBadge] No se pudo copiar el PNG", error);
+      copyBtn.title = error?.message || "No se pudo copiar el badge";
+      copyBtn.style.color = "var(--gluco-red)";
+    } finally {
+      window.setTimeout(() => {
+        copyBtn.innerHTML = originalMarkup;
+        copyBtn.title = "Copiar badge como PNG";
+        copyBtn.style.color = "";
+        copyBtn.disabled = false;
+      }, 1600);
+    }
+  });
 
   details.appendChild(dot);
   details.appendChild(meta);
@@ -650,7 +797,15 @@ function ensureRoot() {
   card.addEventListener("pointerup", endDrag);
   card.addEventListener("pointercancel", endDrag);
 
-  root.__gluco = { dot, valueEl, arrowEl, sub, copyBtn, refreshBtn };
+  root.__gluco = {
+    dot,
+    valueEl,
+    arrowEl,
+    sub,
+    copyBtn,
+    refreshBtn,
+    currentData: null,
+  };
   return root;
 }
 
@@ -716,10 +871,10 @@ function setState(payload) {
     arrowEl.textContent = "";
     arrowEl.setAttribute("data-content", "");
     setValueColor("#fff");
-    setArrowColorByTrend(null);
+    arrowEl.style.color = "#fff";
     sub.textContent = "Sin datos";
     copyBtn.style.display = "none";
-    copyBtn.onclick = null;
+    root.__gluco.currentData = null;
     card.classList.add("compact");
     card.classList.add("inactive");
     return;
@@ -732,10 +887,10 @@ function setState(payload) {
     arrowEl.textContent = "";
     arrowEl.setAttribute("data-content", "");
     setValueColor("#fff");
-    setArrowColorByTrend(null);
+    arrowEl.style.color = "#fff";
     sub.textContent = payload.error ? String(payload.error) : "Error";
     copyBtn.style.display = "none";
-    copyBtn.onclick = null;
+    root.__gluco.currentData = null;
     card.classList.add("compact");
     card.classList.add("inactive");
     return;
@@ -750,7 +905,7 @@ function setState(payload) {
     setValueColor("#fff");
     sub.textContent = "Sin datos";
     copyBtn.style.display = "none";
-    copyBtn.onclick = null;
+    root.__gluco.currentData = null;
     card.classList.add("compact");
     card.classList.add("inactive");
     return;
@@ -895,8 +1050,8 @@ function setState(payload) {
   const rel = formatUpdatedRelative(ms);
   sub.textContent = rel ? `Actualizado ${rel}` : "Actualizado";
 
-  copyBtn.style.display = "none";
-  copyBtn.onclick = null;
+  root.__gluco.currentData = payload.data;
+  copyBtn.style.display = "inline-flex";
 
   card.classList.remove("compact");
   card.classList.remove("inactive");
