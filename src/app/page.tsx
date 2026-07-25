@@ -1960,7 +1960,7 @@ export default function GlucoPage() {
                   <h2 className="text-xl font-black italic tracking-tight">
                     CONFIGURACIÓN DE RANGOS
                   </h2>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                     Ajuste de umbrales clínicos personalizados
                   </p>
                 </div>
@@ -1976,7 +1976,7 @@ export default function GlucoPage() {
                       <CardTitle className="text-sm font-black uppercase tracking-tight">
                         Umbrales de Control
                       </CardTitle>
-                      <CardDescription className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <CardDescription className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                         Define los límites para alertas y análisis
                       </CardDescription>
                     </div>
@@ -1985,10 +1985,10 @@ export default function GlucoPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-red-500">
+                          <Label className="text-[11px] font-black uppercase tracking-widest text-red-500">
                             HIPO
                           </Label>
-                          <Badge className="bg-red-500 h-4 text-[8px] font-black">
+                          <Badge className="bg-red-500 h-4 text-[11px] font-black">
                             CRÍTICO
                           </Badge>
                         </div>
@@ -2003,17 +2003,17 @@ export default function GlucoPage() {
                           }
                           className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
+                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
                           Umbral hipoglucemia grave
                         </p>
                       </div>
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                          <Label className="text-[11px] font-black uppercase tracking-widest text-amber-500">
                             Bajo
                           </Label>
-                          <Badge className="bg-amber-500 h-4 text-[8px] font-black">
+                          <Badge className="bg-amber-500 h-4 text-[11px] font-black">
                             WARNING
                           </Badge>
                         </div>
@@ -2028,17 +2028,17 @@ export default function GlucoPage() {
                           }
                           className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
+                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
                           Inicio de rango objetivo
                         </p>
                       </div>
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                          <Label className="text-[11px] font-black uppercase tracking-widest text-amber-500">
                             Alto
                           </Label>
-                          <Badge className="bg-amber-500 h-4 text-[8px] font-black">
+                          <Badge className="bg-amber-500 h-4 text-[11px] font-black">
                             WARNING
                           </Badge>
                         </div>
@@ -2053,17 +2053,17 @@ export default function GlucoPage() {
                           }
                           className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
+                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
                           Fin de rango objetivo
                         </p>
                       </div>
 
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-black uppercase tracking-widest text-red-500">
+                          <Label className="text-[11px] font-black uppercase tracking-widest text-red-500">
                             HIPER
                           </Label>
-                          <Badge className="bg-red-500 h-4 text-[8px] font-black">
+                          <Badge className="bg-red-500 h-4 text-[11px] font-black">
                             CRÍTICO
                           </Badge>
                         </div>
@@ -2078,7 +2078,7 @@ export default function GlucoPage() {
                           }
                           className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
                         />
-                        <p className="text-[7px] text-muted-foreground font-medium italic opacity-60">
+                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
                           Umbral hiperglucemia grave
                         </p>
                       </div>
@@ -2088,10 +2088,10 @@ export default function GlucoPage() {
                       <div className="flex gap-3">
                         <AlertCircle className="w-5 h-5 text-primary shrink-0" />
                         <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-primary">
                             Información de Sistema
                           </p>
-                          <p className="text-[9px] text-muted-foreground leading-relaxed">
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
                             Estos valores afectan directamente a los cálculos de{" "}
                             <strong>Time in Range</strong>, las alertas visuales
                             de colores y las líneas de referencia en el gráfico
@@ -2107,16 +2107,16 @@ export default function GlucoPage() {
                 <Card className="border bg-card/10 md:col-span-2">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">
                         Estado de Sincronización
                       </p>
-                      <p className="text-[10px] font-black">
+                      <p className="text-[11px] font-black">
                         ALMACENAMIENTO LOCAL ACTIVO
                       </p>
                     </div>
                     <Button
                       variant="outline"
-                      className="h-8 text-[9px] font-black uppercase tracking-widest border-primary/20 text-primary hover:bg-primary/10"
+                      className="h-8 text-[11px] font-black uppercase tracking-widest border-primary/20 text-primary hover:bg-primary/10"
                       onClick={() => setActiveView("dashboard")}
                     >
                       Volver al Panel
@@ -2133,7 +2133,7 @@ export default function GlucoPage() {
       {/* Footer */}
       <footer className="flex-none px-4 py-1.5 border-t bg-background z-10">
         <div className="max-w-[1100px] mx-auto flex justify-between items-center text-muted-foreground">
-          <p className="text-[7px] font-bold tracking-[0.4em] uppercase opacity-30">
+          <p className="text-[11px] font-bold tracking-[0.4em] uppercase opacity-30">
             GlucoWeb Biomedical Interface • Engine v2.5.0-Release
           </p>
           <div className="flex items-center gap-5">
@@ -2143,7 +2143,7 @@ export default function GlucoPage() {
                 href="https://github.com/josemqu"
                 target="_blank"
                 rel="noreferrer"
-                className="text-[7px] font-bold tracking-[0.2em] uppercase text-emerald-500 hover:underline"
+                className="text-[11px] font-bold tracking-[0.2em] uppercase text-emerald-500 hover:underline"
               >
                 Hecho con ♥ por josemqu
               </a>
