@@ -158,9 +158,9 @@ export function AnalysisView({
       <Card className="border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20 shadow-sm">
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
           <div className="flex flex-col w-full sm:w-auto">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
+            <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
               Perfil de Glucosa Ambulatorio (AGP)
-              <span className="hidden sm:inline-flex text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+              <span className="hidden sm:inline-flex text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                 {days} DÍAS
               </span>
               {loading && <RefreshCw className="w-3 h-3 text-primary animate-spin" />}
@@ -340,7 +340,7 @@ export function AnalysisView({
         <div className="flex flex-col gap-3 h-full">
           <Card className="border bg-card/30 flex flex-col">
             <CardHeader className="p-4 pb-0">
-              <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80">Distribución por Rangos</CardTitle>
+              <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80">Distribución por Rangos</CardTitle>
             </CardHeader>
             <CardContent className="p-4 flex-1">
               <div className="space-y-3">
@@ -355,7 +355,7 @@ export function AnalysisView({
 
           <Card className="border bg-card/30 flex flex-col flex-1">
             <CardHeader className="p-4 pb-0">
-              <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 italic">Análisis T1D</CardTitle>
+              <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 italic">Análisis T1D</CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4 flex flex-col flex-1">
               <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -366,9 +366,9 @@ export function AnalysisView({
               <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2 mt-auto">
                 <div className="flex items-center gap-2">
                   <Info className="w-3 h-3 text-primary" />
-                  <span className="text-[10px] font-bold uppercase tracking-tighter">Tip del Día</span>
+                  <span className="text-[11px] font-bold uppercase tracking-tighter">Tip del Día</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   { (stats?.cv || 0) > 36 
                     ? "La variabilidad es alta (>36%). Identifica patrones para estabilizar las curvas."
                     : "Tu variabilidad está en objetivo (<36%). ¡Excelente trabajo manteniendo la estabilidad!"
@@ -399,7 +399,7 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
           </div>
           {target && (
-            <span className="text-[8px] font-black tracking-widest text-muted-foreground/60 uppercase">
+            <span className="text-[11px] font-black tracking-widest text-muted-foreground/60 uppercase">
               Meta: {target}
             </span>
           )}
@@ -410,9 +410,9 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
           ) : (
             <span className="text-2xl font-black tracking-tighter">{value}</span>
           )}
-          {unit && !loading && <span className="text-[10px] font-bold text-muted-foreground uppercase">{unit}</span>}
+          {unit && !loading && <span className="text-[11px] font-bold text-muted-foreground uppercase">{unit}</span>}
         </div>
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
           {description}
         </p>
       </CardContent>
@@ -423,7 +423,7 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
 function RangeBar({ label, value, color, loading }: any) {
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
+      <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
         <span>{label}</span>
         {loading ? (
           <div className="h-3 w-8 rounded bg-muted/40 animate-pulse" />
@@ -450,7 +450,7 @@ function LegendItem({ color, label }: any) {
   return (
     <div className="flex items-center gap-2">
       <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
-      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</span>
+      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{label}</span>
     </div>
   );
 }
@@ -460,7 +460,7 @@ function CustomTooltip({ active, payload }: any) {
     const data = payload[0].payload;
     return (
       <div className="bg-background/95 backdrop-blur-md border border-border p-3 rounded-xl shadow-2xl">
-        <p className="text-[10px] font-black tracking-widest uppercase mb-2 border-b border-border pb-1">
+        <p className="text-[11px] font-black tracking-widest uppercase mb-2 border-b border-border pb-1">
           {data.time}
         </p>
         <div className="space-y-1">
@@ -479,7 +479,7 @@ function CustomTooltip({ active, payload }: any) {
 function TooltipRow({ label, value, color }: any) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">{label}</span>
+      <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-tighter">{label}</span>
       <span className={`text-xs ${color}`}>{value} mg/dL</span>
     </div>
   );

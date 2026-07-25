@@ -737,7 +737,7 @@ export default function GlucoPage() {
         >
           <div className="relative">
             <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center animate-pulse">
-              <Droplets className="w-10 h-10 text-primary animate-bounce" />
+              <Droplets className="w-10 h-10 text-primary animate-smooth-float" />
             </div>
             <div className="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-3xl animate-spin" />
           </div>
@@ -747,7 +747,7 @@ export default function GlucoPage() {
             </h2>
             <div className="flex items-center gap-2 justify-center mt-2">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              <p className="text-muted-foreground text-[10px] uppercase tracking-[0.3em] font-bold">
+              <p className="text-muted-foreground text-[11px] uppercase tracking-[0.3em] font-bold">
                 Sincronizando
               </p>
             </div>
@@ -773,7 +773,7 @@ export default function GlucoPage() {
               <CardTitle className="text-3xl font-bold tracking-tight italic">
                 GLUCOWEB
               </CardTitle>
-              <CardDescription className="text-[10px] uppercase tracking-widest font-bold">
+              <CardDescription className="text-[11px] uppercase tracking-widest font-bold">
                 Med-Analytics Interface
               </CardDescription>
             </CardHeader>
@@ -782,7 +782,7 @@ export default function GlucoPage() {
                 <div className="space-y-2">
                   <Label
                     htmlFor="email"
-                    className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground"
+                    className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground"
                   >
                     Email
                   </Label>
@@ -801,7 +801,7 @@ export default function GlucoPage() {
                 <div className="space-y-2">
                   <Label
                     htmlFor="password"
-                    className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground"
+                    className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground"
                   >
                     Contraseña
                   </Label>
@@ -820,7 +820,7 @@ export default function GlucoPage() {
                   />
                 </div>
                 {error && (
-                  <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-[10px] font-bold uppercase tracking-widest border border-destructive/20 flex items-center gap-2">
+                  <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-[11px] font-bold uppercase tracking-widest border border-destructive/20 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" />
                     {error}
                   </div>
@@ -1092,7 +1092,7 @@ export default function GlucoPage() {
               <h1 className="text-base font-black tracking-tighter leading-none italic">
                 GLUCOWEB
               </h1>
-              <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5 opacity-60">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5 opacity-60">
                 PRO INTERFACE V2.5
               </span>
             </div>
@@ -1100,7 +1100,7 @@ export default function GlucoPage() {
             <nav className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border/50">
               <button
                 onClick={() => setActiveView("dashboard")}
-                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${
+                className={`px-3 py-1 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${
                   activeView === "dashboard" 
                     ? "bg-background shadow-sm text-primary" 
                     : "text-muted-foreground hover:text-foreground"
@@ -1110,7 +1110,7 @@ export default function GlucoPage() {
               </button>
               <button
                 onClick={() => setActiveView("analysis")}
-                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${
+                className={`px-3 py-1 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${
                   activeView === "analysis" 
                     ? "bg-background shadow-sm text-primary" 
                     : "text-muted-foreground hover:text-foreground"
@@ -1123,7 +1123,7 @@ export default function GlucoPage() {
 
           <div className="flex items-center gap-2 sm:gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
                 Monitorización Activa
               </p>
               <p className="font-bold text-xs leading-none">
@@ -1175,14 +1175,14 @@ export default function GlucoPage() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-black italic tracking-tighter uppercase">Análisis Avanzado</h2>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Clinical Glucose Insights</p>
+                  <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Clinical Glucose Insights</p>
                 </div>
                 <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/40">
                   {[7, 14, 30, 90].map((d) => (
                     <button
                       key={d}
                       onClick={() => setAnalysisDays(d)}
-                      className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                      className={`px-4 py-1.5 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${
                         analysisDays === d 
                           ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
                           : "text-muted-foreground hover:text-foreground hover:bg-background/50"
