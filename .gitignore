@@ -19,6 +19,9 @@
 
 # production
 /build
+/macos-app/.build/
+/macos-app/dist/
+/macos-app/dist.noindex/
 
 # misc
 .DS_Store
