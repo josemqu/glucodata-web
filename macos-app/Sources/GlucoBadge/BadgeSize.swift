@@ -17,9 +17,9 @@ enum BadgeSize: String, CaseIterable, Identifiable {
 
     var panelSize: NSSize {
         switch self {
-        case .normal: return NSSize(width: 174, height: 80)
-        case .compact: return NSSize(width: 146, height: 66)
-        case .mini: return NSSize(width: 108, height: 46)
+        case .normal: return NSSize(width: 198, height: 80)
+        case .compact: return NSSize(width: 168, height: 66)
+        case .mini: return NSSize(width: 130, height: 46)
         }
     }
 }

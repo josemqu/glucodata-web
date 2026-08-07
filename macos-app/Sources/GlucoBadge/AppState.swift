@@ -207,6 +207,10 @@ final class AppState: ObservableObject {
         SettingsWindowController.shared.show()
     }
 
+    func openHistory() {
+        HistoryWindowController.shared.show()
+    }
+
     func closeSettings() {
         SettingsWindowController.shared.close()
     }

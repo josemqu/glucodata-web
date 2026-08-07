@@ -31,7 +31,7 @@ struct BadgeView: View {
                 .strokeBorder(.white.opacity(0.18), lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .contextMenu {
             Button("Configuración…") {
                 appState.openSettings()
@@ -46,48 +46,52 @@ struct BadgeView: View {
     }
 
     private func readingView(_ reading: GlucoseReading) -> some View {
-        Group {
-            if badgeSize == .mini {
-                HStack(alignment: .firstTextBaseline, spacing: valueArrowSpacing) {
-                    Text("\(reading.value)")
-                        .font(.system(size: valueFontSize, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .layoutPriority(2)
-
-                    trendView(reading)
-                }
-            } else {
-                VStack(spacing: badgeSize == .normal ? 2 : 1) {
+        HStack(spacing: badgeSize == .mini ? 3 : 5) {
+            Group {
+                if badgeSize == .mini {
                     HStack(alignment: .firstTextBaseline, spacing: valueArrowSpacing) {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(reading.value)")
-                                .font(.system(size: valueFontSize, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .layoutPriority(2)
-
-                            Text(reading.unit)
-                                .font(.system(size: unitFontSize, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
+                        Text("\(reading.value)")
+                            .font(.system(size: valueFontSize, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(2)
 
                         trendView(reading)
                     }
+                } else {
+                    VStack(spacing: badgeSize == .normal ? 2 : 1) {
+                        HStack(alignment: .firstTextBaseline, spacing: valueArrowSpacing) {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(reading.value)")
+                                    .font(.system(size: valueFontSize, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(2)
 
-                    Text(appState.readingAgeText)
-                        .font(.system(size: ageFontSize, weight: .medium))
-                        .foregroundStyle(appState.isReadingStale ? .orange : .secondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                                Text(reading.unit)
+                                    .font(.system(size: unitFontSize, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+
+                            trendView(reading)
+                        }
+
+                        Text(appState.readingAgeText)
+                            .font(.system(size: ageFontSize, weight: .medium))
+                            .foregroundStyle(appState.isReadingStale ? .orange : .secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            historyButton
         }
-        .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityLabel(
             "Glucemia \(reading.value) \(reading.unit), tendencia \(reading.trendState), \(appState.readingAgeText)"
         )
@@ -119,6 +123,8 @@ struct BadgeView: View {
 
             Spacer(minLength: 0)
 
+            historyButton
+
             Button {
                 appState.openSettings()
             } label: {
@@ -139,6 +145,28 @@ struct BadgeView: View {
             .foregroundStyle(.red.opacity(0.8))
             .help("Salir de GlucoBadge")
         }
+    }
+
+    private var historyButton: some View {
+        Button {
+            appState.openHistory()
+        } label: {
+            Image(systemName: "chart.xyaxis.line")
+                .font(.system(size: badgeSize == .normal ? 13 : 11, weight: .semibold))
+                .frame(
+                    width: badgeSize == .normal ? 23 : 19,
+                    height: badgeSize == .normal ? 23 : 19
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .background(
+            Color.primary.opacity(0.055),
+            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+        )
+        .help("Abrir historial de glucemia")
+        .accessibilityLabel("Abrir historial de glucemia")
     }
 
     private var cornerRadius: CGFloat {

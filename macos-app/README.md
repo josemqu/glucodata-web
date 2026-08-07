@@ -18,6 +18,7 @@ siguiendo el lenguaje visual de los iconos modernos de macOS.
 - Actualización automática configurable.
 - Tres tamaños con padding uniforme: Normal, Compacto y Mini.
 - Aviso visual cuando el dato tiene más de 15 minutos.
+- Gráfico histórico nativo para 1 h, 3 h, 6 h, 12 h y 1 día, con rango objetivo.
 
 ## Ejecutar durante el desarrollo
 

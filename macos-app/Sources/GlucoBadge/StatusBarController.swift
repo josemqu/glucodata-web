@@ -70,6 +70,14 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
         statusMenu.addItem(.separator())
 
+        let historyItem = NSMenuItem(
+            title: "Ver historial…",
+            action: #selector(openHistory),
+            keyEquivalent: "g"
+        )
+        historyItem.target = self
+        statusMenu.addItem(historyItem)
+
         let refreshItem = NSMenuItem(
             title: "Actualizar ahora",
             action: #selector(refresh),
@@ -158,6 +166,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func refresh() {
         Task { await appState.refresh() }
+    }
+
+    @objc private func openHistory() {
+        appState.openHistory()
     }
 
     @objc private func openSettings() {
