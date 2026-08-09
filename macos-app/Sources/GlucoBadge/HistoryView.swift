@@ -18,25 +18,37 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var history: GlucoseHistory?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    private var latestRequestID = UUID()
 
     func load() async {
+        let requestID = UUID()
+        latestRequestID = requestID
+        let requestedPeriod = period
         let urlString = UserDefaults.standard.string(forKey: SettingsKey.apiURL) ?? ""
         let token = KeychainStore.readToken()
         guard let url = URL(string: urlString), !urlString.isEmpty, !token.isEmpty else {
+            isLoading = false
             errorMessage = "Configurá la URL y el token para consultar el historial."
             return
         }
 
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if latestRequestID == requestID {
+                isLoading = false
+            }
+        }
         do {
-            history = try await GlucoseAPI.fetchHistory(
+            let updatedHistory = try await GlucoseAPI.fetchHistory(
                 from: url,
                 token: token,
-                hours: period.rawValue
+                hours: requestedPeriod.rawValue
             )
+            guard latestRequestID == requestID else { return }
+            history = updatedHistory
         } catch {
+            guard latestRequestID == requestID else { return }
             errorMessage = "No se pudo cargar el historial. \(error.localizedDescription)"
         }
     }
@@ -66,6 +78,12 @@ struct HistoryView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .task { await model.load() }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .historyWindowRequestedRefresh)
+        ) { _ in
+            selectedReading = nil
+            Task { await model.load() }
+        }
         .onChange(of: model.period) { _ in
             selectedReading = nil
             Task { await model.load() }
@@ -176,7 +194,7 @@ struct HistoryView: View {
                     )
                     .interpolationMethod(.catmullRom)
                     .foregroundStyle(.tint)
-                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                    .lineStyle(StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
                 }
 
                 if let selectedReading {
@@ -276,14 +294,12 @@ struct HistoryView: View {
             Text(reading.value.formatted(.number.precision(.fractionLength(0))))
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .contentTransition(.numericText())
             Text(reading.unit)
                 .font(.callout.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(reading.date, format: .dateTime.weekday(.abbreviated).hour().minute())
                 .font(.callout)
                 .foregroundStyle(.secondary)
-                .contentTransition(.numericText())
             Spacer()
             HStack(spacing: 6) {
                 Circle()
@@ -298,7 +314,9 @@ struct HistoryView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .animation(selectionAnimation, value: reading.id)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 
     private var selectionAnimation: Animation? {

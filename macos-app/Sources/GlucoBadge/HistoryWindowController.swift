@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let historyWindowRequestedRefresh = Notification.Name(
+        "GlucoBadge.historyWindowRequestedRefresh"
+    )
+}
+
 @MainActor
 final class HistoryWindowController: NSObject, NSWindowDelegate {
     static let shared = HistoryWindowController()
@@ -9,8 +15,10 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         let historyWindow: NSWindow
+        let shouldRefreshExistingWindow: Bool
         if let window {
             historyWindow = window
+            shouldRefreshExistingWindow = true
         } else {
             let newWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 760, height: 500),
@@ -26,9 +34,14 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
             newWindow.contentView = NSHostingView(rootView: HistoryView())
             window = newWindow
             historyWindow = newWindow
+            shouldRefreshExistingWindow = false
         }
 
         NSApp.activate(ignoringOtherApps: true)
         historyWindow.makeKeyAndOrderFront(nil)
+
+        if shouldRefreshExistingWindow {
+            NotificationCenter.default.post(name: .historyWindowRequestedRefresh, object: nil)
+        }
     }
 }
