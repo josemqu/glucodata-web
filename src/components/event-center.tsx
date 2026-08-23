@@ -4,6 +4,7 @@ import { FormEvent, forwardRef, useCallback, useEffect, useImperativeHandle, use
 import { createPortal } from "react-dom";
 import {
   Activity,
+  BarChart3,
   Check,
   BookOpenText,
   Dumbbell,
@@ -32,6 +33,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { EventAnalysisResult, GlucoseReading } from "@/lib/event-analysis";
+import type { EventComparisonResult } from "@/lib/event-comparison";
+import {
+  CHART_TOOLTIP_CONTENT_STYLE,
+  CHART_TOOLTIP_OFFSET,
+  CHART_TOOLTIP_WRAPPER_STYLE,
+} from "@/lib/chart-tooltip";
 import type {
   EventInput,
   EventLinkSuggestion,
@@ -115,7 +122,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
-  const [panelView, setPanelView] = useState<"register" | "today">("register");
+  const [panelView, setPanelView] = useState<"register" | "today" | "compare">("register");
   const [type, setType] = useState<EventType>("meal");
   const [editing, setEditing] = useState<GlucoEvent | null>(null);
   const [title, setTitle] = useState("");
@@ -144,6 +151,10 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
   const [detailRequestTitle, setDetailRequestTitle] = useState("");
   const [relationshipPendingKey, setRelationshipPendingKey] = useState<string | null>(null);
   const [dosePurposeSaving, setDosePurposeSaving] = useState(false);
+  const [comparisonSelection, setComparisonSelection] = useState<string[]>([]);
+  const [comparison, setComparison] = useState<EventComparisonResult | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const todayEvents = useMemo(() => {
     const today = new Date();
@@ -392,19 +403,53 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     }
   };
 
+  const toggleComparisonEvent = (event: GlucoEvent) => {
+    setComparisonError(null);
+    setComparisonSelection((current) => {
+      if (current.includes(event.id)) return current.filter((id) => id !== event.id);
+      if (current.length >= 8) return current;
+      const selectedType = events.find((candidate) => candidate.id === current[0])?.type;
+      if (selectedType && selectedType !== event.type) return current;
+      return [...current, event.id];
+    });
+  };
+
+  const compareEvents = async () => {
+    if (comparisonSelection.length < 2) {
+      setComparisonError("Seleccioná al menos dos eventos del mismo tipo.");
+      return;
+    }
+    setComparisonLoading(true);
+    setComparisonError(null);
+    try {
+      const response = await fetch("/api/events/compare", {
+        method: "POST",
+        headers: headers(session),
+        body: JSON.stringify({ event_ids: comparisonSelection }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "No se pudieron comparar los eventos.");
+      setComparison(result.data);
+    } catch (requestError) {
+      setComparisonError(requestError instanceof Error ? requestError.message : "No se pudieron comparar los eventos.");
+    } finally {
+      setComparisonLoading(false);
+    }
+  };
+
   return (
     <>
-      <Button ref={triggerRef} onClick={() => { setDetail(null); setDetailError(null); setPanelView("register"); setOpen(true); }} className="min-h-11 gap-2 px-3 text-[10px] font-bold sm:min-h-8">
+      <Button ref={triggerRef} aria-label="Registrar evento" onClick={() => { setDetail(null); setDetailError(null); setPanelView("register"); setOpen(true); }} className="h-11 w-11 gap-2 px-0 text-[10px] font-bold sm:h-8 sm:w-auto sm:px-3">
         <Plus className="h-4 w-4" />
-        Registrar evento
+        <span className="hidden sm:inline">Registrar evento</span>
       </Button>
 
       {open && typeof document !== "undefined" ? createPortal(
         <div className="fixed inset-0 z-50 bg-black/45" role="presentation" onMouseDown={(event) => {
           if (event.currentTarget === event.target) setOpen(false);
         }}>
-          <aside ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="event-center-title" className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col bg-background shadow-2xl">
-            <div className="flex items-start justify-between gap-4 px-5 pb-4 pt-5 sm:px-6">
+          <aside ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="event-center-title" className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col overflow-hidden bg-background shadow-2xl">
+            <div className="flex items-start justify-between gap-4 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pb-4 sm:pt-5">
               <div className="min-w-0">
                 <h2 id="event-center-title" className="text-lg font-bold tracking-tight">Eventos</h2>
                 <p className="mt-1 max-w-sm text-sm leading-5 text-muted-foreground">Sumá contexto a la curva de glucosa.</p>
@@ -415,15 +460,16 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
             </div>
 
             {!detail && !detailLoading ? (
-              <div className="border-b px-5 sm:px-6">
-                <nav className="flex gap-5" aria-label="Secciones de eventos">
+              <div className="overflow-x-auto border-b px-4 sm:px-6">
+                <nav className="flex min-w-max gap-5" aria-label="Secciones de eventos">
                   <button type="button" aria-current={panelView === "register" ? "page" : undefined} onClick={() => setPanelView("register")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "register" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Registrar</button>
                   <button type="button" aria-current={panelView === "today" ? "page" : undefined} onClick={() => setPanelView("today")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "today" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Hoy <span className="ml-1 text-xs font-medium text-muted-foreground">{todayEvents.length}</span></button>
+                  <button type="button" aria-current={panelView === "compare" ? "page" : undefined} onClick={() => setPanelView("compare")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "compare" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Comparar</button>
                 </nav>
               </div>
             ) : null}
 
-            <div className="flex-1 overflow-y-auto bg-muted/10 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/10 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6">
               {detail ? (
                 <EventDetail
                   data={detail}
@@ -446,7 +492,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">{renderEventIcon(type, "h-5 w-5")}</span>
                       <div className="min-w-0"><h3 className="truncate text-sm font-bold">{editing ? "Editar evento" : copy[type].title}</h3><p className="mt-0.5 text-xs text-muted-foreground">Elegí el tipo y completá lo esencial.</p></div>
                     </div>
-                    {editing ? <button type="button" onClick={() => reset(type)} className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground">Cancelar</button> : null}
+                    {editing ? <button type="button" onClick={() => reset(type)} className="min-h-11 shrink-0 px-2 text-xs font-medium text-muted-foreground hover:text-foreground sm:min-h-8">Cancelar</button> : null}
                   </div>
 
                   <div className="border-b bg-muted/20 p-2" aria-label="Tipo de evento">
@@ -462,8 +508,8 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                     <div className="space-y-2"><Label htmlFor="event-title">Nombre</Label><Input id="event-title" className="h-11 bg-background" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={copy[type].placeholder} maxLength={120} required /></div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2"><Label htmlFor="event-occurred-at">Fecha y hora</Label><Input id="event-occurred-at" className="h-11 bg-background" type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></div>
-                      {type === "meal" ? <div className="space-y-2"><Label htmlFor="event-carbs">Carbohidratos (g CH)</Label><div className="relative"><Input id="event-carbs" className="h-11 bg-background pr-12 font-numbers" type="number" min="0" step="0.1" value={carbs} onChange={(event) => setCarbs(event.target.value)} required /><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">g CH</span></div></div> : null}
-                      {type === "insulin" ? <div className="space-y-2"><Label htmlFor="event-units">Dosis (U)</Label><div className="relative"><Input id="event-units" className="h-11 bg-background pr-9 font-numbers" type="number" min="0" step="0.1" value={units} onChange={(event) => setUnits(event.target.value)} required /><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">U</span></div></div> : null}
+                      {type === "meal" ? <div className="space-y-2"><Label htmlFor="event-carbs">Carbohidratos (g CH)</Label><div className="relative"><Input id="event-carbs" className="h-11 bg-background pr-12 font-numbers" type="number" min="0" step="1" value={carbs} onChange={(event) => setCarbs(event.target.value)} required /><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">g CH</span></div></div> : null}
+                      {type === "insulin" ? <div className="space-y-2"><Label htmlFor="event-units">Dosis (U)</Label><div className="relative"><Input id="event-units" className="h-11 bg-background pr-9 font-numbers" type="number" min="0" step="1" value={units} onChange={(event) => setUnits(event.target.value)} required /><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">U</span></div></div> : null}
                       {type === "exercise" ? <div className="space-y-2"><Label htmlFor="event-ended-at">Finalización</Label><Input id="event-ended-at" className="h-11 bg-background" type="datetime-local" value={endedAt} onChange={(event) => setEndedAt(event.target.value)} required /></div> : null}
                     </div>
                     {type === "insulin" ? <div className="space-y-2"><Label htmlFor="insulin-type">Tipo de insulina</Label><select id="insulin-type" value={insulinType} onChange={(event) => setInsulinType(event.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="rapid">Rápida</option><option value="short">Corta</option><option value="intermediate">Intermedia</option><option value="long">Larga</option><option value="ultra_long">Ultralarga</option><option value="other">Otra</option></select></div> : null}
@@ -472,8 +518,25 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                     <div className="space-y-2"><Label htmlFor="event-notes">Nota <span className="font-normal text-muted-foreground">(opcional)</span></Label><textarea id="event-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} rows={3} placeholder="Agregá un dato que ayude a interpretar el evento" className="min-h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring" /></div>
                     {formError ? <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{formError}</p> : null}
                   </div>
-                  <div className="flex items-center justify-end gap-2 border-t bg-muted/20 px-4 py-3 sm:px-5"><Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving} className="min-w-36 gap-2"><Save className="h-4 w-4" />{saving ? "Guardando…" : editing ? "Guardar cambios" : "Registrar"}</Button></div>
+                  <div className="grid grid-cols-1 gap-2 border-t bg-muted/20 px-4 py-3 min-[380px]:grid-cols-[auto_1fr] sm:px-5"><Button type="button" variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving} className="min-h-11 min-w-0 gap-2"><Save className="h-4 w-4" />{saving ? "Guardando…" : editing ? "Guardar cambios" : "Registrar"}</Button></div>
                 </form>
+              ) : panelView === "compare" ? (
+                comparison ? (
+                  <EventComparison
+                    data={comparison}
+                    onBack={() => setComparison(null)}
+                  />
+                ) : (
+                  <ComparisonPicker
+                    events={events}
+                    selectedIds={comparisonSelection}
+                    loading={comparisonLoading}
+                    error={comparisonError}
+                    onToggle={toggleComparisonEvent}
+                    onCompare={() => void compareEvents()}
+                    onClear={() => { setComparisonSelection([]); setComparisonError(null); }}
+                  />
+                )
               ) : (
                 <section>
                 <div className="flex items-center justify-between">
@@ -490,7 +553,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                       <article key={event.id} className="group flex items-center gap-3 border-b py-3.5 last:border-b-0">
                         <div className="mt-0.5 rounded-lg bg-muted p-2 text-primary"><Icon className="h-4 w-4" /></div>
                         <button type="button" disabled={detailLoading} onClick={() => void openDetail(event)} className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex items-baseline gap-2"><time className="font-numbers text-xs font-bold">{new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time><h4 className="truncate text-sm font-semibold">{event.title}</h4></div><p className="mt-1 truncate text-xs text-muted-foreground">{eventSummary(event) || "Sin detalles adicionales"}</p></button>
-                        <div className="flex opacity-80 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"><Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => edit(event)} aria-label={`Editar ${event.title}`}><Pencil className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-destructive sm:h-8 sm:w-8" onClick={() => void remove(event)} aria-label={`Eliminar ${event.title}`}><Trash2 className="h-3.5 w-3.5" /></Button></div>
+                        <div className="flex opacity-100 transition-opacity sm:opacity-80 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"><Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => edit(event)} aria-label={`Editar ${event.title}`}><Pencil className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-destructive sm:h-8 sm:w-8" onClick={() => void remove(event)} aria-label={`Eliminar ${event.title}`}><Trash2 className="h-3.5 w-3.5" /></Button></div>
                       </article>
                     );
                   })}
@@ -505,6 +568,126 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     </>
   );
 });
+
+const comparisonColors = ["#2563eb", "#db2777", "#7c3aed", "#0891b2", "#ea580c", "#16a34a", "#9333ea", "#475569"];
+const comparisonDashes = [undefined, "8 3", "3 3", "10 3 2 3", "2 4", "12 4", "6 2 2 2", "1 3"];
+
+function ComparisonPicker({
+  events,
+  selectedIds,
+  loading,
+  error,
+  onToggle,
+  onCompare,
+  onClear,
+}: {
+  events: GlucoEvent[];
+  selectedIds: string[];
+  loading: boolean;
+  error: string | null;
+  onToggle: (event: GlucoEvent) => void;
+  onCompare: () => void;
+  onClear: () => void;
+}) {
+  const selectedType = events.find((event) => event.id === selectedIds[0])?.type;
+  const comparableEvents = events.filter((event) => choices.some((choice) => choice.type === event.type));
+  return (
+    <section>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold">Comparar respuestas</h3>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Elegí entre 2 y 8 eventos del mismo tipo. Las curvas se alinean en el momento del registro.</p>
+        </div>
+        {selectedIds.length ? <button type="button" onClick={onClear} className="min-h-11 shrink-0 text-xs font-semibold text-muted-foreground hover:text-foreground">Limpiar</button> : null}
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {comparableEvents.length === 0 ? (
+          <div className="px-4 py-10 text-center"><BarChart3 className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Todavía no hay eventos para comparar</p></div>
+        ) : comparableEvents.map((event) => {
+          const checked = selectedIds.includes(event.id);
+          const disabled = Boolean(selectedType && selectedType !== event.type) || (!checked && selectedIds.length >= 8);
+          return (
+            <label key={event.id} className={`flex min-h-16 items-center gap-3 border-b px-4 py-3 last:border-b-0 ${disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer hover:bg-muted/30"}`}>
+              <input type="checkbox" checked={checked} disabled={disabled || loading} onChange={() => onToggle(event)} className="h-5 w-5 shrink-0 accent-primary" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{renderEventIcon(event.type, "h-4 w-4")}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{event.title}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{new Date(event.occurred_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}{eventSummary(event) ? ` · ${eventSummary(event)}` : ""}</span></span>
+            </label>
+          );
+        })}
+      </div>
+
+      {selectedIds.length ? <p className="mt-3 text-xs font-medium text-muted-foreground">{selectedIds.length}/8 seleccionados{selectedType ? ` · ${choices.find((choice) => choice.type === selectedType)?.label ?? selectedType}` : ""}</p> : null}
+
+      {error ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{error}</p> : null}
+      <div className="sticky bottom-0 -mx-5 mt-5 border-t bg-background/95 px-5 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <Button type="button" className="min-h-11 w-full gap-2" disabled={loading || selectedIds.length < 2} onClick={onCompare}>
+          <BarChart3 className="h-4 w-4" />{loading ? "Preparando comparación…" : `Comparar ${selectedIds.length || ""} ${selectedIds.length === 1 ? "evento" : "eventos"}`}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function EventComparison({ data, onBack }: { data: EventComparisonResult; onBack: () => void }) {
+  const chartRows = useMemo(() => {
+    const rows = new Map<number, Record<string, number>>();
+    const ensure = (minute: number) => {
+      const rounded = Math.round(minute);
+      const current = rows.get(rounded) ?? { relativeMinutes: rounded };
+      rows.set(rounded, current);
+      return current;
+    };
+    data.events.forEach((item, index) => item.points.forEach((point) => {
+      ensure(point.relativeMinutes)[`event${index}`] = point.value;
+    }));
+    data.averageCurve.forEach((point) => {
+      const row = ensure(point.relativeMinutes);
+      row.average = point.value;
+      row.averageN = point.sampleSize;
+    });
+    return [...rows.values()].toSorted((a, b) => a.relativeMinutes - b.relativeMinutes);
+  }, [data]);
+  const formatValue = (value: number) => data.unit === "mmol/L" ? value.toFixed(1) : String(Math.round(value));
+  const formatGlucose = (value: number | null) => value == null ? "—" : `${formatValue(value)} ${data.unit}`;
+
+  return (
+    <section>
+      <button type="button" onClick={onBack} className="mb-4 min-h-11 text-xs font-semibold text-primary hover:underline">← Cambiar selección</button>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h3 className="text-xl font-bold">Comparación de eventos</h3><p className="mt-1 text-sm text-muted-foreground">{data.sampleSize} seleccionados · {data.usableSampleSize} con datos utilizables</p></div>
+        <span className="rounded-md bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">n utilizable = {data.usableSampleSize}</span>
+      </div>
+
+      <div className="mt-5 h-64 min-w-0 rounded-xl border bg-card p-2 sm:h-72 sm:p-3" role="img" aria-label={`Curvas de glucosa de ${data.sampleSize} eventos alineadas al momento del evento. El promedio usa ${data.usableSampleSize} eventos con cobertura suficiente y puede variar según el momento.`}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartRows} margin={{ top: 8, right: 8, bottom: 4, left: -18 }}>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.45} />
+            <XAxis dataKey="relativeMinutes" type="number" domain={[-data.window.beforeMinutes, data.window.afterMinutes]} tickFormatter={(value) => value === 0 ? "Evento" : `${value > 0 ? "+" : ""}${value}m`} tick={{ fontSize: 10 }} />
+            <YAxis domain={["dataMin - 15", "dataMax + 15"]} tick={{ fontSize: 10 }} />
+            <Tooltip offset={CHART_TOOLTIP_OFFSET} allowEscapeViewBox={{ x: false, y: true }} wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE} contentStyle={CHART_TOOLTIP_CONTENT_STYLE} labelFormatter={(value) => Number(value) === 0 ? "Momento del evento" : `${Math.abs(Number(value))} min ${Number(value) > 0 ? "después" : "antes"}`} formatter={(value, name, item) => [`${formatValue(Number(value))} ${data.unit}${name === "average" ? ` · n ${String((item.payload as Record<string, unknown>).averageN ?? data.usableSampleSize)}` : ""}`, name === "average" ? "Promedio" : data.events[Number(String(name).replace("event", ""))]?.event.title ?? String(name)]} />
+            <ReferenceLine x={0} stroke="var(--foreground)" strokeDasharray="3 3" />
+            {data.events.map((item, index) => <Line key={item.event.id} type="monotone" dataKey={`event${index}`} stroke={comparisonColors[index]} strokeDasharray={comparisonDashes[index]} strokeWidth={1.5} strokeOpacity={0.58} dot={false} connectNulls={false} isAnimationActive={false} />)}
+            <Line type="monotone" dataKey="average" name="average" stroke="var(--foreground)" strokeWidth={3} dot={false} connectNulls={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 rounded-xl bg-muted/50 px-3 py-3 text-xs">
+        <span className="flex items-center gap-2 font-semibold"><span className="h-0.5 w-5 bg-foreground" />Promedio</span>
+        {data.events.map((item, index) => <span key={item.event.id} className="flex min-w-0 items-center gap-2 text-muted-foreground"><svg aria-hidden="true" className="h-2 w-5 shrink-0" viewBox="0 0 20 4"><line x1="0" y1="2" x2="20" y2="2" stroke={comparisonColors[index]} strokeWidth="2" strokeDasharray={comparisonDashes[index]} /></svg><span className="max-w-28 truncate">{item.event.title}</span></span>)}
+      </div>
+
+      <div className="mobile-scroll-hint -mx-1 mt-5 max-w-[calc(100%+0.5rem)] overflow-x-auto overscroll-x-contain rounded-xl border bg-card" tabIndex={0} aria-label="Tabla comparativa desplazable horizontalmente">
+        <table className="w-full min-w-[540px] text-left text-xs">
+          <thead className="bg-muted/50 text-muted-foreground"><tr><th className="px-3 py-2.5 font-semibold">Evento</th><th className="px-3 py-2.5 font-semibold">Previa</th><th className="px-3 py-2.5 font-semibold">Δ</th><th className="px-3 py-2.5 font-semibold">Pico</th><th className="px-3 py-2.5 font-semibold">Al pico</th><th className="px-3 py-2.5 font-semibold">TIR posterior</th></tr></thead>
+          <tbody>{data.events.map((item) => { const usable = item.analysis.quality !== "insufficient"; return <tr key={item.event.id} className="border-t"><td className="max-w-40 px-3 py-3"><span className="block truncate font-semibold">{item.event.title}</span><span className="mt-0.5 block text-muted-foreground">{new Date(item.event.occurred_at).toLocaleDateString()} · {usable ? item.analysis.quality === "good" ? "buena cobertura" : "provisional" : "datos insuficientes"}</span></td><td className="font-numbers px-3 py-3">{formatGlucose(item.analysis.baselineGlucose)}</td><td className="font-numbers px-3 py-3">{!usable || item.analysis.glucoseDelta == null ? "—" : `${item.analysis.glucoseDelta >= 0 ? "+" : ""}${formatValue(item.analysis.glucoseDelta)} ${data.unit}`}</td><td className="font-numbers px-3 py-3">{usable ? formatGlucose(item.analysis.peakGlucose) : "—"}</td><td className="font-numbers px-3 py-3">{!usable || item.analysis.timeToPeakMinutes == null ? "—" : `${item.analysis.timeToPeakMinutes} min`}</td><td className="font-numbers px-3 py-3">{!usable || item.analysis.timeInRange == null ? "—" : `${item.analysis.timeInRange}%`}</td></tr>; })}</tbody>
+        </table>
+      </div>
+      <p className="mt-4 text-xs leading-5 text-muted-foreground">Curvas alineadas a t=0. El promedio excluye eventos con datos insuficientes y se calcula cada 15 minutos sólo cuando hay al menos dos muestras cercanas; el n efectivo aparece en el tooltip y puede variar. Los resultados describen estos registros; no implican causalidad ni constituyen una recomendación terapéutica.</p>
+    </section>
+  );
+}
 
 function EventDetailSkeleton({ title }: { title: string }) {
   return (
@@ -589,7 +772,7 @@ function EventDetail({
 
   return (
     <section>
-      <button type="button" onClick={onBack} className="mb-4 text-xs font-semibold text-primary hover:underline">← Volver al registro</button>
+      <button type="button" onClick={onBack} className="mb-4 min-h-11 text-xs font-semibold text-primary hover:underline">← Volver al registro</button>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-muted-foreground">{new Date(data.event.occurred_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>
@@ -623,9 +806,10 @@ function EventDetail({
               />
               <YAxis domain={["dataMin - 15", "dataMax + 15"]} tick={{ fontSize: 9 }} />
               <Tooltip
+                offset={CHART_TOOLTIP_OFFSET}
                 cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.35, strokeDasharray: "3 3" }}
                 allowEscapeViewBox={{ x: false, y: true }}
-                wrapperStyle={{ outline: "none", pointerEvents: "none" }}
+                wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   const value = Number(payload[0]?.value);
@@ -638,7 +822,7 @@ function EventDetail({
                       ? { label: "Alto", className: "text-amber-600" }
                       : { label: "En rango", className: "text-emerald-600" };
                   return (
-                    <div className="min-w-36 rounded-xl border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg">
+                    <div className="min-w-36 rounded-xl border border-border/60 bg-popover/80 px-3 py-2.5 text-popover-foreground shadow-lg backdrop-blur-md">
                       <p className="text-xs font-medium text-muted-foreground">{timing}</p>
                       <div className="mt-1.5 flex items-baseline justify-between gap-4">
                         <p className="font-numbers text-base font-bold">{Math.round(value)} <span className="text-xs font-medium text-muted-foreground">{unit}</span></p>

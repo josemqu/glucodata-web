@@ -21,6 +21,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  CHART_SERIES_ANIMATION_DURATION_MS,
+  CHART_SERIES_ANIMATION_EASING,
+} from "@/lib/chart-motion";
+import {
+  CHART_TOOLTIP_OFFSET,
+  CHART_TOOLTIP_WRAPPER_STYLE,
+} from "@/lib/chart-tooltip";
 import { 
   calculatePercentiles, 
   calculateGMI, 
@@ -31,7 +39,7 @@ import {
   type GlucoseStats,
   type PercentilePoint
 } from "@/lib/metrics";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { 
   Info, 
   TrendingUp, 
@@ -62,6 +70,7 @@ export function AnalysisView({
   loading = false
 }: AnalysisViewProps) {
   const [selectedDays, setSelectedDays] = useState(days);
+  const reduceMotion = useReducedMotion();
 
   const stats = useMemo(() => {
     if (preCalculatedStats) return preCalculatedStats;
@@ -155,7 +164,7 @@ export function AnalysisView({
       </div>
 
       {/* AGP Chart */}
-      <Card className="border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20 shadow-sm">
+      <Card className="min-h-[280px] flex-1 overflow-hidden border bg-card/20 shadow-sm sm:min-h-[320px]">
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
           <div className="flex flex-col w-full sm:w-auto">
             <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
@@ -167,10 +176,10 @@ export function AnalysisView({
             </CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0 relative min-h-0">
-          <div className="flex-1 w-full min-h-0 p-4 pt-6">
+        <CardContent className="relative flex min-h-0 flex-1 flex-col p-0">
+          <div className="glucose-chart-stage relative min-h-[250px] w-full flex-1 overflow-hidden">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={percentileData}>
+              <ComposedChart data={percentileData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorMedian" x1="0" y1="1" x2="0" y2="0">
                     <stop offset="0%" stopColor={getGlucoseColor(p50Min)} />
@@ -217,19 +226,16 @@ export function AnalysisView({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis 
                   dataKey="time" 
-                  stroke="rgba(255,255,255,0.3)" 
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
+                  hide
                 />
                 <YAxis 
-                  stroke="rgba(255,255,255,0.3)" 
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
                   domain={[0, 300]}
+                  hide
                 />
                 <Tooltip 
+                  offset={CHART_TOOLTIP_OFFSET}
+                  allowEscapeViewBox={{ x: false, y: true }}
+                  wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                   content={<CustomTooltip />} 
                   cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
                 />
@@ -241,6 +247,9 @@ export function AnalysisView({
                   stroke="none"
                   fill="url(#colorP5P95)"
                   connectNulls
+                  animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
+                  animationEasing={CHART_SERIES_ANIMATION_EASING}
+                  isAnimationActive={!reduceMotion}
                 />
 
                 {/* Target range (25th-75th percentile) */}
@@ -250,6 +259,9 @@ export function AnalysisView({
                   stroke="none"
                   fill="url(#colorP25P75)"
                   connectNulls
+                  animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
+                  animationEasing={CHART_SERIES_ANIMATION_EASING}
+                  isAnimationActive={!reduceMotion}
                 />
 
                 {/* Median line */}
@@ -261,6 +273,9 @@ export function AnalysisView({
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
                   connectNulls
+                  animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
+                  animationEasing={CHART_SERIES_ANIMATION_EASING}
+                  isAnimationActive={!reduceMotion}
                 />
 
                 {/* Reference Lines for Target Range */}
@@ -324,12 +339,19 @@ export function AnalysisView({
                 )}
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
-
-          <div className="px-4 py-2 border-t bg-muted/5 flex items-center gap-6 justify-center">
-            <LegendItem color="#10b981" label="Mediana (50%)" />
-            <LegendItem color="rgba(16, 185, 129, 0.3)" label="25% - 75%" />
-            <LegendItem color="rgba(148, 163, 184, 0.1)" label="5% - 95%" />
+            <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between text-[10px] font-bold text-foreground/70">
+              <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">00 h</span>
+              <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">12 h</span>
+              <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">24 h</span>
+            </div>
+            <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-card/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground backdrop-blur-sm">
+              mg/dL · 0–300
+            </div>
+            <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1 rounded-md bg-card/80 px-2 py-1 text-[9px] font-semibold text-muted-foreground backdrop-blur-sm sm:flex-row sm:gap-3">
+              <LegendItem color="#10b981" label="Mediana" />
+              <LegendItem color="rgba(16, 185, 129, 0.3)" label="25–75%" />
+              <LegendItem color="rgba(148, 163, 184, 0.2)" label="5–95%" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -448,9 +470,9 @@ function RangeBar({ label, value, color, loading }: any) {
 
 function LegendItem({ color, label }: any) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
-      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{label}</span>
+    <div className="flex items-center gap-1.5 whitespace-nowrap">
+      <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+      <span>{label}</span>
     </div>
   );
 }
@@ -459,7 +481,7 @@ function CustomTooltip({ active, payload }: any) {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-background/95 backdrop-blur-md border border-border p-3 rounded-xl shadow-2xl">
+      <div className="rounded-xl border border-border/60 bg-popover/80 p-2.5 shadow-lg backdrop-blur-md">
         <p className="text-[11px] font-black tracking-widest uppercase mb-2 border-b border-border pb-1">
           {data.time}
         </p>

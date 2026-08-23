@@ -72,6 +72,12 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 import { ThemeProvider } from "@/components/theme-provider";
 
 export default function RootLayout({
@@ -80,7 +86,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <body
         className={`${appSans.variable} ${appMono.variable} ${appNumbers.variable} antialiased`}
         suppressHydrationWarning

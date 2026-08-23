@@ -774,18 +774,18 @@ Al abrir una comida registrada, Glucodata muestra automáticamente su curva de g
 
 ## Fase 5 — Comparación histórica
 
-**Estado: `TODO`**
+**Estado: `IN PROGRESS`**
 
-- [ ] Seleccionar múltiples eventos.
-- [ ] Normalizar curvas a `t=0`.
-- [ ] Overlay de curvas.
-- [ ] Curva promedio.
-- [ ] Comparar baseline.
-- [ ] Comparar delta.
-- [ ] Comparar pico.
-- [ ] Comparar tiempo al pico.
-- [ ] Comparar TIR.
-- [ ] Mostrar tamaño de muestra.
+- [x] Seleccionar múltiples eventos.
+- [x] Normalizar curvas a `t=0`.
+- [x] Overlay de curvas.
+- [x] Curva promedio.
+- [x] Comparar baseline.
+- [x] Comparar delta.
+- [x] Comparar pico.
+- [x] Comparar tiempo al pico.
+- [x] Comparar TIR.
+- [x] Mostrar tamaño de muestra.
 - [ ] Comparar una misma comida.
 - [ ] Comparar por dosis de insulina.
 - [ ] Comparar ejercicio vs. no ejercicio.

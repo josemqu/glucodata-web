@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUp,
   ArrowUpRight,
@@ -56,6 +56,14 @@ import { getHistoricalGlucoseAction } from "./actions";
 import { AnalysisView } from "@/components/analysis-view";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import type { GlucoEvent } from "@/lib/events";
+import {
+  CHART_SERIES_ANIMATION_DURATION_MS,
+  CHART_SERIES_ANIMATION_EASING,
+} from "@/lib/chart-motion";
+import {
+  CHART_TOOLTIP_OFFSET,
+  CHART_TOOLTIP_WRAPPER_STYLE,
+} from "@/lib/chart-tooltip";
 
 function chartEventSymbol(type: GlucoEvent["type"]) {
   if (type === "meal") return "🍽";
@@ -73,7 +81,7 @@ function chartEventLabel(event: GlucoEvent) {
 
 function EventChartMarker({ viewBox, event, onSelect }: { viewBox?: { x?: number; y?: number }; event: GlucoEvent; onSelect: (event: GlucoEvent) => void }) {
   const x = viewBox?.x ?? 0;
-  const y = (viewBox?.y ?? 0) - 36;
+  const y = 6;
   const activate = () => onSelect(event);
   return (
     <g
@@ -577,9 +585,61 @@ export default function GlucoPage() {
 
   const [timeRange, setTimeRange] = useState(24); // hours
   const [showLine, setShowLine] = useState(true);
+  const reduceMotion = useReducedMotion();
 
   const windowEnd = windowEndMs;
   const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
+  const [chartWindowStart, setChartWindowStart] = useState(windowStart);
+  const chartWindowStartRef = useRef(windowStart);
+  const rangeAnimationFrameRef = useRef<number | null>(null);
+  const [isRangeTransitioning, setIsRangeTransitioning] = useState(false);
+  const chartDataStart = Math.min(chartWindowStart, windowStart);
+
+  useEffect(() => {
+    if (rangeAnimationFrameRef.current !== null) {
+      cancelAnimationFrame(rangeAnimationFrameRef.current);
+      rangeAnimationFrameRef.current = null;
+    }
+
+    const from = chartWindowStartRef.current;
+    const to = windowStart;
+
+    if (reduceMotion || Math.abs(from - to) < 1) {
+      chartWindowStartRef.current = to;
+      setChartWindowStart(to);
+      setIsRangeTransitioning(false);
+      return;
+    }
+
+    const duration = 460;
+    const startedAt = performance.now();
+    setIsRangeTransitioning(true);
+
+    const animateRange = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 4);
+      const nextStart = from + (to - from) * eased;
+
+      chartWindowStartRef.current = nextStart;
+      setChartWindowStart(nextStart);
+
+      if (progress < 1) {
+        rangeAnimationFrameRef.current = requestAnimationFrame(animateRange);
+      } else {
+        rangeAnimationFrameRef.current = null;
+        setIsRangeTransitioning(false);
+      }
+    };
+
+    rangeAnimationFrameRef.current = requestAnimationFrame(animateRange);
+
+    return () => {
+      if (rangeAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(rangeAnimationFrameRef.current);
+        rangeAnimationFrameRef.current = null;
+      }
+    };
+  }, [windowStart, reduceMotion]);
 
   const xTicks = useMemo(() => {
     const stepMs = 10 * 60 * 1000;
@@ -627,7 +687,7 @@ export default function GlucoPage() {
   const chartGraph = useMemo(() => {
     const cleaned = graphPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
-      .filter((p: any) => p.time >= windowStart && p.time <= windowEnd)
+      .filter((p: any) => p.time >= chartDataStart && p.time <= windowEnd)
       .sort((a: any, b: any) => a.time - b.time)
       .filter(
         (p: any, idx: number, arr: any[]) =>
@@ -638,7 +698,7 @@ export default function GlucoPage() {
     if (cleaned.length <= maxPoints) {
       return [
         ...cleaned,
-        { time: windowStart, value: null },
+        { time: chartDataStart, value: null },
         { time: windowEnd, value: null },
       ];
     }
@@ -648,7 +708,7 @@ export default function GlucoPage() {
     if (typeof start !== "number" || typeof end !== "number" || start >= end) {
       return [
         ...cleaned.slice(-maxPoints),
-        { time: windowStart, value: null },
+        { time: chartDataStart, value: null },
         { time: windowEnd, value: null },
       ];
     }
@@ -698,10 +758,10 @@ export default function GlucoPage() {
 
     return [
       ...unique,
-      { time: windowStart, value: null },
+      { time: chartDataStart, value: null },
       { time: windowEnd, value: null },
     ];
-  }, [graphPoints, windowStart, windowEnd]);
+  }, [graphPoints, chartDataStart, windowEnd]);
 
   useEffect(() => {
     const saved = Cookies.get("gluco_chart_prefs");
@@ -806,7 +866,7 @@ export default function GlucoPage() {
 
   if (isInitializing) {
     return (
-      <main className="h-screen bg-background flex flex-col items-center justify-center p-4 overflow-hidden">
+      <main className="flex h-[100dvh] flex-col items-center justify-center overflow-hidden bg-background p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -836,7 +896,7 @@ export default function GlucoPage() {
 
   if (!isLoggedIn) {
     return (
-      <main className="min-h-screen bg-background flex items-center justify-center p-4">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-background p-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1160,11 +1220,11 @@ export default function GlucoPage() {
   };
 
   return (
-    <main className="h-screen flex flex-col bg-background text-foreground transition-colors duration-300 overflow-hidden text-xs">
+    <main className="flex h-[100dvh] min-h-[100dvh] max-w-full flex-col overflow-hidden bg-background text-xs text-foreground transition-colors duration-300">
       {/* Header */}
-      <header className="flex-none px-4 py-2 border-b bg-background/80 backdrop-blur-md z-10">
-        <div className="max-w-[1100px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-6">
+      <header className="z-10 flex-none border-b bg-background/80 px-3 py-2 backdrop-blur-md sm:px-4">
+        <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/10">
               <Droplets className="w-5 h-5 text-primary-foreground" />
             </div>
@@ -1172,18 +1232,19 @@ export default function GlucoPage() {
               className="flex flex-col cursor-pointer"
               onClick={() => setActiveView("dashboard")}
             >
-              <h1 className="text-base font-black tracking-tighter leading-none italic">
+              <h1 className="hidden text-base font-black italic leading-none tracking-tighter min-[360px]:block">
                 GLUCOWEB
               </h1>
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5 opacity-60">
+              <span className="mt-0.5 hidden text-[11px] font-bold uppercase leading-none tracking-widest text-muted-foreground opacity-60 min-[380px]:block">
                 PRO INTERFACE V2.5
               </span>
             </div>
-            
-            <nav className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border/50">
+          </div>
+
+            <nav className="order-3 flex w-full items-center gap-1 rounded-lg border border-border/50 bg-muted/50 p-1 sm:order-none sm:w-auto">
               <button
                 onClick={() => setActiveView("dashboard")}
-                className={`px-3 py-1 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${
+                className={`min-h-11 flex-1 rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-widest transition-all sm:min-h-8 sm:flex-none ${
                   activeView === "dashboard" 
                     ? "bg-background shadow-sm text-primary" 
                     : "text-muted-foreground hover:text-foreground"
@@ -1193,7 +1254,7 @@ export default function GlucoPage() {
               </button>
               <button
                 onClick={() => setActiveView("analysis")}
-                className={`px-3 py-1 text-[11px] font-bold uppercase tracking-widest rounded-md transition-all ${
+                className={`min-h-11 flex-1 rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-widest transition-all sm:min-h-8 sm:flex-none ${
                   activeView === "analysis" 
                     ? "bg-background shadow-sm text-primary" 
                     : "text-muted-foreground hover:text-foreground"
@@ -1202,9 +1263,8 @@ export default function GlucoPage() {
                 Análisis
               </button>
             </nav>
-          </div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-4">
             <div className="text-right hidden sm:block">
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none mb-1">
                 Monitorización Activa
@@ -1213,7 +1273,7 @@ export default function GlucoPage() {
                 {patient.firstName} {patient.lastName}
               </p>
             </div>
-            <div className="flex items-center gap-2 border-l pl-2 sm:pl-4 border-border/50">
+            <div className="flex items-center gap-1 border-l border-border/50 pl-1 sm:gap-2 sm:pl-4">
               {session?.token ? (
                 <EventCenter
                   ref={eventCenterRef}
@@ -1229,7 +1289,7 @@ export default function GlucoPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={`w-8 h-8 rounded-md transition-colors ${
+                className={`h-11 w-11 rounded-md transition-colors sm:h-8 sm:w-8 ${
                   activeView === "settings"
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted"
@@ -1246,7 +1306,7 @@ export default function GlucoPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                className="h-11 w-11 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground sm:h-8 sm:w-8"
                 onClick={handleLogout}
               >
                 <LogOut className="w-4 h-4" />
@@ -1258,8 +1318,8 @@ export default function GlucoPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-3 md:p-4 bg-muted/5">
-        <div className="max-w-[1100px] mx-auto h-full">
+      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/5 p-2.5 sm:p-3 md:p-4">
+        <div className="mx-auto h-full min-w-0 max-w-[1100px]">
           {activeView === "analysis" ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
@@ -1271,12 +1331,12 @@ export default function GlucoPage() {
                   <h2 className="text-xl font-black italic tracking-tighter uppercase">Análisis Avanzado</h2>
                   <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Clinical Glucose Insights</p>
                 </div>
-                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/40">
+                <div className="grid w-full grid-cols-4 gap-1 rounded-xl border border-border/40 bg-muted/50 p-1 sm:flex sm:w-auto sm:items-center">
                   {[7, 14, 30, 90].map((d) => (
                     <button
                       key={d}
                       onClick={() => setAnalysisDays(d)}
-                      className={`px-4 py-1.5 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                      className={`min-h-11 rounded-lg px-2 py-1.5 text-[11px] font-black uppercase tracking-widest transition-all sm:min-h-8 sm:px-4 ${
                         analysisDays === d 
                           ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
                           : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -1419,37 +1479,23 @@ export default function GlucoPage() {
 
                   {/* Chart Card */}
                   <Card className="shadow-sm border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20">
-                    <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
-                      <div className="flex flex-col w-full sm:w-auto">
-                        <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
-                          Historial Analítico
-                          <span className="hidden sm:inline-flex text-[8px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                            {timeRange}H Window
-                          </span>
-                        </CardTitle>
-                      </div>
+                    <CardHeader className="gap-1.5 border-b bg-muted/10 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-2">
+                      <CardTitle className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
+                        Historial Analítico
+                      </CardTitle>
 
-                      {/* Time Filters */}
-                      <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setActiveView("analysis")}
-                          className="h-7 text-[9px] font-black uppercase tracking-widest bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary flex items-center gap-2 mr-2"
-                        >
-                          <Activity className="w-3 h-3" />
-                          Análisis Clínico
-                        </Button>
-                        <div className="flex flex-wrap items-center bg-muted/50 p-0.5 rounded-lg border border-border/50">
+                      <div className="flex min-w-0 items-center gap-1 sm:justify-end">
+                        <div className="flex min-w-0 flex-1 items-center sm:flex-none">
                           {[1, 3, 6, 12, 24].map((h) => (
                             <button
                               key={h}
                               onClick={() => setTimeRange(h)}
-                              className={`px-3 py-1 text-[9px] font-bold transition-all rounded-md ${
+                              className={`min-h-11 min-w-0 flex-1 rounded-md px-2 text-[11px] font-bold transition-colors sm:min-h-8 sm:min-w-9 sm:flex-none sm:px-2.5 sm:text-[9px] ${
                                 timeRange === h
-                                  ? "bg-background text-primary shadow-sm"
+                                  ? "bg-primary/10 text-primary"
                                   : "text-muted-foreground hover:text-foreground"
                               }`}
+                              aria-pressed={timeRange === h}
                             >
                               {h}H
                             </button>
@@ -1458,10 +1504,10 @@ export default function GlucoPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-7 w-7 border transition-all ${
+                          className={`h-11 w-11 shrink-0 rounded-md transition-colors sm:h-8 sm:w-8 ${
                             showLine
-                              ? "bg-primary/10 text-primary border-primary/20"
-                              : "text-muted-foreground border-border/50 hover:bg-muted"
+                              ? "text-primary hover:bg-primary/10"
+                              : "text-muted-foreground hover:bg-muted"
                           }`}
                           onClick={() => setShowLine(!showLine)}
                           aria-label={
@@ -1474,14 +1520,24 @@ export default function GlucoPage() {
                             <Eye className="h-4 w-4" />
                           )}
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setActiveView("analysis")}
+                          className="h-11 shrink-0 gap-1.5 px-2 text-[10px] font-bold text-muted-foreground hover:bg-primary/5 hover:text-primary sm:h-8"
+                          aria-label="Abrir análisis clínico"
+                        >
+                          <Activity className="h-4 w-4" />
+                          <span className="hidden sm:inline">Análisis</span>
+                        </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="flex-1 p-0 pt-2 flex flex-col">
-                      <div className="flex-1 min-h-[400px] min-w-0">
-                        <ResponsiveContainer width="100%" height={400}>
+                    <CardContent className="flex flex-1 flex-col p-0">
+                      <div className="glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden sm:min-h-[420px]">
+                        <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
                             data={chartGraph}
-                            margin={{ top: 45, right: 10, left: -15, bottom: 5 }}
+                            margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
                           >
                             {(() => {
                               const gradientId = `lineGluc-${timeRange}-${dataMin}-${dataMax}`;
@@ -1662,46 +1718,22 @@ export default function GlucoPage() {
                                   <XAxis
                                     dataKey="time"
                                     type="number"
-                                    domain={[windowStart, windowEnd]}
+                                    domain={[chartWindowStart, windowEnd]}
                                     allowDataOverflow={true}
                                     ticks={xTicks}
                                     interval={0}
-                                    tickMargin={10}
-                                    tickFormatter={(t) =>
-                                      new Date(t).getMinutes() === 0
-                                        ? new Date(t).toLocaleTimeString([], {
-                                            hour: "2-digit",
-                                          })
-                                        : ""
-                                    }
-                                    stroke="var(--foreground)"
-                                    fontSize={10}
-                                    fontWeight="600"
-                                    tickLine={{
-                                      stroke: "var(--muted-foreground)",
-                                      opacity: 0.6,
-                                    }}
-                                    axisLine={{
-                                      stroke: "var(--muted-foreground)",
-                                      opacity: 0.6,
-                                      strokeWidth: 1,
-                                    }}
+                                    hide
                                     minTickGap={0}
                                   />
                                   <YAxis
-                                    stroke="var(--foreground)"
-                                    fontSize={10}
-                                    fontWeight="600"
-                                    interval={0}
-                                    minTickGap={0}
-                                    tickLine={false}
-                                    axisLine={false}
                                     domain={[yMin, yMax]}
                                     ticks={yTicks}
-                                    orientation="right"
-                                    width={30}
+                                    hide
                                   />
                                   <Tooltip
+                                    offset={CHART_TOOLTIP_OFFSET}
+                                    allowEscapeViewBox={{ x: false, y: true }}
+                                    wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                                     cursor={{
                                       stroke: "var(--muted-foreground)",
                                       strokeOpacity: 0.15,
@@ -1723,7 +1755,7 @@ export default function GlucoPage() {
                                         const status = getGlucoseStatus(val);
 
                                         return (
-                                          <div className="bg-card/95 border border-border/50 rounded-lg p-2 shadow-xl min-w-[130px] backdrop-blur-md ring-1 ring-white/10">
+                                          <div className="min-w-[124px] rounded-lg border border-border/50 bg-card/80 p-2 shadow-lg backdrop-blur-md">
                                             <div className="flex flex-col gap-1.5">
                                               <div className="flex items-center justify-between border-b border-border/40 pb-1.5 px-1">
                                                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.1em]">
@@ -1869,10 +1901,16 @@ export default function GlucoPage() {
                                       fill="url(#colorGluc)"
                                       baseValue={yMin}
                                       animationDuration={
-                                        enableAnimation ? 500 : 0
+                                        enableAnimation
+                                          ? CHART_SERIES_ANIMATION_DURATION_MS
+                                          : 0
                                       }
-                                      animationEasing="ease-in-out"
-                                      isAnimationActive={enableAnimation}
+                                      animationEasing={CHART_SERIES_ANIMATION_EASING}
+                                      isAnimationActive={
+                                        enableAnimation &&
+                                        !isRangeTransitioning &&
+                                        !reduceMotion
+                                      }
                                       connectNulls={true}
                                       dot={showDots ? <CustomDot /> : false}
                                       activeDot={
@@ -1892,11 +1930,17 @@ export default function GlucoPage() {
                                       dataKey="value"
                                       name="GLUCOSA"
                                       shape={<SimpleDot />}
-                                      isAnimationActive={enableAnimation}
-                                      animationDuration={
-                                        enableAnimation ? 500 : 0
+                                      isAnimationActive={
+                                        enableAnimation &&
+                                        !isRangeTransitioning &&
+                                        !reduceMotion
                                       }
-                                      animationEasing="ease-in-out"
+                                      animationDuration={
+                                        enableAnimation
+                                          ? CHART_SERIES_ANIMATION_DURATION_MS
+                                          : 0
+                                      }
+                                      animationEasing={CHART_SERIES_ANIMATION_EASING}
                                     />
                                   )}
                                 </>
@@ -1904,22 +1948,21 @@ export default function GlucoPage() {
                             })()}
                           </ComposedChart>
                         </ResponsiveContainer>
-                      </div>
-
-                      <div className="px-4 py-2 border-t bg-muted/5 flex flex-wrap items-center justify-between gap-2 text-[9px] font-semibold text-muted-foreground">
-                        <div className="flex items-center gap-4">
-                          <span className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
-                            Target Zone ({targetConfig.low}-{targetConfig.high})
+                        <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between text-[10px] font-bold tabular-nums text-foreground/70">
+                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
+                            {new Date(chartWindowStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
-                          <span className="flex items-center gap-1.5 opacity-50">
-                            <div className="w-4 h-[1px] bg-muted-foreground border-t border-dashed" />{" "}
-                            Reference Limits
+                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
+                            {new Date(windowEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
-                        <div className="flex items-center gap-4">
-                          {visibleEvents.length ? <span>Seleccioná un marcador para ver el evento</span> : null}
-                          <span className="opacity-50">Puntos: {filteredGraph.length}</span>
+                        <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1 text-[9px] font-bold tabular-nums text-muted-foreground">
+                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">{yMax}</span>
+                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">mg/dL</span>
+                        </div>
+                        <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-card/80 px-2 py-1 text-[9px] font-semibold text-muted-foreground backdrop-blur-sm">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Objetivo {targetConfig.low}–{targetConfig.high}
                         </div>
                       </div>
                     </CardContent>
@@ -1961,7 +2004,7 @@ export default function GlucoPage() {
                         </div>
 
                         <Button
-                          className="w-full h-7 text-[8px] font-bold uppercase tracking-[0.15em] shadow-sm active:scale-95 transition-transform"
+                          className="min-h-11 w-full text-[11px] font-bold uppercase tracking-wide shadow-sm transition-transform active:scale-95 sm:h-7 sm:min-h-0 sm:text-[8px] sm:tracking-[0.15em]"
                           onClick={() => fetchData()}
                           disabled={loading}
                           variant="secondary"
@@ -2227,8 +2270,8 @@ export default function GlucoPage() {
                 </Card>
 
                 <Card className="border bg-card/10 md:col-span-2">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
+                  <CardContent className="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">
                         Estado de Sincronización
                       </p>
@@ -2238,7 +2281,7 @@ export default function GlucoPage() {
                     </div>
                     <Button
                       variant="outline"
-                      className="h-8 text-[11px] font-black uppercase tracking-widest border-primary/20 text-primary hover:bg-primary/10"
+                      className="min-h-11 w-full border-primary/20 text-[11px] font-black uppercase tracking-wide text-primary hover:bg-primary/10 sm:h-8 sm:min-h-0 sm:w-auto sm:tracking-widest"
                       onClick={() => setActiveView("dashboard")}
                     >
                       Volver al Panel
@@ -2253,9 +2296,9 @@ export default function GlucoPage() {
       </div>
 
       {/* Footer */}
-      <footer className="flex-none px-4 py-1.5 border-t bg-background z-10">
-        <div className="max-w-[1100px] mx-auto flex justify-between items-center text-muted-foreground">
-          <p className="text-[11px] font-bold tracking-[0.4em] uppercase opacity-30">
+      <footer className="z-10 hidden flex-none border-t bg-background px-4 py-1.5 sm:block">
+        <div className="mx-auto flex max-w-[1100px] items-center justify-center text-muted-foreground sm:justify-between">
+          <p className="hidden text-[11px] font-bold uppercase tracking-[0.4em] opacity-30 sm:block">
             GlucoWeb Biomedical Interface • Engine v2.5.0-Release
           </p>
           <div className="flex items-center gap-5">
