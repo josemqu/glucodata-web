@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowUp,
@@ -54,6 +54,50 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 import { getHistoricalGlucoseAction } from "./actions";
 import { AnalysisView } from "@/components/analysis-view";
+import { EventCenter, type EventCenterHandle } from "@/components/event-center";
+import type { GlucoEvent } from "@/lib/events";
+
+function chartEventSymbol(type: GlucoEvent["type"]) {
+  if (type === "meal") return "🍽";
+  if (type === "insulin") return "💉";
+  if (type === "exercise") return "●";
+  if (type === "note") return "✎";
+  return "◆";
+}
+
+function chartEventLabel(event: GlucoEvent) {
+  const type = event.type === "meal" ? "Comida" : event.type === "insulin" ? "Insulina" : event.type === "exercise" ? "Ejercicio" : event.type === "note" ? "Nota" : "Evento";
+  const time = new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `Abrir ${type.toLowerCase()}: ${event.title}, ${time}`;
+}
+
+function EventChartMarker({ viewBox, event, onSelect }: { viewBox?: { x?: number; y?: number }; event: GlucoEvent; onSelect: (event: GlucoEvent) => void }) {
+  const x = viewBox?.x ?? 0;
+  const y = (viewBox?.y ?? 0) - 36;
+  const activate = () => onSelect(event);
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={chartEventLabel(event)}
+      className="group cursor-pointer outline-none"
+      transform={`translate(${x}, ${y})`}
+      onClick={activate}
+      onKeyDown={(keyboardEvent) => {
+        if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+          keyboardEvent.preventDefault();
+          activate();
+        }
+      }}
+    >
+      <title>{chartEventLabel(event)}</title>
+      <rect x={-22} y={-4} width={44} height={44} fill="transparent" />
+      <line x1={0} y1={22} x2={0} y2={36} stroke="var(--primary)" strokeWidth={1} strokeDasharray="3 3" aria-hidden="true" />
+      <circle cx={0} cy={10} r={12} fill="var(--card)" stroke="var(--primary)" strokeWidth={1.5} className="transition-[stroke-width,filter] group-hover:[filter:drop-shadow(0_2px_4px_rgb(0_0_0_/_0.18))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))] group-focus:stroke-[3px]" />
+      <text x={0} y={14} textAnchor="middle" fontSize={event.type === "exercise" ? 11 : 13} fill="var(--primary)" aria-hidden="true">{chartEventSymbol(event.type)}</text>
+    </g>
+  );
+}
 
 export default function GlucoPage() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -73,8 +117,40 @@ export default function GlucoPage() {
   const [analysisPercentiles, setAnalysisPercentiles] = useState<any[]>([]);
   const [analysisDays, setAnalysisDays] = useState(7);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [events, setEvents] = useState<GlucoEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const eventCenterRef = useRef<EventCenterHandle>(null);
 
   const [session, setSession] = useState<any>(null);
+
+  const loadEvents = useCallback(async () => {
+    if (!session?.token || !session?.userId) return;
+    setEventsLoading(true);
+    setEventsError(null);
+    try {
+      const response = await fetch("/api/events", {
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          "X-Libre-User-Id": session.userId,
+          "X-Libre-Region": session.region ?? "",
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "No se pudieron cargar los eventos.");
+      setEvents(result.data ?? []);
+    } catch (requestError) {
+      setEventsError(requestError instanceof Error ? requestError.message : "No se pudieron cargar los eventos.");
+    } finally {
+      setEventsLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !session?.token) return;
+    const timer = window.setTimeout(() => void loadEvents(), 0);
+    return () => window.clearTimeout(timer);
+  }, [isLoggedIn, session?.token, loadEvents]);
 
   // Configuration state
   const [targetConfig, setTargetConfig] = useState({
@@ -300,6 +376,7 @@ export default function GlucoPage() {
     setGraphPoints([]);
     setWindowEndMs(Date.now());
     setSession(null);
+    setEvents([]);
     setCredentials({ email: "", password: "" });
     setActiveView("dashboard");
   };
@@ -998,6 +1075,12 @@ export default function GlucoPage() {
       ? scatterDataRaw
       : scatterDataRaw.filter((_: any, idx: number) => idx % scatterStep === 0);
 
+  const visibleEvents = events.filter((event) => {
+    const occurredAt = new Date(event.occurred_at).getTime();
+    const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : occurredAt;
+    return endedAt >= windowStart && occurredAt <= windowEnd;
+  });
+
   const SimpleDot = (props: any) => {
     const { cx, cy, payload } = props;
     const val = payload?.value;
@@ -1131,6 +1214,17 @@ export default function GlucoPage() {
               </p>
             </div>
             <div className="flex items-center gap-2 border-l pl-2 sm:pl-4 border-border/50">
+              {session?.token ? (
+                <EventCenter
+                  ref={eventCenterRef}
+                  session={session}
+                  events={events}
+                  loading={eventsLoading}
+                  error={eventsError}
+                  onRefresh={loadEvents}
+                  onChanged={loadEvents}
+                />
+              ) : null}
               <ModeToggle />
               <Button
                 variant="ghost"
@@ -1383,11 +1477,11 @@ export default function GlucoPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex-1 p-0 pt-2 flex flex-col">
-                      <div className="flex-1 min-h-[360px] min-w-0">
-                        <ResponsiveContainer width="100%" height={360}>
+                      <div className="flex-1 min-h-[400px] min-w-0">
+                        <ResponsiveContainer width="100%" height={400}>
                           <ComposedChart
                             data={chartGraph}
-                            margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
+                            margin={{ top: 45, right: 10, left: -15, bottom: 5 }}
                           >
                             {(() => {
                               const gradientId = `lineGluc-${timeRange}-${dataMin}-${dataMax}`;
@@ -1538,6 +1632,33 @@ export default function GlucoPage() {
                                       strokeWidth={1}
                                     />
                                   ))}
+                                  {visibleEvents.flatMap((event) => {
+                                    const occurredAt = new Date(event.occurred_at).getTime();
+                                    const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : null;
+                                    return [
+                                      event.type === "exercise" && endedAt ? (
+                                        <ReferenceArea
+                                          key={`${event.id}-area`}
+                                          x1={occurredAt}
+                                          x2={endedAt}
+                                          fill="var(--primary)"
+                                          fillOpacity={0.08}
+                                          stroke="var(--primary)"
+                                          strokeOpacity={0.35}
+                                          ifOverflow="hidden"
+                                        />
+                                      ) : null,
+                                      <ReferenceLine
+                                        key={`${event.id}-marker`}
+                                        x={occurredAt}
+                                        stroke="var(--primary)"
+                                        strokeWidth={1}
+                                        strokeDasharray="3 3"
+                                        ifOverflow="hidden"
+                                        label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} />}
+                                      />
+                                    ];
+                                  })}
                                   <XAxis
                                     dataKey="time"
                                     type="number"
@@ -1785,7 +1906,7 @@ export default function GlucoPage() {
                         </ResponsiveContainer>
                       </div>
 
-                      <div className="px-4 py-2 border-t bg-muted/5 flex items-center justify-between text-[8px] font-bold text-muted-foreground uppercase tracking-widest">
+                      <div className="px-4 py-2 border-t bg-muted/5 flex flex-wrap items-center justify-between gap-2 text-[9px] font-semibold text-muted-foreground">
                         <div className="flex items-center gap-4">
                           <span className="flex items-center gap-1.5">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{" "}
@@ -1796,8 +1917,9 @@ export default function GlucoPage() {
                             Reference Limits
                           </span>
                         </div>
-                        <div className="flex gap-4 opacity-50">
-                          <span>Telemetry Pts: {filteredGraph.length}</span>
+                        <div className="flex items-center gap-4">
+                          {visibleEvents.length ? <span>Seleccioná un marcador para ver el evento</span> : null}
+                          <span className="opacity-50">Puntos: {filteredGraph.length}</span>
                         </div>
                       </div>
                     </CardContent>
