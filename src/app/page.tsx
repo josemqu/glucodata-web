@@ -22,6 +22,8 @@ import {
   ChevronsUp,
   ChevronsDown,
   Activity,
+  Target,
+  TrendingUp,
 } from "lucide-react";
 import {
   Card,
@@ -1223,7 +1225,7 @@ export default function GlucoPage() {
     <main className="flex h-[100dvh] min-h-[100dvh] max-w-full flex-col overflow-hidden bg-background text-xs text-foreground transition-colors duration-300">
       {/* Header */}
       <header className="z-10 flex-none border-b bg-background/80 px-3 py-2 backdrop-blur-md sm:px-4">
-        <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/10">
               <Droplets className="w-5 h-5 text-primary-foreground" />
@@ -1241,7 +1243,7 @@ export default function GlucoPage() {
             </div>
           </div>
 
-            <nav className="order-3 flex w-full items-center gap-1 rounded-lg border border-border/50 bg-muted/50 p-1 sm:order-none sm:w-auto">
+            <nav aria-label="Navegación principal" className="hidden items-center gap-1 rounded-lg border border-border/50 bg-muted/50 p-1 sm:flex">
               <button
                 onClick={() => setActiveView("dashboard")}
                 className={`min-h-11 flex-1 rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-widest transition-all sm:min-h-8 sm:flex-none ${
@@ -1289,7 +1291,7 @@ export default function GlucoPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-11 w-11 rounded-md transition-colors sm:h-8 sm:w-8 ${
+                className={`hidden h-8 w-8 rounded-md transition-colors sm:inline-flex ${
                   activeView === "settings"
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted"
@@ -1318,31 +1320,32 @@ export default function GlucoPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/5 p-2.5 sm:p-3 md:p-4">
+      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/5 p-2.5 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:p-3 md:p-4">
         <div className="mx-auto h-full min-w-0 max-w-[1100px]">
           {activeView === "analysis" ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="h-full flex flex-col space-y-3"
+              className="flex h-full flex-col gap-2"
             >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-black italic tracking-tighter uppercase">Análisis Avanzado</h2>
-                  <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-[0.2em]">Clinical Glucose Insights</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Análisis</h2>
+                  <p className="hidden text-[11px] text-muted-foreground sm:block">Perfil diario y métricas del período</p>
                 </div>
-                <div className="grid w-full grid-cols-4 gap-1 rounded-xl border border-border/40 bg-muted/50 p-1 sm:flex sm:w-auto sm:items-center">
+                <div className="grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana de análisis">
                   {[7, 14, 30, 90].map((d) => (
                     <button
                       key={d}
                       onClick={() => setAnalysisDays(d)}
-                      className={`min-h-11 rounded-lg px-2 py-1.5 text-[11px] font-black uppercase tracking-widest transition-all sm:min-h-8 sm:px-4 ${
+                      aria-pressed={analysisDays === d}
+                      className={`min-h-9 rounded-md px-2 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-3 ${
                         analysisDays === d 
-                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
-                          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                          ? "bg-background text-primary shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      {d}D
+                      {d} d
                     </button>
                   ))}
                 </div>
@@ -1363,14 +1366,58 @@ export default function GlucoPage() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="h-full flex flex-col space-y-3"
+              className="flex h-full flex-col gap-2"
             >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Monitor</h2>
+                  <p className="hidden text-[11px] text-muted-foreground sm:block">Lecturas y distribución del período</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <div className="grid grid-cols-5 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana del monitor">
+                    {[1, 3, 6, 12, 24].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setTimeRange(h)}
+                        aria-pressed={timeRange === h}
+                        className={`min-h-9 rounded-md px-1.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-2.5 ${
+                          timeRange === h
+                            ? "bg-background text-primary shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {h} h
+                      </button>
+                    ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`h-9 w-9 shrink-0 rounded-lg transition-colors sm:h-8 sm:w-8 ${
+                      showLine
+                        ? "bg-muted/60 text-primary"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                    onClick={() => setShowLine(!showLine)}
+                    aria-label={showLine ? "Ocultar línea" : "Mostrar línea"}
+                    aria-pressed={showLine}
+                  >
+                    {showLine ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1">
                 {/* Left Column - Main View */}
                 <div className="lg:col-span-9 flex flex-col gap-3 min-w-0 h-full">
                   {/* Top Metrics Bar */}
-                  <div className="grid grid-cols-2 md:grid-cols-12 gap-3">
-                    <Card className="relative overflow-hidden border bg-card/50 shadow-sm col-span-2 md:col-span-4">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-12">
+                    <Card className="relative h-[104px] overflow-hidden rounded-xl border border-border/60 bg-card/45 shadow-sm md:col-span-3">
                       <div
                         className={`absolute top-0 left-0 bottom-0 w-1 ${
                           displayGlucose
@@ -1380,71 +1427,59 @@ export default function GlucoPage() {
                             : "bg-muted-foreground/40"
                         }`}
                       />
-                      <CardContent className="p-3.5 flex items-center justify-between">
-                        <div>
-                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                            Sensing Real-Time
+                      <CardContent className="flex h-full flex-col justify-between gap-2 p-3 sm:p-3.5">
+                        <div className="flex min-h-6 items-center justify-between gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                            <Droplets className="h-3.5 w-3.5" />
+                          </div>
+                          <p className="min-w-0 truncate text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Glucosa actual
                           </p>
-                          <div className="flex items-baseline gap-1.5">
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex min-w-0 items-baseline gap-1">
                             <motion.span
                               key={displayGlucose?.value ?? "no-data"}
                               initial={{ opacity: 0, scale: 0.9 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className={`text-5xl font-extrabold tabular-nums font-numbers tracking-tighter ${status.color}`}
+                              className={`font-numbers text-4xl font-extrabold tabular-nums tracking-tighter sm:text-5xl ${status.color}`}
                             >
                               {displayGlucose ? displayGlucose.value : "--"}
                             </motion.span>
-                            <span className="text-[10px] font-bold text-muted-foreground opacity-60 uppercase">
+                            <span className="text-[8px] font-bold uppercase text-muted-foreground opacity-60 sm:text-[10px]">
                               {unit}
                             </span>
                           </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5">
-                          <div className="flex gap-1.5">
-                            <Badge
-                              variant={
-                                displayGlucose && status.label === "OBJETIVO"
-                                  ? "outline"
-                                  : "default"
-                              }
-                              className={`${
-                                displayGlucose
-                                  ? status.badge
-                                  : "text-muted-foreground border-border/50 bg-muted/30"
-                              } ${
-                                displayGlucose && status.label !== "OBJETIVO"
-                                  ? "text-white"
-                                  : ""
-                              } px-2 py-0.5 text-[8px] font-bold rounded-sm uppercase tracking-wider`}
-                            >
-                              {displayGlucose ? status.label : "SIN DATOS"}
-                            </Badge>
-                            <div className="p-1.5 bg-muted rounded-md border border-border/50">
-                              {displayGlucose ? (
-                                getTrendIcon(
-                                  calculatedTrend,
-                                  displayGlucose.value,
-                                )
-                              ) : (
-                                <Clock className="w-6 h-6 text-muted-foreground" />
-                              )}
-                            </div>
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/70 text-foreground sm:h-10 sm:w-10">
+                            {displayGlucose ? (
+                              getTrendIcon(
+                                calculatedTrend,
+                                displayGlucose.value,
+                              )
+                            ) : (
+                              <Clock className="h-6 w-6 text-muted-foreground" />
+                            )}
                           </div>
                         </div>
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30 col-span-1 md:col-span-4">
-                      <CardContent className="p-3.5 space-y-1.5">
-                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Time in Range
-                        </p>
+                    <Card className="h-[104px] rounded-xl border border-border/60 bg-card/45 shadow-sm md:col-span-3">
+                      <CardContent className="flex h-full flex-col justify-between p-3 sm:p-3.5">
+                        <div className="flex min-h-6 items-center justify-between gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
+                            <Target className="h-3.5 w-3.5" />
+                          </div>
+                          <p className="min-w-0 truncate text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Tiempo en rango
+                          </p>
+                        </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-2xl font-black text-emerald-500 tabular-nums font-numbers">
                             {stats?.inRange}%
                           </span>
                           <span className="text-[8px] text-muted-foreground font-bold">
-                            OPTIMAL
+                            EN OBJETIVO
                           </span>
                         </div>
                         <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
@@ -1456,11 +1491,16 @@ export default function GlucoPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30 col-span-1 md:col-span-4">
-                      <CardContent className="p-3.5 space-y-1">
-                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Avg Glucose
-                        </p>
+                    <Card className="h-[104px] rounded-xl border border-border/60 bg-card/45 shadow-sm md:col-span-3">
+                      <CardContent className="flex h-full flex-col justify-between p-3 sm:p-3.5">
+                        <div className="flex min-h-6 items-center justify-between gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                            <Activity className="h-3.5 w-3.5" />
+                          </div>
+                          <p className="min-w-0 truncate text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Glucosa media
+                          </p>
+                        </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-2xl font-black tabular-nums font-numbers">
                             {stats?.avg}
@@ -1469,68 +1509,41 @@ export default function GlucoPage() {
                             {unit}
                           </span>
                         </div>
-                        <div className="flex justify-between text-[8px] font-bold mt-1 text-muted-foreground opacity-60">
-                          <span className="font-numbers">↓ {stats?.min}</span>
-                          <span className="font-numbers">↑ {stats?.max}</span>
+                        <p className="text-[8px] font-bold text-muted-foreground">
+                          Durante las últimas {timeRange} h
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="h-[104px] rounded-xl border border-border/60 bg-card/45 shadow-sm md:col-span-3">
+                      <CardContent className="flex h-full flex-col justify-between p-3 sm:p-3.5">
+                        <div className="flex min-h-6 items-center justify-between gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                            <TrendingUp className="h-3.5 w-3.5" />
+                          </div>
+                          <p className="min-w-0 truncate text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Rango del período
+                          </p>
                         </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-numbers text-2xl font-black tabular-nums">
+                            {stats ? `${stats.min}–${stats.max}` : "--"}
+                          </span>
+                          <span className="text-[8px] font-bold uppercase text-muted-foreground">
+                            {unit}
+                          </span>
+                        </div>
+                        <p className="text-[8px] font-bold text-muted-foreground">Mínimo–máximo</p>
                       </CardContent>
                     </Card>
                   </div>
 
                   {/* Chart Card */}
                   <Card className="shadow-sm border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20">
-                    <CardHeader className="gap-1.5 border-b bg-muted/10 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-2">
+                    <CardHeader className="border-b bg-muted/10 px-3 py-2.5 sm:px-4 sm:py-2">
                       <CardTitle className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
                         Historial Analítico
                       </CardTitle>
-
-                      <div className="flex min-w-0 items-center gap-1 sm:justify-end">
-                        <div className="flex min-w-0 flex-1 items-center sm:flex-none">
-                          {[1, 3, 6, 12, 24].map((h) => (
-                            <button
-                              key={h}
-                              onClick={() => setTimeRange(h)}
-                              className={`min-h-11 min-w-0 flex-1 rounded-md px-2 text-[11px] font-bold transition-colors sm:min-h-8 sm:min-w-9 sm:flex-none sm:px-2.5 sm:text-[9px] ${
-                                timeRange === h
-                                  ? "bg-primary/10 text-primary"
-                                  : "text-muted-foreground hover:text-foreground"
-                              }`}
-                              aria-pressed={timeRange === h}
-                            >
-                              {h}H
-                            </button>
-                          ))}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-11 w-11 shrink-0 rounded-md transition-colors sm:h-8 sm:w-8 ${
-                            showLine
-                              ? "text-primary hover:bg-primary/10"
-                              : "text-muted-foreground hover:bg-muted"
-                          }`}
-                          onClick={() => setShowLine(!showLine)}
-                          aria-label={
-                            showLine ? "Ocultar línea" : "Mostrar línea"
-                          }
-                        >
-                          {showLine ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActiveView("analysis")}
-                          className="h-11 shrink-0 gap-1.5 px-2 text-[10px] font-bold text-muted-foreground hover:bg-primary/5 hover:text-primary sm:h-8"
-                          aria-label="Abrir análisis clínico"
-                        >
-                          <Activity className="h-4 w-4" />
-                          <span className="hidden sm:inline">Análisis</span>
-                        </Button>
-                      </div>
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
                       <div className="glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden sm:min-h-[420px]">
@@ -1975,12 +1988,12 @@ export default function GlucoPage() {
                     <Card className="border bg-card/30">
                       <CardContent className="py-3.5 space-y-2">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Health Diagnostics
+                          Diagnóstico de salud
                         </p>
 
                         <div className="flex items-center justify-between">
-                          <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                            Last sync
+                          <span className="max-w-[9rem] truncate text-[8px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                            Última sincronización
                           </span>
                           <span className="text-[10px] font-black tabular-nums font-numbers">
                             {displayGlucose
@@ -1996,7 +2009,7 @@ export default function GlucoPage() {
 
                         <div className="flex items-center justify-between">
                           <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                            Auto-sync
+                            Sincronización
                           </span>
                           <span className="text-[10px] font-black tabular-nums font-numbers text-primary">
                             {secondsUntilRefresh}s
@@ -2014,7 +2027,7 @@ export default function GlucoPage() {
                               loading ? "animate-spin" : ""
                             }`}
                           />
-                          Sync Manual
+                          Sincronizar ahora
                         </Button>
                       </CardContent>
                     </Card>
@@ -2022,7 +2035,7 @@ export default function GlucoPage() {
                     <Card className="border bg-card/30">
                       <CardContent className="p-3.5 space-y-2">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Time in Ranges
+                          Tiempo en rangos
                         </p>
                         <div className="space-y-1.5">
                           {(
@@ -2094,7 +2107,7 @@ export default function GlucoPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-[7px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                            Clinical Profile
+                            Perfil clínico
                           </p>
                           <p className="text-[11px] font-black truncate uppercase tracking-tight">
                             {patient.firstName} {patient.lastName}
@@ -2125,8 +2138,8 @@ export default function GlucoPage() {
                   <h2 className="text-xl font-black italic tracking-tight">
                     CONFIGURACIÓN DE RANGOS
                   </h2>
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                    Ajuste de umbrales clínicos personalizados
+                    <p className="max-w-[28rem] truncate text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Umbrales clínicos
                   </p>
                 </div>
               </div>
@@ -2179,7 +2192,7 @@ export default function GlucoPage() {
                             Bajo
                           </Label>
                           <Badge className="bg-amber-500 h-4 text-[11px] font-black">
-                            WARNING
+                            ATENCIÓN
                           </Badge>
                         </div>
                         <Input
@@ -2204,7 +2217,7 @@ export default function GlucoPage() {
                             Alto
                           </Label>
                           <Badge className="bg-amber-500 h-4 text-[11px] font-black">
-                            WARNING
+                            ATENCIÓN
                           </Badge>
                         </div>
                         <Input
@@ -2258,7 +2271,7 @@ export default function GlucoPage() {
                           </p>
                           <p className="text-[11px] text-muted-foreground leading-relaxed">
                             Estos valores afectan directamente a los cálculos de{" "}
-                            <strong>Time in Range</strong>, las alertas visuales
+                              <strong>Tiempo en rango</strong>, las alertas visuales
                             de colores y las líneas de referencia en el gráfico
                             analítico. Los cambios se guardan automáticamente en
                             tu sesión local.
@@ -2294,6 +2307,44 @@ export default function GlucoPage() {
           )}
         </div>
       </div>
+
+      <nav
+        aria-label="Navegación principal"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:hidden"
+      >
+        <div className="mx-auto grid max-w-md grid-cols-3 gap-1 px-2 pt-1.5">
+          {([
+            { view: "dashboard" as const, label: "Monitor", Icon: Droplets },
+            { view: "analysis" as const, label: "Análisis", Icon: Activity },
+            { view: "settings" as const, label: "Ajustes", Icon: Settings },
+          ]).map(({ view, label, Icon }) => {
+            const isActive = activeView === view;
+
+            return (
+              <button
+                key={view}
+                type="button"
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => setActiveView(view)}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:bg-muted ${
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground"
+                }`}
+              >
+                <span
+                  className={`flex h-7 min-w-10 items-center justify-center rounded-full transition-colors ${
+                    isActive ? "bg-primary/12" : "bg-transparent"
+                  }`}
+                >
+                  <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Footer */}
       <footer className="z-10 hidden flex-none border-t bg-background px-4 py-1.5 sm:block">

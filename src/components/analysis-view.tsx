@@ -120,26 +120,24 @@ export function AnalysisView({
   }
 
   return (
-    <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
-      {/* Left Column - Main View */}
-      <div className="lg:col-span-9 flex flex-col gap-3 min-w-0 h-full">
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Long-period metrics */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <MetricCard
           title="TIR"
           value={`${stats?.tir}%`}
-          description="Tiempo en Rango"
+          description="Tiempo en rango"
           status={getTIRStatus(stats?.tir || 0)}
-          icon={<Target className="w-4 h-4" />}
+          icon={<Target className="h-3.5 w-3.5" />}
           target="> 70%"
           loading={loading}
         />
         <MetricCard
           title="GMI"
           value={`${stats?.gmi}%`}
-          description="A1c Estimada"
+          description="Hemoglobina estimada"
           status="info"
-          icon={<Activity className="w-4 h-4" />}
+          icon={<Activity className="h-3.5 w-3.5" />}
           target="< 7.0%"
           loading={loading}
         />
@@ -148,7 +146,7 @@ export function AnalysisView({
           value={`${stats?.cv}%`}
           description="Variabilidad"
           status={getCVStatus(stats?.cv || 0)}
-          icon={<TrendingUp className="w-4 h-4" />}
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
           target="< 36%"
           loading={loading}
         />
@@ -156,19 +154,19 @@ export function AnalysisView({
           title="Promedio"
           value={stats?.mean || 0}
           unit="mg/dL"
-          description="Glucosa Media"
+          description="Glucosa media"
           status="info"
-          icon={<Clock className="w-4 h-4" />}
+          icon={<Clock className="h-3.5 w-3.5" />}
           loading={loading}
         />
       </div>
 
-      {/* AGP Chart */}
-      <Card className="min-h-[280px] flex-1 overflow-hidden border bg-card/20 shadow-sm sm:min-h-[320px]">
+      {/* AGP Chart — primary analytical surface */}
+      <Card className="flex min-h-[360px] flex-[2_1_480px] overflow-hidden border bg-card/20 shadow-sm sm:min-h-[440px]">
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
           <div className="flex flex-col w-full sm:w-auto">
-            <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
-              Perfil de Glucosa Ambulatorio (AGP)
+            <CardTitle className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
+              Perfil glucémico (AGP)
               <span className="hidden sm:inline-flex text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                 {days} DÍAS
               </span>
@@ -355,11 +353,9 @@ export function AnalysisView({
           </div>
         </CardContent>
       </Card>
-      </div>
 
-      {/* Right Column - Sidemenu */}
-      <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
-        <div className="flex flex-col gap-3 h-full">
+      {/* Secondary analysis */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <Card className="border bg-card/30 flex flex-col">
             <CardHeader className="p-4 pb-0">
               <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80">Distribución por Rangos</CardTitle>
@@ -375,7 +371,7 @@ export function AnalysisView({
             </CardContent>
           </Card>
 
-          <Card className="border bg-card/30 flex flex-col flex-1">
+          <Card className="border bg-card/30 flex flex-col">
             <CardHeader className="p-4 pb-0">
               <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 italic">Análisis T1D</CardTitle>
             </CardHeader>
@@ -399,7 +395,6 @@ export function AnalysisView({
               </div>
             </CardContent>
           </Card>
-        </div>
       </div>
     </div>
   );
@@ -414,31 +409,33 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
   };
 
   return (
-    <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-      <CardContent className="p-4 pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className={`p-1.5 rounded-lg ${colors[status as keyof typeof colors]}`}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+    <div className="flex h-[104px] min-w-0 flex-col rounded-xl border border-border/60 bg-card/45 p-3 shadow-sm sm:px-4">
+        <div className="mb-1.5 flex min-h-6 items-center justify-between gap-2">
+          <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${colors[status as keyof typeof colors]}`}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
           </div>
           {target && (
-            <span className="text-[11px] font-black tracking-widest text-muted-foreground/60 uppercase">
-              Meta: {target}
+            <span className="truncate text-[10px] font-bold text-muted-foreground">
+              Meta {target}
             </span>
           )}
         </div>
-        <div className="flex items-baseline gap-1">
+        <div className="flex h-6 items-center gap-1 leading-none">
           {loading ? (
-            <div className="h-8 w-16 rounded bg-muted/40 animate-pulse" />
+            <div className="h-5 w-16 animate-pulse rounded bg-muted/40" />
           ) : (
-            <span className="text-2xl font-black tracking-tighter">{value}</span>
+            <span className="text-xl font-black tracking-tight">{value}</span>
           )}
-          {unit && !loading && <span className="text-[11px] font-bold text-muted-foreground uppercase">{unit}</span>}
+          {unit && (
+            <span className={`text-[10px] font-bold text-muted-foreground ${loading ? "invisible" : ""}`}>
+              {unit}
+            </span>
+          )}
         </div>
-        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-          {description}
+        <p className="mt-1 min-h-4 truncate text-[10px] font-medium text-muted-foreground">
+          {title} · {description}
         </p>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
