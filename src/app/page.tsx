@@ -1589,7 +1589,7 @@ export default function GlucoPage() {
         ? Math.max(dataMax, ...thresholds)
         : Math.max(targetConfig.high, ...thresholds);
 
-    const pad = 15;
+    const pad = 25;
     const paddedMin = minCandidate - pad;
     const paddedMax = maxCandidate + pad;
 
@@ -2631,9 +2631,6 @@ export default function GlucoPage() {
                             })()}
                           </ComposedChart>
                         </ResponsiveContainer>
-                        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-card/85 px-2 py-1 text-[10px] font-bold capitalize text-foreground/80 shadow-sm backdrop-blur-sm">
-                          {currentMonitorWindowLabel}
-                        </div>
                         {monitorWindowLoading ? (
                           <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center bg-gradient-to-r from-card/70 to-transparent" aria-label="Cargando lecturas anteriores">
                             <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -2647,11 +2644,14 @@ export default function GlucoPage() {
                             </div>
                           </div>
                         ) : null}
-                        <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between text-[10px] font-bold tabular-nums text-foreground/70">
-                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
+                        <div className="pointer-events-none absolute inset-x-2 bottom-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1 text-[10px] font-bold tabular-nums text-foreground/70">
+                          <span className="justify-self-start rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
                             {new Date(displayedChartWindowStart).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
-                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
+                          <span className="justify-self-center rounded-md bg-card/85 px-2 py-1 capitalize text-foreground/80 shadow-sm backdrop-blur-sm">
+                            {currentMonitorWindowLabel}
+                          </span>
+                          <span className="justify-self-end rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
                             {new Date(displayedChartWindowEnd).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
