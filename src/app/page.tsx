@@ -2187,7 +2187,7 @@ export default function GlucoPage() {
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
                       <div
-                        className={`glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[420px] ${isChartDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
+                        className={`glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden outline-none sm:min-h-[420px] ${isChartDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
                         tabIndex={0}
                         aria-label={`Historial de glucosa, ${currentMonitorWindowLabel}. Arrastrá horizontalmente para recorrer el tiempo.`}
                         style={{ touchAction: "pan-y" }}
@@ -2410,7 +2410,7 @@ export default function GlucoPage() {
                                     ticks={yTicks}
                                     hide
                                   />
-                                  <Tooltip
+                                  {!isChartPanning ? <Tooltip
                                     offset={CHART_TOOLTIP_OFFSET}
                                     allowEscapeViewBox={{ x: false, y: true }}
                                     wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
@@ -2475,7 +2475,7 @@ export default function GlucoPage() {
                                       }
                                       return null;
                                     }}
-                                  />
+                                  /> : null}
 
                                   {/* Background Bands */}
                                   <ReferenceArea

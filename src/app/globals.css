@@ -186,6 +186,15 @@
 .glucose-chart-stage .recharts-wrapper,
 .glucose-chart-stage .recharts-surface {
   display: block;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.glucose-chart-stage .recharts-wrapper:focus,
+.glucose-chart-stage .recharts-wrapper:focus-visible,
+.glucose-chart-stage .recharts-surface:focus,
+.glucose-chart-stage .recharts-surface:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .glucose-chart-stage .recharts-cartesian-grid-horizontal line {
