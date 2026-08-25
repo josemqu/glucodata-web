@@ -29,6 +29,7 @@ import {
   Plus,
   Trash2,
   Save,
+  Apple,
   Utensils,
   Dumbbell,
   BookOpenText,
@@ -83,7 +84,6 @@ import {
 } from "@/lib/chart-tooltip";
 
 function chartEventSymbol(type: GlucoEvent["type"]) {
-  if (type === "meal") return "🍽";
   if (type === "insulin") return "💉";
   if (type === "exercise") return "●";
   if (type === "note") return "✎";
@@ -172,7 +172,11 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
       <rect x={-22} y={-4} width={44} height={44} fill="transparent" />
       <line x1={0} y1={22} x2={0} y2={36} stroke={color} strokeWidth={1} strokeDasharray="3 3" aria-hidden="true" />
       <circle cx={0} cy={10} r={12} fill="var(--card)" stroke={color} strokeWidth={2} className="transition-[stroke-width,filter] group-hover:[filter:drop-shadow(0_2px_4px_rgb(0_0_0_/_0.18))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))] group-focus:stroke-[3px]" />
-      <text x={0} y={14} textAnchor="middle" fontSize={event.type === "exercise" ? 11 : 13} fill={color} aria-hidden="true">{chartEventSymbol(event.type)}</text>
+      {event.type === "meal" ? (
+        <Apple x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
+      ) : (
+        <text x={0} y={14} textAnchor="middle" fontSize={event.type === "exercise" ? 11 : 13} fill={color} aria-hidden="true">{chartEventSymbol(event.type)}</text>
+      )}
       {tooltipOpen ? (
         <foreignObject x={tooltipX} y={28} width={150} height={58} overflow="visible" pointerEvents="none" aria-hidden="true">
           <div className="rounded-lg border border-border/60 bg-card/95 px-2.5 py-2 text-left shadow-lg backdrop-blur-md">
