@@ -2,6 +2,12 @@
 
 Aplicación web (Next.js) para visualizar y gestionar datos de glucosa sincronizados desde LibreLinkUp hacia Supabase.
 
+Los clientes nativos e integraciones se mantienen en repositorios independientes:
+
+- `glucobadge-macos`
+- `glucodata-chrome-extension`
+- `glucodata-alexa-skill`
+
 ## Stack
 
 - Next.js 16
