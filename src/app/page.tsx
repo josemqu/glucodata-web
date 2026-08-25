@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -29,7 +29,6 @@ import {
   Plus,
   Trash2,
   Save,
-  Apple,
   Utensils,
   Dumbbell,
   BookOpenText,
@@ -88,9 +87,6 @@ import {
 } from "@/lib/chart-tooltip";
 
 function chartEventSymbol(type: GlucoEvent["type"]) {
-  if (type === "insulin") return "💉";
-  if (type === "exercise") return "●";
-  if (type === "note") return "✎";
   if (type === "medication") return "✚";
   if (type === "sleep") return "☾";
   if (type === "health") return "♥";
@@ -157,7 +153,7 @@ function localDayBounds(value: string) {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONITOR_CACHE_DAYS = 7;
 
-type MonitorDayStatus = "loading" | "ready" | "empty" | "error";
+type MonitorDayStatus = "partial" | "loading" | "ready" | "empty" | "error";
 
 type MonitorGlucosePoint = {
   value: number;
@@ -200,15 +196,25 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
   tooltipOpen: boolean;
   onTooltipVisibilityChange: (open: boolean) => void;
 }) {
+  const markerRef = useRef<SVGGElement>(null);
   const x = viewBox?.x ?? 0;
-  const y = 6;
+  const y = 12;
   const color = chartEventColor(event.type);
   const tooltipX = x < 86 ? 16 : x > 300 ? -166 : -75;
   const eventTime = new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const hasDuration = Boolean(event.ended_at && new Date(event.ended_at).getTime() > new Date(event.occurred_at).getTime());
   const measurement = chartEventMeasurement(event);
   const activate = () => onSelect(event);
+
+  useLayoutEffect(() => {
+    if (!tooltipOpen) return;
+    const referenceLineLayer = markerRef.current?.closest<SVGGElement>(".recharts-reference-line");
+    referenceLineLayer?.parentElement?.append(referenceLineLayer);
+  }, [tooltipOpen]);
+
   return (
     <g
+      ref={markerRef}
       role="button"
       tabIndex={0}
       aria-label={chartEventLabel(event)}
@@ -226,13 +232,19 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
         }
       }}
     >
-      <rect x={-22} y={-4} width={44} height={44} fill="transparent" />
-      <line x1={0} y1={22} x2={0} y2={36} stroke={color} strokeWidth={1} strokeDasharray="3 3" aria-hidden="true" />
-      <circle cx={0} cy={10} r={12} fill="var(--card)" stroke={color} strokeWidth={2} className="transition-[stroke-width,filter] group-hover:[filter:drop-shadow(0_2px_4px_rgb(0_0_0_/_0.18))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))] group-focus:stroke-[3px]" />
+      <rect x={-22} y={-4} width={44} height={44} fill="transparent" pointerEvents="none" />
+      {!hasDuration ? <line x1={0} y1={22} x2={0} y2={36} stroke={color} strokeWidth={tooltipOpen ? 2 : 1} strokeDasharray="3 3" className="transition-[stroke-width]" aria-hidden="true" /> : null}
+      <circle cx={0} cy={10} r={tooltipOpen ? 14 : 12} fill="var(--card)" stroke={color} strokeWidth={tooltipOpen ? 3 : 2} className="transition-[r,stroke-width,filter] group-hover:[filter:drop-shadow(0_3px_5px_rgb(0_0_0_/_0.24))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))]" />
       {event.type === "meal" ? (
-        <Apple x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
+        <Utensils x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
+      ) : event.type === "insulin" ? (
+        <Syringe x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
+      ) : event.type === "exercise" ? (
+        <Dumbbell x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
+      ) : event.type === "note" ? (
+        <BookOpenText x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
       ) : (
-        <text x={0} y={14} textAnchor="middle" fontSize={event.type === "exercise" ? 11 : 13} fill={color} aria-hidden="true">{chartEventSymbol(event.type)}</text>
+        <text x={0} y={14} textAnchor="middle" fontSize={13} fill={color} aria-hidden="true">{chartEventSymbol(event.type)}</text>
       )}
       {tooltipOpen ? (
         <foreignObject x={tooltipX} y={28} width={150} height={58} overflow="visible" pointerEvents="none" aria-hidden="true">
@@ -706,7 +718,7 @@ export default function GlucoPage() {
       return points;
     }).catch((requestError) => {
       const message = requestError instanceof Error ? requestError.message : "No se pudo cargar este día.";
-      monitorDayCacheRef.current.set(value, { status: "error", points: [], error: message, lastAccessedAt: Date.now() });
+      monitorDayCacheRef.current.set(value, { status: "error", points: cached?.points ?? [], error: message, lastAccessedAt: Date.now() });
       setMonitorCacheVersion((version) => version + 1);
       throw requestError;
     }).finally(() => {
@@ -1152,8 +1164,8 @@ export default function GlucoPage() {
     });
     grouped.forEach((points, key) => {
       const existing = monitorDayCacheRef.current.get(key);
-      if (!existing || key === localDateKey()) {
-        monitorDayCacheRef.current.set(key, { status: "ready", points, lastAccessedAt: Date.now() });
+      if (!existing || existing.status === "partial") {
+        monitorDayCacheRef.current.set(key, { status: "partial", points, lastAccessedAt: Date.now() });
       }
     });
   }, [graphPoints]);
@@ -1261,7 +1273,7 @@ export default function GlucoPage() {
     const keys = new Set([dateKeyFromTime(windowStart), dateKeyFromTime(Math.max(windowStart, windowEnd - 1))]);
     return [...keys].map((key) => monitorDayCacheRef.current.get(key)?.status ?? "loading");
   }, [windowStart, windowEnd, monitorCacheVersion]);
-  const monitorWindowLoading = visibleDayStates.includes("loading");
+  const monitorWindowLoading = visibleDayStates.some((status) => status === "loading" || status === "partial");
   const monitorWindowEmpty = !monitorWindowLoading && filteredGraphWithValues.length === 0 && visibleDayStates.every((status) => status === "empty");
   const monitorWindowHasError = visibleDayStates.includes("error");
   const canMoveForward = windowEnd < Date.now() - 60_000;
@@ -2141,14 +2153,29 @@ export default function GlucoPage() {
                   </div>
 
                   {/* Chart Card */}
-                  <Card className="shadow-sm border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20">
-                    <CardHeader className="grid-cols-[minmax(0,1fr)_auto] border-b bg-muted/10 px-3 py-2.5 sm:px-4 sm:py-2">
-                      <CardTitle className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
+                  <Card className="gap-0 shadow-sm border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20">
+                    <CardHeader className="grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-muted/10 px-3 py-2.5 pb-2.5! sm:px-4 sm:py-2 sm:pb-2!">
+                      <CardTitle className="flex h-8 items-center text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
                         Historial Analítico
                       </CardTitle>
-                      <span className="col-start-2 row-start-1 whitespace-nowrap text-[9px] font-semibold tabular-nums text-muted-foreground" aria-label={`Escala del gráfico hasta ${yMax} miligramos por decilitro`}>
-                        Escala {yMax} mg/dL
-                      </span>
+                      <div className="col-start-2 row-start-1 flex h-8 items-center justify-end gap-1.5">
+                        {canMoveForward ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1 rounded-md px-2 text-[10px] font-bold text-primary hover:text-primary"
+                            onClick={returnMonitorToNow}
+                            aria-label="Volver a las lecturas actuales"
+                          >
+                            <LocateFixed className="h-3.5 w-3.5" />
+                            <span className="hidden min-[360px]:inline">Ahora</span>
+                          </Button>
+                        ) : null}
+                        <span className="inline-flex h-8 items-center whitespace-nowrap text-[9px] font-semibold tabular-nums text-muted-foreground" aria-label={`Escala del gráfico hasta ${yMax} miligramos por decilitro`}>
+                          Escala {yMax} mg/dL
+                        </span>
+                      </div>
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
                       <div
@@ -2331,32 +2358,34 @@ export default function GlucoPage() {
                                     />
                                   ))}
                                   {visibleEvents.flatMap((event) => {
-                                    const occurredAt = new Date(event.occurred_at).getTime();
-                                    const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : null;
-                                    const eventColor = chartEventColor(event.type);
-                                    return [
-                                      event.type === "exercise" && endedAt ? (
-                                        <ReferenceArea
-                                          key={`${event.id}-area`}
-                                          x1={occurredAt}
-                                          x2={endedAt}
-                                          fill={eventColor}
-                                          fillOpacity={0.08}
-                                          stroke={eventColor}
-                                          strokeOpacity={0.35}
+                                      const occurredAt = new Date(event.occurred_at).getTime();
+                                      const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : null;
+                                      const hasDuration = endedAt !== null && endedAt > occurredAt;
+                                      const markerAt = hasDuration ? occurredAt + (endedAt - occurredAt) / 2 : occurredAt;
+                                      const eventColor = chartEventColor(event.type);
+                                      return [
+                                        hasDuration ? (
+                                          <ReferenceArea
+                                            key={`${event.id}-area`}
+                                            x1={occurredAt}
+                                            x2={endedAt}
+                                            fill={eventColor}
+                                            fillOpacity={0.08}
+                                            stroke={eventColor}
+                                            strokeOpacity={0.35}
+                                            ifOverflow="hidden"
+                                          />
+                                        ) : null,
+                                        <ReferenceLine
+                                          key={`${event.id}-marker`}
+                                          x={markerAt}
+                                          stroke={hasDuration ? "transparent" : eventColor}
+                                          strokeWidth={1}
+                                          strokeDasharray={hasDuration ? undefined : "3 3"}
                                           ifOverflow="hidden"
+                                          label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} tooltipOpen={hoveredChartEventId === event.id} onTooltipVisibilityChange={(open) => setHoveredChartEventId(open ? event.id : null)} />}
                                         />
-                                      ) : null,
-                                      <ReferenceLine
-                                        key={`${event.id}-marker`}
-                                        x={occurredAt}
-                                        stroke={eventColor}
-                                        strokeWidth={1}
-                                        strokeDasharray="3 3"
-                                        ifOverflow="hidden"
-                                        label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} tooltipOpen={hoveredChartEventId === event.id} onTooltipVisibilityChange={(open) => setHoveredChartEventId(open ? event.id : null)} />}
-                                      />
-                                    ];
+                                      ];
                                   })}
                                   <XAxis
                                     dataKey="time"
@@ -2595,19 +2624,6 @@ export default function GlucoPage() {
                         <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-card/85 px-2 py-1 text-[10px] font-bold capitalize text-foreground/80 shadow-sm backdrop-blur-sm">
                           {currentMonitorWindowLabel}
                         </div>
-                        {canMoveForward ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="absolute right-2 top-2 h-8 gap-1.5 rounded-lg px-2.5 text-[10px] font-bold shadow-sm"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={returnMonitorToNow}
-                          >
-                            <LocateFixed className="h-3.5 w-3.5" />
-                            Ahora
-                          </Button>
-                        ) : null}
                         {monitorWindowLoading ? (
                           <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center bg-gradient-to-r from-card/70 to-transparent" aria-label="Cargando lecturas anteriores">
                             <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />

@@ -27,6 +27,8 @@ type MonitorDayResult = {
 const analysisCache = new Map<string, { data: any, timestamp: number }>();
 const monitorDayCache = new Map<string, { data: MonitorDayResult, timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const MONITOR_DAY_PAGE_SIZE = 500;
+const MONITOR_DAY_MAX_ROWS = 5000;
 
 export async function getLatestGlucoseAction(
   email?: string,
@@ -371,17 +373,33 @@ export async function getMonitorGlucoseDayAction(
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: rows, error } = await supabase
-      .from("glucose_measurements")
-      .select("timestamp,value,trend,is_high,is_low,unit")
-      .eq("patient_id", patientId)
-      .gte("timestamp", start.toISOString())
-      .lt("timestamp", end.toISOString())
-      .order("timestamp", { ascending: true })
-      .limit(400);
+    const rows: Array<{
+      timestamp: string;
+      value: number | string;
+      trend: number | string | null;
+      is_high: boolean | null;
+      is_low: boolean | null;
+      unit: string | null;
+    }> = [];
+    for (let offset = 0; offset < MONITOR_DAY_MAX_ROWS; offset += MONITOR_DAY_PAGE_SIZE) {
+      const { data: page, error } = await supabase
+        .from("glucose_measurements")
+        .select("timestamp,value,trend,is_high,is_low,unit")
+        .eq("patient_id", patientId)
+        .gte("timestamp", start.toISOString())
+        .lt("timestamp", end.toISOString())
+        .order("timestamp", { ascending: true })
+        .range(offset, offset + MONITOR_DAY_PAGE_SIZE - 1);
 
-    if (error) throw error;
-    const graph = (rows ?? []).map((row) => ({
+      if (error) throw error;
+      rows.push(...(page ?? []));
+      if (!page || page.length < MONITOR_DAY_PAGE_SIZE) break;
+      if (rows.length >= MONITOR_DAY_MAX_ROWS) {
+        throw new Error("El día contiene más lecturas de las que se pueden cargar de forma segura.");
+      }
+    }
+
+    const graph = rows.map((row) => ({
       value: Number(row.value),
       trend: row.trend as number | string | null,
       time: new Date(row.timestamp).getTime(),
