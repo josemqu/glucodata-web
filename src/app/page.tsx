@@ -373,6 +373,7 @@ export default function GlucoPage() {
   const [monitorDateError, setMonitorDateError] = useState<string | null>(null);
   const [monitorCacheVersion, setMonitorCacheVersion] = useState(0);
   const [isChartDragging, setIsChartDragging] = useState(false);
+  const [isChartPanning, setIsChartPanning] = useState(false);
   const [chartContextMenu, setChartContextMenu] = useState<ChartContextMenuState | null>(null);
   const [insulins, setInsulins] = useState<PatientInsulin[]>(DEFAULT_PATIENT_INSULINS);
   const [insulinsLoading, setInsulinsLoading] = useState(false);
@@ -976,6 +977,8 @@ export default function GlucoPage() {
   const chartWindowEndRef = useRef(windowEnd);
   const rangeAnimationFrameRef = useRef<number | null>(null);
   const [isRangeTransitioning, setIsRangeTransitioning] = useState(false);
+  const displayedChartWindowStart = isChartPanning ? windowStart : chartWindowStart;
+  const displayedChartWindowEnd = isChartPanning ? windowEnd : chartWindowEnd;
   const chartDataStart = Math.min(chartWindowStart, windowStart);
   const chartDataEnd = Math.max(chartWindowEnd, windowEnd);
 
@@ -990,7 +993,7 @@ export default function GlucoPage() {
     const to = windowStart;
     const toEnd = windowEnd;
 
-    if (reduceMotion || isChartDragging || (Math.abs(from - to) < 1 && Math.abs(fromEnd - toEnd) < 1)) {
+    if (reduceMotion || isChartPanning || (Math.abs(from - to) < 1 && Math.abs(fromEnd - toEnd) < 1)) {
       chartWindowStartRef.current = to;
       chartWindowEndRef.current = toEnd;
       setChartWindowStart(to);
@@ -1030,7 +1033,7 @@ export default function GlucoPage() {
         rangeAnimationFrameRef.current = null;
       }
     };
-  }, [windowStart, windowEnd, reduceMotion, isChartDragging]);
+  }, [windowStart, windowEnd, reduceMotion, isChartPanning]);
 
   const xTicks = useMemo(() => {
     const stepMs = 10 * 60 * 1000;
@@ -1229,6 +1232,7 @@ export default function GlucoPage() {
     };
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsChartDragging(true);
+    setIsChartPanning(true);
   };
 
   const handleChartPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1251,7 +1255,10 @@ export default function GlucoPage() {
     chartPanRef.current = null;
     setIsChartDragging(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    if (reduceMotion || Math.abs(velocity) < 0.08 || width <= 0) return;
+    if (reduceMotion || Math.abs(velocity) < 0.08 || width <= 0) {
+      setIsChartPanning(false);
+      return;
+    }
 
     let previous = performance.now();
     const animateInertia = (now: number) => {
@@ -1263,6 +1270,7 @@ export default function GlucoPage() {
         chartInertiaFrameRef.current = requestAnimationFrame(animateInertia);
       } else {
         chartInertiaFrameRef.current = null;
+        setIsChartPanning(false);
       }
     };
     chartInertiaFrameRef.current = requestAnimationFrame(animateInertia);
@@ -2390,7 +2398,7 @@ export default function GlucoPage() {
                                   <XAxis
                                     dataKey="time"
                                     type="number"
-                                    domain={[chartWindowStart, chartWindowEnd]}
+                                    domain={[displayedChartWindowStart, displayedChartWindowEnd]}
                                     allowDataOverflow={true}
                                     ticks={xTicks}
                                     interval={0}
@@ -2582,6 +2590,7 @@ export default function GlucoPage() {
                                       isAnimationActive={
                                         enableAnimation &&
                                         !isRangeTransitioning &&
+                                        !isChartPanning &&
                                         !reduceMotion
                                       }
                                       connectNulls={true}
@@ -2606,6 +2615,7 @@ export default function GlucoPage() {
                                       isAnimationActive={
                                         enableAnimation &&
                                         !isRangeTransitioning &&
+                                        !isChartPanning &&
                                         !reduceMotion
                                       }
                                       animationDuration={
@@ -2639,10 +2649,10 @@ export default function GlucoPage() {
                         ) : null}
                         <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between text-[10px] font-bold tabular-nums text-foreground/70">
                           <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
-                            {new Date(chartWindowStart).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            {new Date(displayedChartWindowStart).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
                           <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
-                            {new Date(chartWindowEnd).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            {new Date(displayedChartWindowEnd).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                         {chartContextMenu ? (
