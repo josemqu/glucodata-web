@@ -10,7 +10,22 @@ const LIBRE_EMAIL = process.env.LIBRE_EMAIL || "";
 const LIBRE_PASSWORD = process.env.LIBRE_PASSWORD || "";
 
 // Simple in-memory cache for analysis results
+type MonitorDayResult = {
+  graph: Array<{
+    value: number;
+    trend: number | string | null;
+    time: number;
+    isHigh: boolean | null;
+    isLow: boolean | null;
+    unit: string | null;
+  }>;
+  from: string;
+  to: string;
+  hasData: boolean;
+};
+
 const analysisCache = new Map<string, { data: any, timestamp: number }>();
+const monitorDayCache = new Map<string, { data: MonitorDayResult, timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 export async function getLatestGlucoseAction(
@@ -311,5 +326,82 @@ export async function getHistoricalGlucoseAction(
     };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+export async function getMonitorGlucoseDayAction(
+  startIso: string,
+  endIso: string,
+  email?: string,
+  password?: string,
+  sessionData?: { token: string; userId: string; region: string },
+) {
+  try {
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    const duration = end.getTime() - start.getTime();
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || duration < 20 * 60 * 60 * 1000 || duration > 28 * 60 * 60 * 1000) {
+      return { success: false, error: "El rango diario no es válido." };
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    if (!supabaseUrl || !serviceRoleKey) {
+      return { success: false, error: "Falta la configuración de datos históricos." };
+    }
+
+    const client = new LibreLinkUpClient(
+      email || LIBRE_EMAIL,
+      password || LIBRE_PASSWORD,
+      sessionData?.region,
+      sessionData?.token,
+      sessionData?.userId,
+    );
+    if (!sessionData?.token) await client.login();
+    const connections = await client.getConnections();
+    if (connections.length === 0) return { success: false, error: "No hay pacientes conectados." };
+
+    const patientId = connections[0].patientId;
+    const cacheKey = `${patientId}:${start.toISOString()}:${end.toISOString()}`;
+    const cached = monitorDayCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return { success: true, data: cached.data };
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: rows, error } = await supabase
+      .from("glucose_measurements")
+      .select("timestamp,value,trend,is_high,is_low,unit")
+      .eq("patient_id", patientId)
+      .gte("timestamp", start.toISOString())
+      .lt("timestamp", end.toISOString())
+      .order("timestamp", { ascending: true })
+      .limit(400);
+
+    if (error) throw error;
+    const graph = (rows ?? []).map((row) => ({
+      value: Number(row.value),
+      trend: row.trend as number | string | null,
+      time: new Date(row.timestamp).getTime(),
+      isHigh: row.is_high as boolean | null,
+      isLow: row.is_low as boolean | null,
+      unit: row.unit as string | null,
+    }));
+    const resultData = {
+      graph,
+      from: start.toISOString(),
+      to: end.toISOString(),
+      hasData: graph.length > 0,
+    };
+    monitorDayCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+
+    return {
+      success: true,
+      data: resultData,
+    };
+  } catch (error: unknown) {
+    return { success: false, error: error instanceof Error ? error.message : "No se pudo cargar el día seleccionado." };
   }
 }

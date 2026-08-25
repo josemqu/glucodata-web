@@ -33,6 +33,9 @@ import {
   Utensils,
   Dumbbell,
   BookOpenText,
+  ChevronLeft,
+  ChevronRight,
+  LocateFixed,
 } from "lucide-react";
 import {
   Card,
@@ -46,7 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getLatestGlucoseAction } from "./actions";
+import { getLatestGlucoseAction, getMonitorGlucoseDayAction } from "./actions";
 import Cookies from "js-cookie";
 import { supabase } from "@/lib/supabase";
 import {
@@ -66,6 +69,7 @@ import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 import { getHistoricalGlucoseAction } from "./actions";
 import { AnalysisView } from "@/components/analysis-view";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
+import { MonitorDatePicker } from "@/components/monitor-date-picker";
 import type { GlucoEvent } from "@/lib/events";
 import type { EventType } from "@/lib/events";
 import {
@@ -134,6 +138,59 @@ function chartEventMeasurement(event: GlucoEvent) {
     return `${event.metadata.carbs_g} g CH`;
   }
   return null;
+}
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localDayBounds(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const start = new Date(year, month - 1, day);
+  const end = new Date(year, month - 1, day + 1);
+  return { start, end };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MONITOR_CACHE_DAYS = 7;
+
+type MonitorDayStatus = "loading" | "ready" | "empty" | "error";
+
+type MonitorGlucosePoint = {
+  value: number;
+  trend?: number | string | null;
+  time: number;
+  isHigh?: boolean | null;
+  isLow?: boolean | null;
+  unit?: string | null;
+};
+
+type MonitorDayCacheEntry = {
+  status: MonitorDayStatus;
+  points: MonitorGlucosePoint[];
+  lastAccessedAt: number;
+  error?: string;
+};
+
+function dateKeyFromTime(time: number) {
+  return localDateKey(new Date(time));
+}
+
+function monitorWindowLabel(start: number, end: number) {
+  if (end >= Date.now() - 2 * 60_000) return "Ahora";
+  const today = localDateKey();
+  const startKey = dateKeyFromTime(start);
+  const endKey = dateKeyFromTime(Math.max(start, end - 1));
+  if (startKey === today && endKey === today) return "Hoy";
+  const yesterday = localDateKey(new Date(Date.now() - DAY_MS));
+  if (startKey === yesterday && endKey === yesterday) return "Ayer";
+  if (startKey === endKey) {
+    return new Date(start).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
+  }
+  return `${new Date(start).toLocaleDateString("es-AR", { day: "numeric", month: "short" })} – ${new Date(end).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}`;
 }
 
 function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisibilityChange }: {
@@ -299,20 +356,30 @@ export default function GlucoPage() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [hoveredChartEventId, setHoveredChartEventId] = useState<string | null>(null);
+  const [monitorDate, setMonitorDate] = useState(() => localDateKey());
+  const [monitorDateLoading, setMonitorDateLoading] = useState(false);
+  const [monitorDateError, setMonitorDateError] = useState<string | null>(null);
+  const [monitorCacheVersion, setMonitorCacheVersion] = useState(0);
+  const [isChartDragging, setIsChartDragging] = useState(false);
   const [chartContextMenu, setChartContextMenu] = useState<ChartContextMenuState | null>(null);
   const [insulins, setInsulins] = useState<PatientInsulin[]>(DEFAULT_PATIENT_INSULINS);
   const [insulinsLoading, setInsulinsLoading] = useState(false);
   const [insulinsSaving, setInsulinsSaving] = useState(false);
   const [insulinsMessage, setInsulinsMessage] = useState<string | null>(null);
   const eventCenterRef = useRef<EventCenterHandle>(null);
+  const monitorDayCacheRef = useRef(new Map<string, MonitorDayCacheEntry>());
+  const monitorDayRequestsRef = useRef(new Map<string, Promise<MonitorGlucosePoint[]>>());
+  const chartPanRef = useRef<{ pointerId: number; startX: number; startEnd: number; lastX: number; lastAt: number; velocityPxMs: number } | null>(null);
+  const chartInertiaFrameRef = useRef<number | null>(null);
+  const isMonitorToday = monitorDate === localDateKey();
 
   const openChartContextMenu = useCallback((clientX: number, clientY: number, chartRect: DOMRect) => {
     const ratio = Math.max(0, Math.min(1, (clientX - chartRect.left) / chartRect.width));
-    const occurredAtMs = chartWindowStartRef.current + ratio * (windowEndMs - chartWindowStartRef.current);
+    const occurredAtMs = chartWindowStartRef.current + ratio * (chartWindowEndRef.current - chartWindowStartRef.current);
     const roundedToMinute = Math.round(occurredAtMs / 60_000) * 60_000;
     setHoveredChartEventId(null);
     setChartContextMenu({ x: clientX, y: clientY, occurredAt: new Date(roundedToMinute) });
-  }, [windowEndMs]);
+  }, []);
 
   const [session, setSession] = useState<any>(null);
 
@@ -593,6 +660,82 @@ export default function GlucoPage() {
     }
   };
 
+  const loadMonitorDay = useCallback((value: string) => {
+    const cached = monitorDayCacheRef.current.get(value);
+    if (cached?.status === "ready" || cached?.status === "empty") {
+      cached.lastAccessedAt = Date.now();
+      return Promise.resolve(cached.points);
+    }
+
+    const pending = monitorDayRequestsRef.current.get(value);
+    if (pending) return pending;
+
+    monitorDayCacheRef.current.set(value, { status: "loading", points: cached?.points ?? [], lastAccessedAt: Date.now() });
+    setMonitorCacheVersion((version) => version + 1);
+    const { start, end } = localDayBounds(value);
+    const request = getMonitorGlucoseDayAction(
+      start.toISOString(),
+      end.toISOString(),
+      credentialsRef.current.email,
+      credentialsRef.current.password,
+      sessionRef.current,
+    ).then((result) => {
+      if (!result.success) throw new Error(result.error);
+      const points = result.data?.graph ?? [];
+      monitorDayCacheRef.current.set(value, {
+        status: points.length > 0 ? "ready" : "empty",
+        points,
+        lastAccessedAt: Date.now(),
+      });
+      setGraphPoints((current) => {
+        const merged = [...current, ...points]
+          .filter((point) => typeof point?.time === "number" && !Number.isNaN(point.time))
+          .sort((first, second) => first.time - second.time)
+          .filter((point, index, all) => index === 0 || point.time !== all[index - 1].time);
+        return merged.length > 5000 ? merged.slice(-5000) : merged;
+      });
+
+      const removable = [...monitorDayCacheRef.current.entries()]
+        .filter(([key, entry]) => key !== localDateKey() && entry.status !== "loading")
+        .sort((first, second) => first[1].lastAccessedAt - second[1].lastAccessedAt);
+      while (monitorDayCacheRef.current.size > MONITOR_CACHE_DAYS && removable.length > 0) {
+        const oldest = removable.shift();
+        if (oldest) monitorDayCacheRef.current.delete(oldest[0]);
+      }
+      setMonitorCacheVersion((version) => version + 1);
+      return points;
+    }).catch((requestError) => {
+      const message = requestError instanceof Error ? requestError.message : "No se pudo cargar este día.";
+      monitorDayCacheRef.current.set(value, { status: "error", points: [], error: message, lastAccessedAt: Date.now() });
+      setMonitorCacheVersion((version) => version + 1);
+      throw requestError;
+    }).finally(() => {
+      monitorDayRequestsRef.current.delete(value);
+    });
+
+    monitorDayRequestsRef.current.set(value, request);
+    return request;
+  }, []);
+
+  const selectMonitorDate = async (value: string) => {
+    setMonitorDate(value);
+    setMonitorDateLoading(true);
+    setMonitorDateError(null);
+    setHoveredChartEventId(null);
+    const { end } = localDayBounds(value);
+    const nextEnd = value === localDateKey() ? Date.now() : end.getTime();
+    setWindowEndMs(nextEnd);
+
+    try {
+      await loadMonitorDay(value);
+      if (value === localDateKey()) await fetchData();
+    } catch (requestError) {
+      setMonitorDateError(requestError instanceof Error ? requestError.message : "No se pudo cargar el día seleccionado.");
+    } finally {
+      setMonitorDateLoading(false);
+    }
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setGraphPoints([]);
@@ -661,7 +804,7 @@ export default function GlucoPage() {
       });
     };
 
-    if (isLoggedIn && activeView === "dashboard") {
+    if (isLoggedIn && activeView === "dashboard" && isMonitorToday) {
       nextRefreshAtRef.current = Date.now() + 60000;
       setSecondsUntilRefresh(60);
 
@@ -709,7 +852,7 @@ export default function GlucoPage() {
     return () => {
       if (tick) clearInterval(tick);
     };
-  }, [isLoggedIn, activeView]);
+  }, [isLoggedIn, activeView, isMonitorToday]);
 
   const getTrendIcon = (trend: TrendState, val: number) => {
     const className = "w-6 h-6 transition-all duration-300";
@@ -816,10 +959,13 @@ export default function GlucoPage() {
   const windowEnd = windowEndMs;
   const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
   const [chartWindowStart, setChartWindowStart] = useState(windowStart);
+  const [chartWindowEnd, setChartWindowEnd] = useState(windowEnd);
   const chartWindowStartRef = useRef(windowStart);
+  const chartWindowEndRef = useRef(windowEnd);
   const rangeAnimationFrameRef = useRef<number | null>(null);
   const [isRangeTransitioning, setIsRangeTransitioning] = useState(false);
   const chartDataStart = Math.min(chartWindowStart, windowStart);
+  const chartDataEnd = Math.max(chartWindowEnd, windowEnd);
 
   useEffect(() => {
     if (rangeAnimationFrameRef.current !== null) {
@@ -828,11 +974,15 @@ export default function GlucoPage() {
     }
 
     const from = chartWindowStartRef.current;
+    const fromEnd = chartWindowEndRef.current;
     const to = windowStart;
+    const toEnd = windowEnd;
 
-    if (reduceMotion || Math.abs(from - to) < 1) {
+    if (reduceMotion || isChartDragging || (Math.abs(from - to) < 1 && Math.abs(fromEnd - toEnd) < 1)) {
       chartWindowStartRef.current = to;
+      chartWindowEndRef.current = toEnd;
       setChartWindowStart(to);
+      setChartWindowEnd(toEnd);
       setIsRangeTransitioning(false);
       return;
     }
@@ -845,9 +995,12 @@ export default function GlucoPage() {
       const progress = Math.min(1, (now - startedAt) / duration);
       const eased = 1 - Math.pow(1 - progress, 4);
       const nextStart = from + (to - from) * eased;
+      const nextEnd = fromEnd + (toEnd - fromEnd) * eased;
 
       chartWindowStartRef.current = nextStart;
+      chartWindowEndRef.current = nextEnd;
       setChartWindowStart(nextStart);
+      setChartWindowEnd(nextEnd);
 
       if (progress < 1) {
         rangeAnimationFrameRef.current = requestAnimationFrame(animateRange);
@@ -865,7 +1018,7 @@ export default function GlucoPage() {
         rangeAnimationFrameRef.current = null;
       }
     };
-  }, [windowStart, reduceMotion]);
+  }, [windowStart, windowEnd, reduceMotion, isChartDragging]);
 
   const xTicks = useMemo(() => {
     const stepMs = 10 * 60 * 1000;
@@ -913,7 +1066,7 @@ export default function GlucoPage() {
   const chartGraph = useMemo(() => {
     const cleaned = graphPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
-      .filter((p: any) => p.time >= chartDataStart && p.time <= windowEnd)
+      .filter((p: any) => p.time >= chartDataStart && p.time <= chartDataEnd)
       .sort((a: any, b: any) => a.time - b.time)
       .filter(
         (p: any, idx: number, arr: any[]) =>
@@ -925,7 +1078,7 @@ export default function GlucoPage() {
       return [
         ...cleaned,
         { time: chartDataStart, value: null },
-        { time: windowEnd, value: null },
+        { time: chartDataEnd, value: null },
       ];
     }
 
@@ -935,7 +1088,7 @@ export default function GlucoPage() {
       return [
         ...cleaned.slice(-maxPoints),
         { time: chartDataStart, value: null },
-        { time: windowEnd, value: null },
+        { time: chartDataEnd, value: null },
       ];
     }
 
@@ -985,9 +1138,134 @@ export default function GlucoPage() {
     return [
       ...unique,
       { time: chartDataStart, value: null },
-      { time: windowEnd, value: null },
+      { time: chartDataEnd, value: null },
     ];
-  }, [graphPoints, chartDataStart, windowEnd]);
+  }, [graphPoints, chartDataStart, chartDataEnd]);
+
+  useEffect(() => {
+    if (graphPoints.length === 0) return;
+    const grouped = new Map<string, MonitorGlucosePoint[]>();
+    graphPoints.forEach((point) => {
+      if (typeof point?.time !== "number") return;
+      const key = dateKeyFromTime(point.time);
+      grouped.set(key, [...(grouped.get(key) ?? []), point]);
+    });
+    grouped.forEach((points, key) => {
+      const existing = monitorDayCacheRef.current.get(key);
+      if (!existing || key === localDateKey()) {
+        monitorDayCacheRef.current.set(key, { status: "ready", points, lastAccessedAt: Date.now() });
+      }
+    });
+  }, [graphPoints]);
+
+  useEffect(() => {
+    if (!isLoggedIn || activeView !== "dashboard") return;
+    const firstDay = new Date(windowStart);
+    firstDay.setHours(0, 0, 0, 0);
+    firstDay.setDate(firstDay.getDate() - 1);
+    const lastDay = new Date(windowEnd);
+    lastDay.setHours(0, 0, 0, 0);
+    const todayKey = localDateKey();
+    const keys: string[] = [];
+    for (const day = new Date(firstDay); day <= lastDay; day.setDate(day.getDate() + 1)) {
+      const key = localDateKey(day);
+      if (key <= todayKey) keys.push(key);
+    }
+    void Promise.allSettled(keys.map((key) => loadMonitorDay(key)));
+  }, [isLoggedIn, activeView, windowStart, windowEnd, loadMonitorDay]);
+
+  useEffect(() => {
+    const key = dateKeyFromTime(Math.min(Date.now(), Math.max(windowStart, windowEnd - 1)));
+    if (key !== monitorDate) setMonitorDate(key);
+  }, [windowStart, windowEnd, monitorDate]);
+
+  useEffect(() => () => {
+    if (chartInertiaFrameRef.current !== null) cancelAnimationFrame(chartInertiaFrameRef.current);
+  }, []);
+
+  const shiftMonitorDay = (direction: -1 | 1) => {
+    const next = new Date(windowEnd);
+    next.setDate(next.getDate() + direction);
+    setHoveredChartEventId(null);
+    setWindowEndMs(Math.min(Date.now(), next.getTime()));
+  };
+
+  const returnMonitorToNow = () => {
+    setHoveredChartEventId(null);
+    setWindowEndMs(Date.now());
+  };
+
+  const updateWindowFromPointer = (clientX: number, width: number) => {
+    const pan = chartPanRef.current;
+    if (!pan || width <= 0) return;
+    const rangeMs = timeRange * 60 * 60 * 1000;
+    const deltaX = clientX - pan.startX;
+    setWindowEndMs(Math.min(Date.now(), pan.startEnd - (deltaX / width) * rangeMs));
+  };
+
+  const handleChartPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || chartContextMenu) return;
+    if (chartInertiaFrameRef.current !== null) cancelAnimationFrame(chartInertiaFrameRef.current);
+    chartInertiaFrameRef.current = null;
+    chartPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startEnd: windowEnd,
+      lastX: event.clientX,
+      lastAt: performance.now(),
+      velocityPxMs: 0,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsChartDragging(true);
+  };
+
+  const handleChartPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = chartPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    const now = performance.now();
+    const elapsed = Math.max(1, now - pan.lastAt);
+    pan.velocityPxMs = (event.clientX - pan.lastX) / elapsed;
+    pan.lastX = event.clientX;
+    pan.lastAt = now;
+    updateWindowFromPointer(event.clientX, event.currentTarget.clientWidth);
+  };
+
+  const finishChartPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = chartPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    const width = event.currentTarget.clientWidth;
+    const rangeMs = timeRange * 60 * 60 * 1000;
+    let velocity = pan.velocityPxMs;
+    chartPanRef.current = null;
+    setIsChartDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (reduceMotion || Math.abs(velocity) < 0.08 || width <= 0) return;
+
+    let previous = performance.now();
+    const animateInertia = (now: number) => {
+      const elapsed = Math.min(32, now - previous);
+      previous = now;
+      setWindowEndMs((current) => Math.min(Date.now(), current - velocity * elapsed / width * rangeMs));
+      velocity *= Math.pow(0.92, elapsed / 16);
+      if (Math.abs(velocity) >= 0.02) {
+        chartInertiaFrameRef.current = requestAnimationFrame(animateInertia);
+      } else {
+        chartInertiaFrameRef.current = null;
+      }
+    };
+    chartInertiaFrameRef.current = requestAnimationFrame(animateInertia);
+  };
+
+  const visibleDayStates = useMemo(() => {
+    void monitorCacheVersion;
+    const keys = new Set([dateKeyFromTime(windowStart), dateKeyFromTime(Math.max(windowStart, windowEnd - 1))]);
+    return [...keys].map((key) => monitorDayCacheRef.current.get(key)?.status ?? "loading");
+  }, [windowStart, windowEnd, monitorCacheVersion]);
+  const monitorWindowLoading = visibleDayStates.includes("loading");
+  const monitorWindowEmpty = !monitorWindowLoading && filteredGraphWithValues.length === 0 && visibleDayStates.every((status) => status === "empty");
+  const monitorWindowHasError = visibleDayStates.includes("error");
+  const canMoveForward = windowEnd < Date.now() - 60_000;
+  const currentMonitorWindowLabel = monitorWindowLabel(windowStart, windowEnd);
 
   useEffect(() => {
     const saved = Cookies.get("gluco_chart_prefs");
@@ -1684,7 +1962,16 @@ export default function GlucoPage() {
                   <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Monitor</h2>
                   <p className="hidden text-[11px] text-muted-foreground sm:block">Lecturas y distribución del período</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex w-full shrink-0 items-center justify-between gap-1 sm:w-auto sm:justify-end">
+                  <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Navegación temporal del monitor">
+                    <Button type="button" variant="ghost" size="icon-sm" className="rounded-md" onClick={() => shiftMonitorDay(-1)} aria-label="Ver el día anterior">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <MonitorDatePicker value={monitorDate} onChange={(value) => void selectMonitorDate(value)} loading={monitorDateLoading} />
+                    <Button type="button" variant="ghost" size="icon-sm" className="rounded-md" onClick={() => shiftMonitorDay(1)} disabled={!canMoveForward} aria-label="Ver el día siguiente">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <div className="grid grid-cols-5 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana del monitor">
                     {[1, 3, 6, 12, 24].map((h) => (
                       <button
@@ -1722,6 +2009,10 @@ export default function GlucoPage() {
                   </Button>
                 </div>
               </div>
+
+              {monitorDateError ? (
+                <div role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{monitorDateError}</div>
+              ) : null}
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1">
                 {/* Left Column - Main View */}
@@ -1861,14 +2152,24 @@ export default function GlucoPage() {
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
                       <div
-                        className="glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[420px]"
+                        className={`glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[420px] ${isChartDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
                         tabIndex={0}
-                        aria-label="Historial de glucosa. Usá el menú contextual para registrar un evento en un momento del gráfico."
+                        aria-label={`Historial de glucosa, ${currentMonitorWindowLabel}. Arrastrá horizontalmente para recorrer el tiempo.`}
+                        style={{ touchAction: "pan-y" }}
+                        onPointerDown={handleChartPointerDown}
+                        onPointerMove={handleChartPointerMove}
+                        onPointerUp={finishChartPointer}
+                        onPointerCancel={finishChartPointer}
                         onContextMenu={(event) => {
                           event.preventDefault();
                           openChartContextMenu(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
                         }}
                         onKeyDown={(event) => {
+                          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                            event.preventDefault();
+                            shiftMonitorDay(event.key === "ArrowLeft" ? -1 : 1);
+                            return;
+                          }
                           if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
                           event.preventDefault();
                           const rect = event.currentTarget.getBoundingClientRect();
@@ -2060,7 +2361,7 @@ export default function GlucoPage() {
                                   <XAxis
                                     dataKey="time"
                                     type="number"
-                                    domain={[chartWindowStart, windowEnd]}
+                                    domain={[chartWindowStart, chartWindowEnd]}
                                     allowDataOverflow={true}
                                     ticks={xTicks}
                                     interval={0}
@@ -2291,12 +2592,41 @@ export default function GlucoPage() {
                             })()}
                           </ComposedChart>
                         </ResponsiveContainer>
+                        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-card/85 px-2 py-1 text-[10px] font-bold capitalize text-foreground/80 shadow-sm backdrop-blur-sm">
+                          {currentMonitorWindowLabel}
+                        </div>
+                        {canMoveForward ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="absolute right-2 top-2 h-8 gap-1.5 rounded-lg px-2.5 text-[10px] font-bold shadow-sm"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={returnMonitorToNow}
+                          >
+                            <LocateFixed className="h-3.5 w-3.5" />
+                            Ahora
+                          </Button>
+                        ) : null}
+                        {monitorWindowLoading ? (
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center bg-gradient-to-r from-card/70 to-transparent" aria-label="Cargando lecturas anteriores">
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                          </div>
+                        ) : null}
+                        {monitorWindowEmpty || monitorWindowHasError ? (
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center">
+                            <div className="rounded-xl bg-card/90 px-4 py-3 shadow-sm backdrop-blur-sm">
+                              <p className="text-xs font-bold">{monitorWindowHasError ? "No se pudo cargar este período" : "Sin lecturas en este período"}</p>
+                              <p className="mt-1 text-[10px] text-muted-foreground">{monitorWindowHasError ? "Elegí otra fecha o reintentá desde el calendario." : "Podés seguir recorriendo el historial."}</p>
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between text-[10px] font-bold tabular-nums text-foreground/70">
                           <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
-                            {new Date(chartWindowStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(chartWindowStart).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
                           <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">
-                            {new Date(windowEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(chartWindowEnd).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                         {chartContextMenu ? (
@@ -2344,22 +2674,22 @@ export default function GlucoPage() {
                             Sincronización
                           </span>
                           <span className="text-[10px] font-black tabular-nums font-numbers text-primary">
-                            {secondsUntilRefresh}s
+                            {isMonitorToday ? `${secondsUntilRefresh}s` : "Pausada"}
                           </span>
                         </div>
 
                         <Button
                           className="min-h-11 w-full text-[11px] font-bold uppercase tracking-wide shadow-sm transition-transform active:scale-95 sm:h-7 sm:min-h-0 sm:text-[8px] sm:tracking-[0.15em]"
-                          onClick={() => fetchData()}
-                          disabled={loading}
+                          onClick={() => isMonitorToday ? void fetchData() : void selectMonitorDate(localDateKey())}
+                          disabled={loading || monitorDateLoading}
                           variant="secondary"
                         >
                           <RefreshCw
                             className={`w-3.5 h-3.5 mr-2 ${
-                              loading ? "animate-spin" : ""
+                              loading || monitorDateLoading ? "animate-spin" : ""
                             }`}
                           />
-                          Sincronizar ahora
+                          {isMonitorToday ? "Sincronizar ahora" : "Volver a hoy"}
                         </Button>
                       </CardContent>
                     </Card>
