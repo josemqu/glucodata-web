@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUp,
@@ -24,6 +25,13 @@ import {
   Activity,
   Target,
   TrendingUp,
+  Syringe,
+  Plus,
+  Trash2,
+  Save,
+  Utensils,
+  Dumbbell,
+  BookOpenText,
 } from "lucide-react";
 import {
   Card,
@@ -58,6 +66,13 @@ import { getHistoricalGlucoseAction } from "./actions";
 import { AnalysisView } from "@/components/analysis-view";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import type { GlucoEvent } from "@/lib/events";
+import type { EventType } from "@/lib/events";
+import {
+  DEFAULT_PATIENT_INSULINS,
+  INSULIN_TYPES,
+  INSULIN_TYPE_LABELS,
+  type PatientInsulin,
+} from "@/lib/insulins";
 import {
   CHART_SERIES_ANIMATION_DURATION_MS,
   CHART_SERIES_ANIMATION_EASING,
@@ -72,18 +87,68 @@ function chartEventSymbol(type: GlucoEvent["type"]) {
   if (type === "insulin") return "💉";
   if (type === "exercise") return "●";
   if (type === "note") return "✎";
+  if (type === "medication") return "✚";
+  if (type === "sleep") return "☾";
+  if (type === "health") return "♥";
   return "◆";
 }
 
+function chartEventColor(type: GlucoEvent["type"]) {
+  return `var(--event-${type === "other" ? "other" : type})`;
+}
+
 function chartEventLabel(event: GlucoEvent) {
-  const type = event.type === "meal" ? "Comida" : event.type === "insulin" ? "Insulina" : event.type === "exercise" ? "Ejercicio" : event.type === "note" ? "Nota" : "Evento";
+  const labels: Record<GlucoEvent["type"], string> = {
+    meal: "Comida",
+    insulin: "Insulina",
+    exercise: "Ejercicio",
+    medication: "Medicación",
+    sleep: "Sueño",
+    health: "Salud",
+    note: "Nota",
+    other: "Evento",
+  };
+  const type = labels[event.type];
   const time = new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return `Abrir ${type.toLowerCase()}: ${event.title}, ${time}`;
 }
 
-function EventChartMarker({ viewBox, event, onSelect }: { viewBox?: { x?: number; y?: number }; event: GlucoEvent; onSelect: (event: GlucoEvent) => void }) {
+function chartEventTypeLabel(type: GlucoEvent["type"]) {
+  return ({
+    meal: "Comida",
+    insulin: "Insulina",
+    exercise: "Ejercicio",
+    medication: "Medicación",
+    sleep: "Sueño",
+    health: "Salud",
+    note: "Nota",
+    other: "Evento",
+  } satisfies Record<GlucoEvent["type"], string>)[type];
+}
+
+function chartEventMeasurement(event: GlucoEvent) {
+  if (event.type === "insulin" && typeof event.metadata.units === "number") {
+    return `${event.metadata.units} U`;
+  }
+  if (event.type === "meal" && typeof event.metadata.carbs_g === "number") {
+    return `${event.metadata.carbs_g} g CH`;
+  }
+  return null;
+}
+
+function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisibilityChange }: {
+  viewBox?: { x?: number; y?: number };
+  event: GlucoEvent;
+  onSelect: (event: GlucoEvent) => void;
+  tooltipOpen: boolean;
+  onTooltipVisibilityChange: (open: boolean) => void;
+}) {
   const x = viewBox?.x ?? 0;
   const y = 6;
+  const color = chartEventColor(event.type);
+  const tooltipX = x < 86 ? 16 : x > 300 ? -166 : -75;
+  const eventTime = new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const measurement = chartEventMeasurement(event);
   const activate = () => onSelect(event);
   return (
     <g
@@ -93,6 +158,10 @@ function EventChartMarker({ viewBox, event, onSelect }: { viewBox?: { x?: number
       className="group cursor-pointer outline-none"
       transform={`translate(${x}, ${y})`}
       onClick={activate}
+      onMouseEnter={() => onTooltipVisibilityChange(true)}
+      onMouseLeave={() => onTooltipVisibilityChange(false)}
+      onFocus={() => onTooltipVisibilityChange(true)}
+      onBlur={() => onTooltipVisibilityChange(false)}
       onKeyDown={(keyboardEvent) => {
         if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
           keyboardEvent.preventDefault();
@@ -100,12 +169,107 @@ function EventChartMarker({ viewBox, event, onSelect }: { viewBox?: { x?: number
         }
       }}
     >
-      <title>{chartEventLabel(event)}</title>
       <rect x={-22} y={-4} width={44} height={44} fill="transparent" />
-      <line x1={0} y1={22} x2={0} y2={36} stroke="var(--primary)" strokeWidth={1} strokeDasharray="3 3" aria-hidden="true" />
-      <circle cx={0} cy={10} r={12} fill="var(--card)" stroke="var(--primary)" strokeWidth={1.5} className="transition-[stroke-width,filter] group-hover:[filter:drop-shadow(0_2px_4px_rgb(0_0_0_/_0.18))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))] group-focus:stroke-[3px]" />
-      <text x={0} y={14} textAnchor="middle" fontSize={event.type === "exercise" ? 11 : 13} fill="var(--primary)" aria-hidden="true">{chartEventSymbol(event.type)}</text>
+      <line x1={0} y1={22} x2={0} y2={36} stroke={color} strokeWidth={1} strokeDasharray="3 3" aria-hidden="true" />
+      <circle cx={0} cy={10} r={12} fill="var(--card)" stroke={color} strokeWidth={2} className="transition-[stroke-width,filter] group-hover:[filter:drop-shadow(0_2px_4px_rgb(0_0_0_/_0.18))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))] group-focus:stroke-[3px]" />
+      <text x={0} y={14} textAnchor="middle" fontSize={event.type === "exercise" ? 11 : 13} fill={color} aria-hidden="true">{chartEventSymbol(event.type)}</text>
+      {tooltipOpen ? (
+        <foreignObject x={tooltipX} y={28} width={150} height={58} overflow="visible" pointerEvents="none" aria-hidden="true">
+          <div className="rounded-lg border border-border/60 bg-card/95 px-2.5 py-2 text-left shadow-lg backdrop-blur-md">
+            <p className="truncate text-[11px] font-bold leading-tight text-foreground">{event.title}</p>
+            <p className="mt-1 flex items-center justify-between gap-2 text-[9px] font-semibold text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-1 truncate">
+                <span>{chartEventTypeLabel(event.type)}</span>
+                {measurement ? <><span aria-hidden="true">·</span><strong className="font-numbers font-bold tabular-nums text-foreground/80">{measurement}</strong></> : null}
+              </span>
+              <span className="font-numbers tabular-nums">{eventTime}</span>
+            </p>
+          </div>
+        </foreignObject>
+      ) : null}
     </g>
+  );
+}
+
+type ChartContextMenuState = {
+  x: number;
+  y: number;
+  occurredAt: Date;
+};
+
+const chartContextChoices: Array<{ type: EventType; label: string; icon: typeof Utensils }> = [
+  { type: "meal", label: "Comida", icon: Utensils },
+  { type: "insulin", label: "Insulina", icon: Syringe },
+  { type: "exercise", label: "Ejercicio", icon: Dumbbell },
+  { type: "note", label: "Nota", icon: BookOpenText },
+];
+
+function ChartEventContextMenu({ menu, onClose, onSelect }: {
+  menu: ChartContextMenuState;
+  onClose: () => void;
+  onSelect: (type: EventType) => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const close = () => onClose();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [onClose]);
+
+  const menuWidth = 224;
+  const menuHeight = 246;
+  const left = Math.max(8, Math.min(menu.x, window.innerWidth - menuWidth - 8));
+  const top = Math.max(8, Math.min(menu.y, window.innerHeight - menuHeight - 8));
+  const dateLabel = menu.occurredAt.toLocaleDateString([], { day: "2-digit", month: "short" });
+  const timeLabel = menu.occurredAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label={`Registrar evento el ${dateLabel} a las ${timeLabel}`}
+      className="fixed z-[60] w-56 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl"
+      style={{ left, top }}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <div className="border-b bg-muted/30 px-3 py-2.5">
+        <p className="text-xs font-semibold">Registrar evento</p>
+        <time className="mt-0.5 block font-numbers text-[11px] tabular-nums text-muted-foreground">
+          {dateLabel} · {timeLabel}
+        </time>
+      </div>
+      <div className="p-1.5">
+        {chartContextChoices.map((choice) => {
+          const Icon = choice.icon;
+          return (
+            <button
+              key={choice.type}
+              type="button"
+              role="menuitem"
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
+              onClick={() => onSelect(choice.type)}
+            >
+              <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              {choice.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -130,7 +294,21 @@ export default function GlucoPage() {
   const [events, setEvents] = useState<GlucoEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [hoveredChartEventId, setHoveredChartEventId] = useState<string | null>(null);
+  const [chartContextMenu, setChartContextMenu] = useState<ChartContextMenuState | null>(null);
+  const [insulins, setInsulins] = useState<PatientInsulin[]>(DEFAULT_PATIENT_INSULINS);
+  const [insulinsLoading, setInsulinsLoading] = useState(false);
+  const [insulinsSaving, setInsulinsSaving] = useState(false);
+  const [insulinsMessage, setInsulinsMessage] = useState<string | null>(null);
   const eventCenterRef = useRef<EventCenterHandle>(null);
+
+  const openChartContextMenu = useCallback((clientX: number, clientY: number, chartRect: DOMRect) => {
+    const ratio = Math.max(0, Math.min(1, (clientX - chartRect.left) / chartRect.width));
+    const occurredAtMs = chartWindowStartRef.current + ratio * (windowEndMs - chartWindowStartRef.current);
+    const roundedToMinute = Math.round(occurredAtMs / 60_000) * 60_000;
+    setHoveredChartEventId(null);
+    setChartContextMenu({ x: clientX, y: clientY, occurredAt: new Date(roundedToMinute) });
+  }, [windowEndMs]);
 
   const [session, setSession] = useState<any>(null);
 
@@ -156,11 +334,53 @@ export default function GlucoPage() {
     }
   }, [session]);
 
+  const sessionHeaders = useCallback(() => ({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session?.token ?? ""}`,
+    "X-Libre-User-Id": session?.userId ?? "",
+    "X-Libre-Region": session?.region ?? "",
+  }), [session]);
+
+  const loadInsulins = useCallback(async () => {
+    if (!session?.token || !session?.userId) return;
+    setInsulinsLoading(true);
+    try {
+      const response = await fetch("/api/patient/insulins", { headers: sessionHeaders() });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "No se pudo cargar la configuración de insulina.");
+      if (result.data?.length) setInsulins(result.data);
+    } catch (requestError) {
+      setInsulinsMessage(requestError instanceof Error ? requestError.message : "No se pudo cargar la configuración de insulina.");
+    } finally {
+      setInsulinsLoading(false);
+    }
+  }, [session, sessionHeaders]);
+
+  const saveInsulins = async () => {
+    setInsulinsSaving(true);
+    setInsulinsMessage(null);
+    try {
+      const response = await fetch("/api/patient/insulins", {
+        method: "PUT",
+        headers: sessionHeaders(),
+        body: JSON.stringify(insulins),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "No se pudo guardar la configuración de insulina.");
+      setInsulins(result.data);
+      setInsulinsMessage("Configuración guardada para este paciente.");
+    } catch (requestError) {
+      setInsulinsMessage(requestError instanceof Error ? requestError.message : "No se pudo guardar la configuración de insulina.");
+    } finally {
+      setInsulinsSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!isLoggedIn || !session?.token) return;
-    const timer = window.setTimeout(() => void loadEvents(), 0);
+    const timer = window.setTimeout(() => { void loadEvents(); void loadInsulins(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [isLoggedIn, session?.token, loadEvents]);
+  }, [isLoggedIn, session?.token, loadEvents, loadInsulins]);
 
   // Configuration state
   const [targetConfig, setTargetConfig] = useState({
@@ -1137,6 +1357,69 @@ export default function GlucoPage() {
       ? scatterDataRaw
       : scatterDataRaw.filter((_: any, idx: number) => idx % scatterStep === 0);
 
+  const localExtrema = (() => {
+    const points = chartGraph.filter(
+      (point: any) => typeof point?.time === "number" && typeof point?.value === "number",
+    );
+    if (points.length < 5) return [];
+
+    type ExtremaCandidate = (typeof points)[number] & {
+      extremum: "min" | "max";
+      prominence: number;
+      absolute: boolean;
+    };
+    const candidates: ExtremaCandidate[] = [];
+    const radius = 2;
+    for (let index = radius; index < points.length - radius; index += 1) {
+      const point = points[index];
+      const left = points.slice(index - radius, index);
+      const right = points.slice(index + 1, index + radius + 1);
+      const neighbors = [...left, ...right];
+      const isMinimum = neighbors.every((neighbor) => point.value <= neighbor.value)
+        && neighbors.some((neighbor) => point.value < neighbor.value);
+      const isMaximum = neighbors.every((neighbor) => point.value >= neighbor.value)
+        && neighbors.some((neighbor) => point.value > neighbor.value);
+
+      if (isMinimum) {
+        const prominence = Math.min(
+          Math.max(...left.map((neighbor) => neighbor.value)) - point.value,
+          Math.max(...right.map((neighbor) => neighbor.value)) - point.value,
+        );
+        if (prominence >= 6) candidates.push({ ...point, extremum: "min", prominence, absolute: false });
+      } else if (isMaximum) {
+        const prominence = Math.min(
+          point.value - Math.min(...left.map((neighbor) => neighbor.value)),
+          point.value - Math.min(...right.map((neighbor) => neighbor.value)),
+        );
+        if (prominence >= 6) candidates.push({ ...point, extremum: "max", prominence, absolute: false });
+      }
+    }
+
+    const globalMin = points.reduce((best, point) => point.value < best.value ? point : best);
+    const globalMax = points.reduce((best, point) => point.value > best.value ? point : best);
+    const prioritized = [
+      { ...globalMin, extremum: "min" as const, prominence: Number.POSITIVE_INFINITY, absolute: true },
+      { ...globalMax, extremum: "max" as const, prominence: Number.POSITIVE_INFINITY, absolute: true },
+      ...candidates.sort((first, second) => second.prominence - first.prominence),
+    ];
+    const minimumSeparationMs = Math.max(20 * 60_000, (windowEnd - chartDataStart) / 8);
+    const eventClearanceMs = Math.max(20 * 60_000, (windowEnd - chartDataStart) * 0.04);
+    const visibleEventTimes = events
+      .map((event) => new Date(event.occurred_at).getTime())
+      .filter((time) => time >= chartDataStart && time <= windowEnd);
+    const chartRange = Math.max(1, yMax - yMin);
+    const selected: ExtremaCandidate[] = [];
+    for (const candidate of prioritized) {
+      if (selected.some((item) => item.time === candidate.time)) continue;
+      if (!candidate.absolute && selected.some((item) => Math.abs(item.time - candidate.time) < minimumSeparationMs)) continue;
+      const isNearTopEdge = candidate.value >= yMax - chartRange * 0.12;
+      if (!candidate.absolute && isNearTopEdge && visibleEventTimes.some((time) => Math.abs(time - candidate.time) < eventClearanceMs)) continue;
+      selected.push(candidate);
+      if (selected.length === 6) break;
+    }
+    return selected.sort((first, second) => first.time - second.time);
+  })();
+
   const visibleEvents = events.filter((event) => {
     const occurredAt = new Date(event.occurred_at).getTime();
     const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : occurredAt;
@@ -1153,6 +1436,8 @@ export default function GlucoPage() {
       val === null
     )
       return null;
+    const extremum = localExtrema.find((item) => item.time === payload.time);
+    if (extremum) return <ExtremumMarker {...props} payload={extremum} />;
     return <circle cx={cx} cy={cy} r={2} fill={getGlucoseColor(val)} />;
   };
 
@@ -1166,6 +1451,10 @@ export default function GlucoPage() {
       val === null
     )
       return null;
+
+    const extremum = localExtrema.find((item) => item.time === payload.time);
+    if (extremum) return <ExtremumMarker {...props} payload={extremum} />;
+    if (!showDots) return null;
 
     const dataLength = chartGraph.length;
     const isFirst = index === 0;
@@ -1219,6 +1508,21 @@ export default function GlucoPage() {
     // Si minDist >= 0.5, mostrar todos los dots (área dispersa)
 
     return <circle cx={cx} cy={cy} r={1.5} fill={getGlucoseColor(val)} />;
+  };
+
+  const ExtremumMarker = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (typeof cx !== "number" || typeof cy !== "number" || typeof payload?.value !== "number") return null;
+    const color = getGlucoseColor(payload.value);
+    const labelY = payload.extremum === "max" ? cy - 8 : cy + 13;
+    return (
+      <g aria-hidden="true" className="pointer-events-none">
+        <circle cx={cx} cy={cy} r={3} fill={color} stroke="var(--background)" strokeWidth={1.5} />
+        <text x={cx} y={labelY} textAnchor="middle" fill={color} fontSize={9} fontWeight={800} paintOrder="stroke" stroke="var(--background)" strokeWidth={3} strokeLinejoin="round">
+          {Math.round(payload.value)}
+        </text>
+      </g>
+    );
   };
 
   return (
@@ -1281,10 +1585,13 @@ export default function GlucoPage() {
                   ref={eventCenterRef}
                   session={session}
                   events={events}
+                  visibleFrom={windowStart}
+                  visibleTo={windowEnd}
                   loading={eventsLoading}
                   error={eventsError}
                   onRefresh={loadEvents}
                   onChanged={loadEvents}
+                  insulins={insulins}
                 />
               ) : null}
               <ModeToggle />
@@ -1540,13 +1847,30 @@ export default function GlucoPage() {
 
                   {/* Chart Card */}
                   <Card className="shadow-sm border flex flex-col flex-1 min-h-[320px] overflow-hidden bg-card/20">
-                    <CardHeader className="border-b bg-muted/10 px-3 py-2.5 sm:px-4 sm:py-2">
+                    <CardHeader className="grid-cols-[minmax(0,1fr)_auto] border-b bg-muted/10 px-3 py-2.5 sm:px-4 sm:py-2">
                       <CardTitle className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
                         Historial Analítico
                       </CardTitle>
+                      <span className="col-start-2 row-start-1 whitespace-nowrap text-[9px] font-semibold tabular-nums text-muted-foreground" aria-label={`Escala del gráfico hasta ${yMax} miligramos por decilitro`}>
+                        Escala {yMax} mg/dL
+                      </span>
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
-                      <div className="glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden sm:min-h-[420px]">
+                      <div
+                        className="glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[420px]"
+                        tabIndex={0}
+                        aria-label="Historial de glucosa. Usá el menú contextual para registrar un evento en un momento del gráfico."
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          openChartContextMenu(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+                          event.preventDefault();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          openChartContextMenu(rect.left + rect.width / 2, rect.top + rect.height / 2, rect);
+                        }}
+                      >
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
                             data={chartGraph}
@@ -1704,15 +2028,16 @@ export default function GlucoPage() {
                                   {visibleEvents.flatMap((event) => {
                                     const occurredAt = new Date(event.occurred_at).getTime();
                                     const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : null;
+                                    const eventColor = chartEventColor(event.type);
                                     return [
                                       event.type === "exercise" && endedAt ? (
                                         <ReferenceArea
                                           key={`${event.id}-area`}
                                           x1={occurredAt}
                                           x2={endedAt}
-                                          fill="var(--primary)"
+                                          fill={eventColor}
                                           fillOpacity={0.08}
-                                          stroke="var(--primary)"
+                                          stroke={eventColor}
                                           strokeOpacity={0.35}
                                           ifOverflow="hidden"
                                         />
@@ -1720,11 +2045,11 @@ export default function GlucoPage() {
                                       <ReferenceLine
                                         key={`${event.id}-marker`}
                                         x={occurredAt}
-                                        stroke="var(--primary)"
+                                        stroke={eventColor}
                                         strokeWidth={1}
                                         strokeDasharray="3 3"
                                         ifOverflow="hidden"
-                                        label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} />}
+                                        label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} tooltipOpen={hoveredChartEventId === event.id} onTooltipVisibilityChange={(open) => setHoveredChartEventId(open ? event.id : null)} />}
                                       />
                                     ];
                                   })}
@@ -1754,9 +2079,10 @@ export default function GlucoPage() {
                                       strokeDasharray: "4 4",
                                     }}
                                     content={({ active, payload, label }) => {
+                                      if (hoveredChartEventId) return null;
                                       if (active && payload && payload.length) {
                                         const glucoseItem = payload.find(
-                                          (p) => p.dataKey === "value",
+                                          (p) => p.dataKey === "value" && p.name === "GLUCOSA",
                                         );
                                         if (
                                           !glucoseItem ||
@@ -1925,7 +2251,7 @@ export default function GlucoPage() {
                                         !reduceMotion
                                       }
                                       connectNulls={true}
-                                      dot={showDots ? <CustomDot /> : false}
+                                      dot={<CustomDot />}
                                       activeDot={
                                         showDots
                                           ? {
@@ -1969,14 +2295,16 @@ export default function GlucoPage() {
                             {new Date(windowEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
-                        <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1 text-[9px] font-bold tabular-nums text-muted-foreground">
-                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">{yMax}</span>
-                          <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">mg/dL</span>
-                        </div>
-                        <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-card/80 px-2 py-1 text-[9px] font-semibold text-muted-foreground backdrop-blur-sm">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          Objetivo {targetConfig.low}–{targetConfig.high}
-                        </div>
+                        {chartContextMenu ? (
+                          <ChartEventContextMenu
+                            menu={chartContextMenu}
+                            onClose={() => setChartContextMenu(null)}
+                            onSelect={(eventType) => {
+                              eventCenterRef.current?.openNewAt(chartContextMenu.occurredAt, eventType);
+                              setChartContextMenu(null);
+                            }}
+                          />
+                        ) : null}
                       </div>
                     </CardContent>
                   </Card>
@@ -2136,7 +2464,7 @@ export default function GlucoPage() {
                 </Button>
                 <div>
                   <h2 className="text-xl font-black italic tracking-tight">
-                    CONFIGURACIÓN DE RANGOS
+                    CONFIGURACIÓN GENERAL
                   </h2>
                     <p className="max-w-[28rem] truncate text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                     Umbrales clínicos
@@ -2279,6 +2607,40 @@ export default function GlucoPage() {
                         </div>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border bg-card/40 md:col-span-2">
+                  <CardHeader className="flex flex-row items-center gap-4 px-4 pb-3 pt-5 sm:px-6 sm:pt-6">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Syringe className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-sm font-black uppercase tracking-tight">Insulinas del paciente</CardTitle>
+                      <CardDescription className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground sm:tracking-widest">Se muestran como acceso rápido al registrar una dosis</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-4 pt-2 sm:p-6 sm:pt-3">
+                    {insulins.map((insulin, index) => (
+                      <div key={insulin.id ?? index} className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_2.75rem] gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor={`insulin-name-${index}`} className="sr-only">Nombre de insulina {index + 1}</Label>
+                          <Input id={`insulin-name-${index}`} value={insulin.name} maxLength={80} placeholder="Nombre comercial" onChange={(event) => setInsulins((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} className="h-11" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`insulin-type-${index}`} className="sr-only">Tipo de insulina {index + 1}</Label>
+                          <select id={`insulin-type-${index}`} value={insulin.insulin_type} onChange={(event) => setInsulins((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, insulin_type: event.target.value as PatientInsulin["insulin_type"] } : item))} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm">
+                            {INSULIN_TYPES.map((type) => <option key={type} value={type}>{INSULIN_TYPE_LABELS[type]}</option>)}
+                          </select>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" disabled={insulins.length === 1} onClick={() => setInsulins((current) => current.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, sort_order: itemIndex })))} className="h-11 w-11 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /><span className="sr-only">Quitar {insulin.name || `insulina ${index + 1}`}</span></Button>
+                      </div>
+                    ))}
+                    <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <Button type="button" variant="outline" disabled={insulins.length >= 6} onClick={() => setInsulins((current) => [...current, { name: "", insulin_type: "rapid", sort_order: current.length }])} className="min-h-11 gap-2"><Plus className="h-4 w-4" />Agregar insulina</Button>
+                      <Button type="button" disabled={insulinsLoading || insulinsSaving || insulins.some((item) => !item.name.trim())} onClick={() => void saveInsulins()} className="min-h-11 gap-2"><Save className="h-4 w-4" />{insulinsSaving ? "Guardando…" : "Guardar insulinas"}</Button>
+                    </div>
+                    {insulinsMessage ? <p role="status" className="text-xs text-muted-foreground">{insulinsMessage}</p> : null}
                   </CardContent>
                 </Card>
 

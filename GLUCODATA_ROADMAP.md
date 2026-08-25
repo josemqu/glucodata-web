@@ -636,7 +636,7 @@ Un breve bloque `Estado actual de arquitectura` agregado al final de este docume
 
 ## Fase 1 — Event Foundation
 
-**Estado: `IN PROGRESS`**
+**Estado: `DONE`**
 
 ### Base de datos
 
@@ -672,8 +672,8 @@ Un breve bloque `Estado actual de arquitectura` agregado al final de este docume
 ### Timeline
 
 - [x] Mostrar eventos del día.
-- [ ] Sincronizar timeline con rango temporal del gráfico cuando corresponda.
-- [ ] Abrir detalle al seleccionar un evento.
+- [x] Sincronizar timeline con rango temporal del gráfico cuando corresponda.
+- [x] Abrir detalle al seleccionar un evento.
 
 ### CGM Chart
 
@@ -681,8 +681,8 @@ Un breve bloque `Estado actual de arquitectura` agregado al final de este docume
 - [x] Mostrar marcador de insulina.
 - [x] Mostrar intervalo de ejercicio.
 - [x] Mostrar otros tipos de eventos.
-- [ ] Tooltip/resumen del evento.
-- [ ] Navegar al detalle desde el gráfico.
+- [x] Tooltip/resumen del evento.
+- [x] Navegar al detalle desde el gráfico.
 
 ### Criterio de finalización
 
@@ -692,18 +692,18 @@ La aplicación permite registrar comida, insulina y ejercicio y ver esos eventos
 
 ## Fase 2 — Meal Tracking
 
-**Estado: `TODO`**
+**Estado: `IN PROGRESS`**
 
-- [ ] Crear tabla/modelo `foods`.
-- [ ] Crear tabla/modelo `meal_items`.
-- [ ] Crear migraciones.
-- [ ] CRUD de alimentos.
-- [ ] Buscador de alimentos propios.
-- [ ] Favoritos.
-- [ ] Agregar múltiples alimentos a una comida.
-- [ ] Calcular macros totales.
-- [ ] Conservar snapshot nutricional en `meal_items`.
-- [ ] Duplicar comida histórica.
+- [x] Crear tabla/modelo `foods`.
+- [x] Crear tabla/modelo `meal_items`.
+- [x] Crear migraciones.
+- [x] CRUD de alimentos.
+- [x] Buscador de alimentos propios.
+- [x] Favoritos.
+- [x] Agregar múltiples alimentos a una comida.
+- [x] Calcular macros totales.
+- [x] Conservar snapshot nutricional en `meal_items`.
+- [x] Duplicar comida histórica.
 - [ ] Comidas frecuentes.
 - [ ] Plantillas/favoritos de comidas.
 - [ ] Búsqueda por nombre de comida/alimento.
@@ -857,7 +857,7 @@ La primera versión útil debe limitarse a estas diez capacidades:
 - [x] Baseline, peak, Δpeak y valores +1/+2/+3 h.
 - [x] Mini gráfico de respuesta glucémica.
 
-**Milestone:** `MVP Event Response`
+**Milestone:** `MVP Event Response` — `DONE`.
 
 Cuando estos diez puntos estén validados, actualizar este milestone a `DONE`.
 
@@ -1061,14 +1061,80 @@ Migraciones: sin cambios.
 Tests/validación: TypeScript, ESLint del panel, `git diff --check` y build de producción exitosos.
 Pendientes: comprobación visual e interactiva con una sesión LibreLink activa; el navegador integrado no estuvo disponible en esta ejecución.
 
+2026-08-23 — [FASE 1 / TIMELINE SINCRONIZADO]
+
+Estado: Fase 1 DONE; flujo autenticado verificado.
+Cambios: la pestaña de eventos comparte la ventana temporal activa del gráfico, incluye eventos con duración que solapan el rango y comunica el intervalo exacto; se reconciliaron como implementados el detalle, tooltip y acceso directo desde marcadores.
+Archivos/componentes principales: `src/app/page.tsx`, `src/components/event-center.tsx`, `GLUCODATA_ROADMAP.md`.
+Migraciones: sin cambios.
+Tests/validación: TypeScript, ESLint focalizado del panel, detector de interfaz, `git diff --check` y build de producción exitosos. Flujo autenticado con sesión LibreLink y datos reales verificado por el usuario.
+Pendientes: ninguno para Fase 1 ni para el milestone MVP.
+
+2026-08-23 — [MVP EVENT RESPONSE / CIERRE]
+
+Estado: Fase 1 y milestone `MVP Event Response` DONE.
+Cambios: cierre formal después de validar el flujo autenticado completo y la sincronización entre eventos, gráfico CGM y detalle de respuesta.
+Archivos/componentes principales: `src/app/page.tsx`, `src/components/event-center.tsx`, `src/app/api/events`, `src/lib/event-analysis.ts`.
+Migraciones: sin cambios adicionales.
+Tests/validación: validación autenticada confirmada por el usuario; verificaciones estáticas y build de producción previamente exitosos.
+Pendientes: comenzar Fase 2 — Meal Tracking.
+
+2026-08-23 — [FASE 2 / MEAL TRACKING FOUNDATION]
+
+Estado: Fase 2 IN PROGRESS; base de datos, CRUD server-only de alimentos y composición transaccional implementados.
+Cambios: tablas `foods` y `meal_items`; snapshots de nombre, porción y macros; tipos y validación de alimentos; endpoints CRUD con búsqueda/favoritos; endpoint para leer y reemplazar hasta 50 alimentos de una comida en una única transacción; aislamiento por paciente mediante sesión LibreLink validada en servidor y función `security invoker` restringida a `service_role`.
+Archivos/componentes principales: `src/lib/foods.ts`, `src/app/api/foods`, `src/app/api/events/[id]/meal-items`, `src/lib/server/event-auth.ts`.
+Migraciones: `20260824010221_meal_tracking_foundation.sql` y `20260824010900_meal_item_composition.sql` aplicadas, verificadas y registradas como `applied` en el destino remoto.
+Tests/validación: TypeScript, ESLint focalizado, build y `git diff --check` exitosos; RLS activa y cero grants `anon/authenticated`; tabla y RPC denegadas a anon con HTTP 401 / `42501`; FK cruzada rechazada; snapshot preservado después de editar/eliminar el alimento; macros escalados por cantidad; reemplazo fallido conserva la composición anterior; limpieza transitoria sin residuos. Advisors sin hallazgos sobre los objetos nuevos; seis warnings históricos ajenos a esta fase.
+Pendientes: duplicación histórica, comidas frecuentes/plantillas y búsqueda por comida o alimento.
+
+2026-08-23 — [FASE 2 / COMPOSICIÓN MÓVIL DE COMIDAS]
+
+Estado: búsqueda, favoritos, alta inline y composición múltiple integrados; Fase 2 continúa IN PROGRESS.
+Cambios: el formulario de comida permite buscar alimentos propios con debounce, marcar favoritos, crear un alimento sin salir del flujo, seleccionar hasta 50 líneas, ajustar cantidades y ver CH/proteínas/grasas/kcal; cuando hay composición, los CH del evento se calculan automáticamente y la carga manual permanece como fallback.
+Archivos/componentes principales: `src/components/meal-composer.tsx`, `src/components/event-center.tsx`, `src/lib/foods.ts`, `src/app/api/foods`, `src/app/api/events/[id]/meal-items`.
+Migraciones: sin cambios adicionales; reutiliza `20260824010221_meal_tracking_foundation.sql` y `20260824010900_meal_item_composition.sql`.
+Tests/validación: TypeScript, ESLint focalizado, detector de interfaz y `git diff --check` exitosos; QA autenticada real a 390 × 844 y 320 × 700 sin overflow horizontal (`scrollWidth` igual al viewport). No se crearon alimentos persistentes durante la inspección visual.
+Pendientes: duplicar una comida histórica; comidas frecuentes/plantillas; búsqueda histórica por comida o alimento; validar creación y guardado end-to-end con un alimento real.
+
+2026-08-23 — [FASE 2 / DEPLOY PRODUCTIVO]
+
+Estado: working tree de Fase 2 desplegado a producción en Vercel.
+Cambios: publicación del CRUD server-only de alimentos, composición transaccional y formulario móvil de comidas para prueba directa con sesión LibreLink real.
+Archivos/componentes principales: deployment `dpl_4GnMhuEjmhLUbXQ2wWWBdjVve12h`; alias `https://glucodata-web.vercel.app`.
+Migraciones: `20260824010221_meal_tracking_foundation.sql` y `20260824010900_meal_item_composition.sql` ya aplicadas y verificadas en Supabase.
+Tests/validación: Vercel `Ready`; raíz productiva HTTP 200; `/api/foods` y `/api/events` sin sesión rechazadas con HTTP 401.
+Pendientes: prueba end-to-end en producción creando un alimento y registrando una comida compuesta; los cambios continúan sin commit/push.
+
+2026-08-23 — [FASE 2 / REUTILIZACIÓN HISTÓRICA]
+
+Estado: duplicación de comidas históricas implementada y desplegada; Fase 2 continúa IN PROGRESS.
+Cambios: el detalle de una comida permite `Repetir`; abre un nuevo registro con fecha/hora actual, nombre, nota y composición histórica editables. La nueva comida reutiliza los snapshots nutricionales originales, no los valores actuales del alimento, y admite combinar porciones históricas con alimentos vigentes.
+Archivos/componentes principales: `src/components/event-center.tsx`, `src/components/meal-composer.tsx`, `src/lib/foods.ts`, `src/app/api/events/[id]/meal-items`, migración `20260824020105_reuse_historical_meal_snapshots.sql`.
+Migraciones: `20260824020105` aplicada y registrada en producción sin modificar las migraciones históricas remotas ausentes del checkout (`20260203210154`, `20260204225920`).
+Tests/validación: TypeScript, ESLint focalizado, build y `git diff --check` exitosos. Prueba transaccional remota confirmó que 1 porción histórica de 15 g CH copiada a 2 porciones conserva el snapshot y produce 30 g CH aunque el alimento vigente cambie a 99 g; cero residuos. Función denegada a `anon/authenticated` y habilitada sólo para `service_role`. Vercel `dpl_EdMRmJ23FJ67cAdBYXi6TVYbh7yM` en estado `Ready`.
+Pendientes: validación autenticada del botón `Repetir` en producción; comidas frecuentes/plantillas; búsqueda histórica por nombre de comida o alimento.
+
+2026-08-24 — [UI / FORMULARIOS COMPACTOS]
+
+Estado: formularios de creación y edición de eventos compactados y desplegados en producción.
+Cambios: nuevo patrón compartido de etiquetas inset dentro del borde; aplicado a nombre, fechas, carbohidratos, dosis, selectores, nota y alta inline de alimentos. Se redujo el espacio vertical sin reducir el área táctil de 48 px ni eliminar etiquetas accesibles persistentes.
+Archivos/componentes principales: `src/components/ui/inset-field.tsx`, `src/components/event-center.tsx`, `src/components/meal-composer.tsx`.
+Tests/validación: TypeScript, ESLint focalizado, build y `git diff --check` exitosos; preview y producción compilaron en Vercel. Deployment productivo `dpl_GPashhRMDhtu5ng9cbSmNcgAztH8` en estado `Ready`. QA autenticada visual pendiente porque la pestaña aislada del navegador no heredó la sesión LibreLink; no se ingresaron credenciales ni se registraron eventos.
+
+2026-08-24 — [UI / SELECTOR MODAL DE ALIMENTOS]
+
+Estado: búsqueda y alta de alimentos extraídas del formulario principal y desplegadas en producción.
+Cambios: el formulario de comida muestra sólo el acceso `Agregar alimentos`, las líneas seleccionadas y sus totales. Un modal independiente concentra búsqueda, favoritos, alta inline y selección múltiple; en móvil funciona como hoja inferior de altura controlada, con búsqueda fija, scroll propio y acción `Listo`.
+Archivos/componentes principales: `src/components/meal-composer.tsx`.
+Tests/validación: TypeScript, ESLint focalizado, build y `git diff --check` exitosos. Deployment productivo `dpl_CXxKKysZ28FoTwrDLHXLKghnVdqq` en estado `Ready`.
+
 ---
 
 # 24. Próxima acción recomendada
 
-**Fase 0 — Auditoría de la app existente.**
+**Fase 2 — Comidas frecuentes.**
 
-Antes de implementar nuevas features, Codex debe inspeccionar `glucodata-web`, completar la sección **Estado actual de arquitectura** y contrastar el código existente contra la **Fase 1 — Event Foundation**.
+Detectar y mostrar comidas repetidas con conteo y último uso para reutilizarlas con mínima interacción, apoyándose en el flujo `Repetir` ya validado a nivel de datos.
 
-Después debe proponer el conjunto mínimo de cambios para alcanzar el milestone:
-
-**`MVP Event Response`**
+Después incorporar plantillas/favoritos explícitos de comidas y búsqueda histórica por nombre de comida o alimento.

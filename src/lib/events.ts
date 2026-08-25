@@ -1,3 +1,5 @@
+import { isInsulinType } from "@/lib/insulins";
+
 export const EVENT_TYPES = [
   "meal",
   "insulin",
@@ -124,11 +126,10 @@ export function validateEventInput(value: unknown):
 
   if (input.type === "insulin") {
     const units = Number(metadata.units);
-    const allowedInsulinTypes = ["rapid", "short", "intermediate", "long", "ultra_long", "other"];
     if (!Number.isFinite(units) || units <= 0 || units > 250) {
       return { success: false, error: "Ingresá una dosis válida mayor que 0 y de hasta 250 U." };
     }
-    if (!allowedInsulinTypes.includes(String(metadata.insulin_type))) {
+    if (!isInsulinType(metadata.insulin_type)) {
       return { success: false, error: "Seleccioná un tipo de insulina válido." };
     }
     if (metadata.dose_purpose != null && !["meal", "correction"].includes(String(metadata.dose_purpose))) {

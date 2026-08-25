@@ -1,0 +1,90 @@
+create or replace function public.replace_meal_items(
+  p_patient_id text,
+  p_event_id uuid,
+  p_items jsonb
+)
+returns setof public.meal_items
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  item jsonb;
+  selected_food public.foods%rowtype;
+  item_quantity numeric(10, 3);
+begin
+  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) > 50 then
+    raise exception 'La composición debe ser una lista de hasta 50 alimentos.' using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1
+    from public.events
+    where patient_id = p_patient_id
+      and id = p_event_id
+      and type = 'meal'
+  ) then
+    raise exception 'La comida no existe para el paciente activo.' using errcode = 'P0002';
+  end if;
+
+  delete from public.meal_items
+  where patient_id = p_patient_id and event_id = p_event_id;
+
+  for item in select value from jsonb_array_elements(p_items)
+  loop
+    item_quantity := (item ->> 'quantity')::numeric;
+    if item_quantity <= 0 or item_quantity > 10000 then
+      raise exception 'La cantidad debe ser mayor que 0 y no superar 10000.' using errcode = '22023';
+    end if;
+
+    select * into selected_food
+    from public.foods
+    where patient_id = p_patient_id
+      and id = (item ->> 'food_id')::uuid;
+
+    if not found then
+      raise exception 'Uno de los alimentos no existe para el paciente activo.' using errcode = 'P0002';
+    end if;
+
+    insert into public.meal_items (
+      patient_id,
+      event_id,
+      food_id,
+      quantity,
+      food_name,
+      serving_size,
+      serving_unit,
+      carbs_g,
+      protein_g,
+      fat_g,
+      calories
+    ) values (
+      p_patient_id,
+      p_event_id,
+      selected_food.id,
+      item_quantity,
+      selected_food.name,
+      selected_food.serving_size,
+      selected_food.serving_unit,
+      selected_food.carbs_g * item_quantity,
+      selected_food.protein_g * item_quantity,
+      selected_food.fat_g * item_quantity,
+      selected_food.calories * item_quantity
+    );
+  end loop;
+
+  return query
+    select *
+    from public.meal_items
+    where patient_id = p_patient_id and event_id = p_event_id
+    order by created_at, id;
+end;
+$$;
+
+revoke all on function public.replace_meal_items(text, uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.replace_meal_items(text, uuid, jsonb) to service_role;
+
+comment on function public.replace_meal_items(text, uuid, jsonb) is
+  'Atomically replaces a meal composition using current foods as immutable nutritional snapshots.';
+
+select pg_notify('pgrst', 'reload schema');

@@ -7,6 +7,7 @@ import {
   BarChart3,
   Check,
   BookOpenText,
+  Copy,
   Dumbbell,
   Link2,
   Pencil,
@@ -31,7 +32,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { InsetField, InsetNumberStepper, insetControlClass, insetSelectClass, insetTextareaClass } from "@/components/ui/inset-field";
+import { MealComposer, type MealSelection } from "@/components/meal-composer";
 import type { EventAnalysisResult, GlucoseReading } from "@/lib/event-analysis";
 import type { EventComparisonResult } from "@/lib/event-comparison";
 import {
@@ -47,6 +49,8 @@ import type {
   GlucoEvent,
   LinkedEvent,
 } from "@/lib/events";
+import type { MealItem } from "@/lib/foods";
+import { INSULIN_TYPE_LABELS, type PatientInsulin } from "@/lib/insulins";
 
 interface LibreSession {
   token: string;
@@ -57,14 +61,18 @@ interface LibreSession {
 interface EventCenterProps {
   session: LibreSession;
   events: GlucoEvent[];
+  visibleFrom: number;
+  visibleTo: number;
   loading: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
   onChanged: () => Promise<void>;
+  insulins: PatientInsulin[];
 }
 
 export interface EventCenterHandle {
   openEvent: (event: GlucoEvent) => void;
+  openNewAt: (occurredAt: Date, type: EventType) => void;
 }
 
 const choices: Array<{ type: EventType; label: string; icon: typeof Activity }> = [
@@ -118,7 +126,7 @@ function eventSummary(event: GlucoEvent) {
   return event.notes ?? "";
 }
 
-export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(function EventCenter({ session, events, loading, error, onRefresh, onChanged }, ref) {
+export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(function EventCenter({ session, events, visibleFrom, visibleTo, loading, error, onRefresh, onChanged, insulins }, ref) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
@@ -155,16 +163,31 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
   const [comparison, setComparison] = useState<EventComparisonResult | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [mealSelection, setMealSelection] = useState<MealSelection[]>([]);
+  const [mealCompositionDirty, setMealCompositionDirty] = useState(false);
+  const [duplicating, setDuplicating] = useState<GlucoEvent | null>(null);
 
-  const todayEvents = useMemo(() => {
-    const today = new Date();
+  const visibleEvents = useMemo(() => {
     return events.filter((event) => {
-      const date = new Date(event.occurred_at);
-      return date.getFullYear() === today.getFullYear()
-        && date.getMonth() === today.getMonth()
-        && date.getDate() === today.getDate();
+      const occurredAt = new Date(event.occurred_at).getTime();
+      const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : occurredAt;
+      return endedAt >= visibleFrom && occurredAt <= visibleTo;
     });
-  }, [events]);
+  }, [events, visibleFrom, visibleTo]);
+
+  const visibleRangeLabel = useMemo(() => {
+    const from = new Date(visibleFrom);
+    const to = new Date(visibleTo);
+    const sameDay = from.toDateString() === to.toDateString();
+    const time = (date: Date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    if (sameDay) return `${time(from)}–${time(to)}`;
+    return `${from.toLocaleDateString([], { day: "2-digit", month: "short" })}, ${time(from)} – ${to.toLocaleDateString([], { day: "2-digit", month: "short" })}, ${time(to)}`;
+  }, [visibleFrom, visibleTo]);
+
+  const selectedMealCarbs = useMemo(() => mealSelection.reduce(
+    (sum, item) => sum + Number(item.food.carbs_g) * item.quantity,
+    0,
+  ), [mealSelection]);
 
   useEffect(() => {
     if (!open) return;
@@ -203,25 +226,29 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     };
   }, [open]);
 
-  const reset = (nextType: EventType = "meal") => {
+  const reset = useCallback((nextType: EventType = "meal", nextOccurredAt = new Date()) => {
     setEditing(null);
+    setDuplicating(null);
     setType(nextType);
-    setTitle("");
-    setOccurredAt(localDateTime());
+    setTitle(nextType === "insulin" ? (insulins[0]?.name ?? "") : "");
+    setOccurredAt(localDateTime(nextOccurredAt));
     setEndedAt("");
     setNotes("");
     setCarbs("");
     setUnits("");
-    setInsulinType("rapid");
+    setInsulinType(insulins[0]?.insulin_type ?? "rapid");
     setIsCorrection(false);
     setIntensity("medium");
+    setMealSelection([]);
+    setMealCompositionDirty(false);
     setFormError(null);
-  };
+  }, [insulins]);
 
   const edit = (event: GlucoEvent) => {
     setDetail(null);
     setPanelView("register");
     setEditing(event);
+    setDuplicating(null);
     setType(event.type);
     setTitle(event.title);
     setOccurredAt(localDateTime(new Date(event.occurred_at)));
@@ -232,7 +259,82 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setInsulinType(String(event.metadata.insulin_type ?? "rapid"));
     setIsCorrection(event.metadata.dose_purpose === "correction");
     setIntensity(String(event.metadata.intensity ?? "medium"));
+    setMealSelection([]);
+    setMealCompositionDirty(false);
     setFormError(null);
+    if (event.type === "meal") {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/events/${event.id}/meal-items`, { headers: headers(session) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error ?? "No se pudo cargar la composición de la comida.");
+          const items = (result.data ?? []) as MealItem[];
+          setMealSelection(items.filter((item) => item.food_id).map((item) => ({
+            quantity: Number(item.quantity),
+            food: {
+              id: item.food_id as string,
+              patient_id: item.patient_id,
+              name: item.food_name,
+              serving_size: Number(item.serving_size),
+              serving_unit: item.serving_unit,
+              carbs_g: Number(item.carbs_g) / Number(item.quantity),
+              protein_g: Number(item.protein_g) / Number(item.quantity),
+              fat_g: Number(item.fat_g) / Number(item.quantity),
+              calories: item.calories == null ? null : Number(item.calories) / Number(item.quantity),
+              favorite: false,
+              created_at: item.created_at,
+              updated_at: item.updated_at,
+            },
+          })));
+        } catch (requestError) {
+          setFormError(requestError instanceof Error ? requestError.message : "No se pudo cargar la composición de la comida.");
+        }
+      })();
+    }
+  };
+
+  const duplicateMeal = async (event: GlucoEvent) => {
+    setDetail(null);
+    setPanelView("register");
+    setEditing(null);
+    setDuplicating(event);
+    setType("meal");
+    setTitle(event.title);
+    setOccurredAt(localDateTime());
+    setEndedAt("");
+    setNotes(event.notes ?? "");
+    setCarbs(event.metadata.carbs_g == null ? "" : String(event.metadata.carbs_g));
+    setMealSelection([]);
+    setMealCompositionDirty(false);
+    setFormError(null);
+    try {
+      const response = await fetch(`/api/events/${event.id}/meal-items`, { headers: headers(session) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "No se pudo cargar la composición histórica.");
+      const items = (result.data ?? []) as MealItem[];
+      if (!items.length) throw new Error("Esta comida no tiene alimentos guardados para reutilizar.");
+      setMealSelection(items.map((item) => ({
+        sourceMealItemId: item.id,
+        quantity: Number(item.quantity),
+        food: {
+          id: `snapshot:${item.id}`,
+          patient_id: item.patient_id,
+          name: item.food_name,
+          serving_size: Number(item.serving_size),
+          serving_unit: item.serving_unit,
+          carbs_g: Number(item.carbs_g) / Number(item.quantity),
+          protein_g: Number(item.protein_g) / Number(item.quantity),
+          fat_g: Number(item.fat_g) / Number(item.quantity),
+          calories: item.calories == null ? null : Number(item.calories) / Number(item.quantity),
+          favorite: false,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        },
+      })));
+    } catch (requestError) {
+      setDuplicating(null);
+      setFormError(requestError instanceof Error ? requestError.message : "No se pudo preparar la copia de la comida.");
+    }
   };
 
   const refreshRelationships = useCallback(async (event: GlucoEvent) => {
@@ -271,7 +373,14 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
       setPanelView("today");
       void openDetail(event);
     },
-  }), [openDetail]);
+    openNewAt(nextOccurredAt, nextType) {
+      setDetail(null);
+      setDetailError(null);
+      setPanelView("register");
+      reset(nextType, nextOccurredAt);
+      setOpen(true);
+    },
+  }), [openDetail, reset]);
 
   const updateRelationship = async (
     event: GlucoEvent,
@@ -352,7 +461,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setFormError(null);
 
     const metadata: Record<string, unknown> = {};
-    if (type === "meal") metadata.carbs_g = Number(carbs);
+    if (type === "meal") metadata.carbs_g = mealSelection.length ? selectedMealCarbs : Number(carbs);
     if (type === "insulin") {
       metadata.units = Number(units);
       metadata.insulin_type = insulinType;
@@ -378,6 +487,17 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "No se pudo guardar el evento.");
+      if (type === "meal" && (mealSelection.length > 0 || (editing && mealCompositionDirty))) {
+        const compositionResponse = await fetch(`/api/events/${result.data.id}/meal-items`, {
+          method: "PUT",
+          headers: headers(session),
+          body: JSON.stringify({ items: mealSelection.map((item) => item.sourceMealItemId
+            ? { source_meal_item_id: item.sourceMealItemId, quantity: item.quantity }
+            : { food_id: item.food.id, quantity: item.quantity }) }),
+        });
+        const compositionResult = await compositionResponse.json();
+        if (!compositionResponse.ok) throw new Error(`El evento se guardó, pero no su composición: ${compositionResult.error ?? "intentá nuevamente."}`);
+      }
       reset(type);
       setDetail(null);
       setPanelView("today");
@@ -463,7 +583,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
               <div className="overflow-x-auto border-b px-4 sm:px-6">
                 <nav className="flex min-w-max gap-5" aria-label="Secciones de eventos">
                   <button type="button" aria-current={panelView === "register" ? "page" : undefined} onClick={() => setPanelView("register")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "register" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Registrar</button>
-                  <button type="button" aria-current={panelView === "today" ? "page" : undefined} onClick={() => setPanelView("today")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "today" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Hoy <span className="ml-1 text-xs font-medium text-muted-foreground">{todayEvents.length}</span></button>
+                  <button type="button" aria-current={panelView === "today" ? "page" : undefined} onClick={() => setPanelView("today")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "today" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>En gráfico <span className="ml-1 text-xs font-medium text-muted-foreground">{visibleEvents.length}</span></button>
                   <button type="button" aria-current={panelView === "compare" ? "page" : undefined} onClick={() => setPanelView("compare")} className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors ${panelView === "compare" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Comparar</button>
                 </nav>
               </div>
@@ -479,6 +599,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                   dosePurposeSaving={dosePurposeSaving}
                   onBack={() => setDetail(null)}
                   onEdit={() => edit(detail.event)}
+                  onDuplicate={detail.event.type === "meal" ? () => void duplicateMeal(detail.event) : undefined}
                   onDosePurposeChange={(correction) => void updateDosePurpose(detail.event, correction)}
                   onUpdateRelationship={(relatedEventId, relationType, status) => void updateRelationship(detail.event, relatedEventId, relationType, status)}
                   onUnlink={(linkId) => void unlinkEvent(detail.event, linkId)}
@@ -490,35 +611,45 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                   <div className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-5">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">{renderEventIcon(type, "h-5 w-5")}</span>
-                      <div className="min-w-0"><h3 className="truncate text-sm font-bold">{editing ? "Editar evento" : copy[type].title}</h3><p className="mt-0.5 text-xs text-muted-foreground">Elegí el tipo y completá lo esencial.</p></div>
+                      <div className="min-w-0"><h3 className="truncate text-sm font-bold">{editing ? "Editar evento" : duplicating ? "Repetir comida" : copy[type].title}</h3><p className="mt-0.5 text-xs text-muted-foreground">{duplicating ? "Revisá la hora y las porciones antes de registrar." : "Elegí el tipo y completá lo esencial."}</p></div>
                     </div>
-                    {editing ? <button type="button" onClick={() => reset(type)} className="min-h-11 shrink-0 px-2 text-xs font-medium text-muted-foreground hover:text-foreground sm:min-h-8">Cancelar</button> : null}
+                    {editing || duplicating ? <button type="button" onClick={() => reset(type)} className="min-h-11 shrink-0 px-2 text-xs font-medium text-muted-foreground hover:text-foreground sm:min-h-8">Cancelar</button> : null}
                   </div>
 
                   <div className="border-b bg-muted/20 p-2" aria-label="Tipo de evento">
                     <div className="grid grid-cols-4 gap-1 rounded-xl bg-muted/60 p-1">
                       {choices.map((choice) => {
                         const Icon = choice.icon;
-                        return <button key={choice.type} type="button" aria-label={choice.label} aria-pressed={type === choice.type} disabled={Boolean(editing)} onClick={() => reset(choice.type)} className={`flex min-h-12 items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${type === choice.type ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"}`}><Icon className="h-4 w-4" /><span className="hidden min-[390px]:inline">{choice.label}</span></button>;
+                        return <button key={choice.type} type="button" aria-label={choice.label} aria-pressed={type === choice.type} disabled={Boolean(editing || duplicating)} onClick={() => { const selectedAt = new Date(occurredAt); reset(choice.type, Number.isNaN(selectedAt.getTime()) ? new Date() : selectedAt); }} className={`flex min-h-12 items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${type === choice.type ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"}`}><Icon className="h-4 w-4" /><span className="hidden min-[390px]:inline">{choice.label}</span></button>;
                       })}
                     </div>
                   </div>
 
-                  <div className="space-y-5 px-4 py-5 sm:px-5">
-                    <div className="space-y-2"><Label htmlFor="event-title">Nombre</Label><Input id="event-title" className="h-11 bg-background" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={copy[type].placeholder} maxLength={120} required /></div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2"><Label htmlFor="event-occurred-at">Fecha y hora</Label><Input id="event-occurred-at" className="h-11 bg-background" type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></div>
-                      {type === "meal" ? <div className="space-y-2"><Label htmlFor="event-carbs">Carbohidratos (g CH)</Label><div className="relative"><Input id="event-carbs" className="h-11 bg-background pr-12 font-numbers" type="number" min="0" step="1" value={carbs} onChange={(event) => setCarbs(event.target.value)} required /><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">g CH</span></div></div> : null}
-                      {type === "insulin" ? <div className="space-y-2"><Label htmlFor="event-units">Dosis (U)</Label><div className="relative"><Input id="event-units" className="h-11 bg-background pr-9 font-numbers" type="number" min="0" step="1" value={units} onChange={(event) => setUnits(event.target.value)} required /><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">U</span></div></div> : null}
-                      {type === "exercise" ? <div className="space-y-2"><Label htmlFor="event-ended-at">Finalización</Label><Input id="event-ended-at" className="h-11 bg-background" type="datetime-local" value={endedAt} onChange={(event) => setEndedAt(event.target.value)} required /></div> : null}
+                  <div className="space-y-3 px-4 py-4 sm:px-5">
+                    {type === "insulin" ? (
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-semibold text-muted-foreground">Insulina</legend>
+                        <div className="grid grid-cols-2 gap-2">
+                          {insulins.map((insulin) => {
+                            const selected = title === insulin.name && insulinType === insulin.insulin_type;
+                            return <button key={`${insulin.name}-${insulin.insulin_type}`} type="button" aria-pressed={selected} onClick={() => { setTitle(insulin.name); setInsulinType(insulin.insulin_type); }} className={`min-h-14 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-primary" : "bg-background hover:bg-muted"}`}><span className="block truncate text-sm font-bold">{insulin.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{INSULIN_TYPE_LABELS[insulin.insulin_type]}</span></button>;
+                          })}
+                        </div>
+                      </fieldset>
+                    ) : <InsetField id="event-title" label="Nombre"><Input id="event-title" className={insetControlClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={copy[type].placeholder} maxLength={120} required /></InsetField>}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <InsetField id="event-occurred-at" label="Fecha y hora"><Input id="event-occurred-at" className={insetControlClass} type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></InsetField>
+                      {type === "meal" ? <InsetNumberStepper id="event-carbs" label={mealSelection.length ? "Carbohidratos calculados" : "Carbohidratos"} value={mealSelection.length ? Number(selectedMealCarbs.toFixed(1)) : carbs} onValueChange={setCarbs} step={1} min={0} unit="g CH" readOnly={mealSelection.length > 0} required /> : null}
+                      {type === "insulin" ? <InsetNumberStepper id="event-units" label="Dosis" value={units} onValueChange={setUnits} step={1} min={0} unit="U" required /> : null}
+                      {type === "exercise" ? <InsetField id="event-ended-at" label="Finalización"><Input id="event-ended-at" className={insetControlClass} type="datetime-local" value={endedAt} onChange={(event) => setEndedAt(event.target.value)} required /></InsetField> : null}
                     </div>
-                    {type === "insulin" ? <div className="space-y-2"><Label htmlFor="insulin-type">Tipo de insulina</Label><select id="insulin-type" value={insulinType} onChange={(event) => setInsulinType(event.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="rapid">Rápida</option><option value="short">Corta</option><option value="intermediate">Intermedia</option><option value="long">Larga</option><option value="ultra_long">Ultralarga</option><option value="other">Otra</option></select></div> : null}
+                    {type === "meal" ? <MealComposer session={session} value={mealSelection} disabled={saving} onChange={(next) => { setMealSelection(next); setMealCompositionDirty(true); if (next.length) setCarbs(String(next.reduce((sum, item) => sum + Number(item.food.carbs_g) * item.quantity, 0))); }} /> : null}
                     {type === "insulin" ? <label htmlFor="event-correction" className="flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border bg-background px-3 py-3"><input id="event-correction" type="checkbox" checked={isCorrection} onChange={(event) => setIsCorrection(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-primary" /><span className="min-w-0"><span className="block text-sm font-semibold">Esta dosis fue una corrección</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">Desmarcada se guarda como dosis habitual o asociada a comida.</span></span></label> : null}
-                    {type === "exercise" ? <div className="space-y-2"><Label htmlFor="exercise-intensity">Intensidad</Label><select id="exercise-intensity" value={intensity} onChange={(event) => setIntensity(event.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="low">Baja</option><option value="medium">Media</option><option value="high">Alta</option></select></div> : null}
-                    <div className="space-y-2"><Label htmlFor="event-notes">Nota <span className="font-normal text-muted-foreground">(opcional)</span></Label><textarea id="event-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} rows={3} placeholder="Agregá un dato que ayude a interpretar el evento" className="min-h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring" /></div>
+                    {type === "exercise" ? <InsetField id="exercise-intensity" label="Intensidad"><select id="exercise-intensity" value={intensity} onChange={(event) => setIntensity(event.target.value)} className={insetSelectClass}><option value="low">Baja</option><option value="medium">Media</option><option value="high">Alta</option></select></InsetField> : null}
+                    <InsetField id="event-notes" label="Nota" optional><textarea id="event-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} rows={3} placeholder="Agregá un dato que ayude a interpretar el evento" className={insetTextareaClass} /></InsetField>
                     {formError ? <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{formError}</p> : null}
                   </div>
-                  <div className="grid grid-cols-1 gap-2 border-t bg-muted/20 px-4 py-3 min-[380px]:grid-cols-[auto_1fr] sm:px-5"><Button type="button" variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving} className="min-h-11 min-w-0 gap-2"><Save className="h-4 w-4" />{saving ? "Guardando…" : editing ? "Guardar cambios" : "Registrar"}</Button></div>
+                  <div className="grid grid-cols-1 gap-2 border-t bg-muted/20 px-4 py-3 min-[380px]:grid-cols-[auto_1fr] sm:px-5"><Button type="button" variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving} className="min-h-11 min-w-0 gap-2"><Save className="h-4 w-4" />{saving ? "Guardando…" : editing ? "Guardar cambios" : duplicating ? "Registrar copia" : "Registrar"}</Button></div>
                 </form>
               ) : panelView === "compare" ? (
                 comparison ? (
@@ -540,14 +671,14 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
               ) : (
                 <section>
                 <div className="flex items-center justify-between">
-                  <div><h3 className="text-base font-bold">Eventos de hoy</h3><p className="mt-1 text-sm text-muted-foreground">{todayEvents.length} {todayEvents.length === 1 ? "evento registrado" : "eventos registrados"}</p></div>
+                  <div><h3 className="text-base font-bold">Eventos en el gráfico</h3><p className="mt-1 text-sm text-muted-foreground">{visibleRangeLabel} · {visibleEvents.length} {visibleEvents.length === 1 ? "evento" : "eventos"}</p></div>
                   {loading ? <span role="status" className="text-xs text-muted-foreground">Actualizando…</span> : null}
                 </div>
                 {detailError ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{detailError}</p> : null}
                 {error ? <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p> : null}
                 <div className="mt-4 overflow-hidden rounded-2xl border bg-card px-4 shadow-sm sm:px-5">
-                  {!loading && todayEvents.length === 0 ? <div className="flex flex-col items-center py-10 text-center"><BookOpenText className="h-6 w-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Todavía no registraste eventos</p><p className="mt-1 text-xs text-muted-foreground">Usá la pestaña Registrar para sumar contexto.</p></div> : null}
-                  {todayEvents.map((event) => {
+                  {!loading && visibleEvents.length === 0 ? <div className="flex flex-col items-center py-10 text-center"><BookOpenText className="h-6 w-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No hay eventos en este rango</p><p className="mt-1 text-xs text-muted-foreground">Cambiá el rango del gráfico o registrá un evento.</p></div> : null}
+                  {visibleEvents.map((event) => {
                     const Icon = eventIcon(event.type);
                     return (
                       <article key={event.id} className="group flex items-center gap-3 border-b py-3.5 last:border-b-0">
@@ -722,6 +853,7 @@ function EventDetail({
   dosePurposeSaving,
   onBack,
   onEdit,
+  onDuplicate,
   onDosePurposeChange,
   onUpdateRelationship,
   onUnlink,
@@ -733,6 +865,7 @@ function EventDetail({
   dosePurposeSaving: boolean;
   onBack: () => void;
   onEdit: () => void;
+  onDuplicate?: () => void;
   onDosePurposeChange: (correction: boolean) => void;
   onUpdateRelationship: (relatedEventId: string, relationType: EventRelationType, status: "accepted" | "dismissed") => void;
   onUnlink: (linkId: string) => void;
@@ -782,6 +915,7 @@ function EventDetail({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${data.analysis.complete ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>{data.analysis.complete ? "Ventana temporal finalizada" : "Análisis en curso"}</span>
           <Button type="button" variant="outline" size="sm" className="min-h-9 gap-2" onClick={onEdit}><Pencil className="h-3.5 w-3.5" />Editar</Button>
+          {onDuplicate ? <Button type="button" variant="outline" size="sm" className="min-h-9 gap-2" onClick={onDuplicate}><Copy className="h-3.5 w-3.5" />Repetir</Button> : null}
         </div>
       </div>
 
