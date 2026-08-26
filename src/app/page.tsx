@@ -2476,6 +2476,7 @@ export default function GlucoPage() {
                                   />
                                   {!isChartPanning ? <Tooltip
                                     offset={CHART_TOOLTIP_OFFSET}
+                                    isAnimationActive={false}
                                     allowEscapeViewBox={{ x: false, y: true }}
                                     wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                                     cursor={{
@@ -2659,16 +2660,12 @@ export default function GlucoPage() {
                                       }
                                       connectNulls={true}
                                       dot={<CustomDot />}
-                                      activeDot={
-                                        showDots
-                                          ? {
-                                              r: 4,
-                                              strokeWidth: 2,
-                                              fill: "#94a3b8",
-                                              stroke: "var(--background)",
-                                            }
-                                          : false
-                                      }
+                                      activeDot={{
+                                        r: 4,
+                                        strokeWidth: 2,
+                                        fill: "#94a3b8",
+                                        stroke: "var(--background)",
+                                      }}
                                     />
                                   ) : (
                                     <Scatter
