@@ -82,6 +82,8 @@ import {
   CHART_SERIES_ANIMATION_EASING,
 } from "@/lib/chart-motion";
 import {
+  CHART_TOOLTIP_CURSOR,
+  CHART_TOOLTIP_IS_ANIMATION_ACTIVE,
   CHART_TOOLTIP_OFFSET,
   CHART_TOOLTIP_WRAPPER_STYLE,
 } from "@/lib/chart-tooltip";
@@ -2476,15 +2478,10 @@ export default function GlucoPage() {
                                   />
                                   {!isChartPanning ? <Tooltip
                                     offset={CHART_TOOLTIP_OFFSET}
-                                    isAnimationActive={false}
+                                    isAnimationActive={CHART_TOOLTIP_IS_ANIMATION_ACTIVE}
                                     allowEscapeViewBox={{ x: false, y: true }}
                                     wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
-                                    cursor={{
-                                      stroke: "var(--muted-foreground)",
-                                      strokeOpacity: 0.15,
-                                      strokeWidth: 1.5,
-                                      strokeDasharray: "4 4",
-                                    }}
+                                    cursor={CHART_TOOLTIP_CURSOR}
                                     content={({ active, payload, label }) => {
                                       if (hoveredChartEventId) return null;
                                       if (active && payload && payload.length) {

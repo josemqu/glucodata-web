@@ -26,6 +26,8 @@ import {
   CHART_SERIES_ANIMATION_EASING,
 } from "@/lib/chart-motion";
 import {
+  CHART_TOOLTIP_CURSOR,
+  CHART_TOOLTIP_IS_ANIMATION_ACTIVE,
   CHART_TOOLTIP_OFFSET,
   CHART_TOOLTIP_WRAPPER_STYLE,
 } from "@/lib/chart-tooltip";
@@ -59,6 +61,13 @@ interface AnalysisViewProps {
   preCalculatedStats?: GlucoseStats | null;
   preCalculatedPercentiles?: PercentilePoint[];
   loading?: boolean;
+}
+
+const AGP_MOBILE_TIME_TICKS = [0, 4, 8, 12, 16, 20, 24];
+const AGP_DESKTOP_TIME_TICKS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+
+function formatAgpHour(hour: number) {
+  return `${String(hour).padStart(2, "0")}:00`;
 }
 
 export function AnalysisView({ 
@@ -232,10 +241,11 @@ export function AnalysisView({
                 />
                 <Tooltip 
                   offset={CHART_TOOLTIP_OFFSET}
+                  isAnimationActive={CHART_TOOLTIP_IS_ANIMATION_ACTIVE}
                   allowEscapeViewBox={{ x: false, y: true }}
                   wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                   content={<CustomTooltip />} 
-                  cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
+                  cursor={CHART_TOOLTIP_CURSOR}
                 />
                 
                 {/* Outermost range (5th-95th percentile) */}
@@ -337,10 +347,44 @@ export function AnalysisView({
                 )}
               </ComposedChart>
             </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between text-[10px] font-bold text-foreground/70">
-              <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">00 h</span>
-              <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">12 h</span>
-              <span className="rounded-md bg-card/80 px-1.5 py-0.5 backdrop-blur-sm">24 h</span>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-border/45 bg-card/85 px-2 pb-1 pt-1.5 backdrop-blur-sm"
+            >
+              <div className="grid grid-cols-7 sm:hidden">
+                {AGP_MOBILE_TIME_TICKS.map((hour, index) => (
+                  <span
+                    key={hour}
+                    className={`font-numbers relative text-[9px] font-medium leading-none text-muted-foreground ${
+                      index === 0
+                        ? "text-left"
+                        : index === AGP_MOBILE_TIME_TICKS.length - 1
+                          ? "text-right"
+                          : "text-center"
+                    }`}
+                  >
+                    <span className="absolute -top-1.5 left-1/2 h-1 w-px -translate-x-1/2 bg-border" />
+                    {formatAgpHour(hour)}
+                  </span>
+                ))}
+              </div>
+              <div className="hidden grid-cols-9 sm:grid">
+                {AGP_DESKTOP_TIME_TICKS.map((hour, index) => (
+                  <span
+                    key={hour}
+                    className={`font-numbers relative text-[10px] font-medium leading-none text-muted-foreground ${
+                      index === 0
+                        ? "text-left"
+                        : index === AGP_DESKTOP_TIME_TICKS.length - 1
+                          ? "text-right"
+                          : "text-center"
+                    }`}
+                  >
+                    <span className="absolute -top-1.5 left-1/2 h-1 w-px -translate-x-1/2 bg-border" />
+                    {formatAgpHour(hour)}
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-card/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground backdrop-blur-sm">
               mg/dL · 0–300

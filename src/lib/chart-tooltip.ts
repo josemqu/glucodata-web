@@ -1,6 +1,14 @@
 import type { CSSProperties } from "react";
 
 export const CHART_TOOLTIP_OFFSET = 22;
+export const CHART_TOOLTIP_IS_ANIMATION_ACTIVE = false;
+
+export const CHART_TOOLTIP_CURSOR = {
+  stroke: "var(--muted-foreground)",
+  strokeOpacity: 0.15,
+  strokeWidth: 1.5,
+  strokeDasharray: "4 4",
+} as const;
 
 export const CHART_TOOLTIP_WRAPPER_STYLE: CSSProperties = {
   outline: "none",
