@@ -1904,15 +1904,12 @@ export default function GlucoPage() {
               <Droplets className="w-5 h-5 text-primary-foreground" />
             </div>
             <div
-              className="flex flex-col cursor-pointer"
+              className="flex cursor-pointer"
               onClick={() => setActiveView("dashboard")}
             >
               <h1 className="hidden text-base font-black italic leading-none tracking-tighter min-[360px]:block">
                 GLUCOWEB
               </h1>
-              <span className="mt-0.5 hidden text-[11px] font-bold uppercase leading-none tracking-widest text-muted-foreground opacity-60 min-[380px]:block">
-                PRO INTERFACE V2.5
-              </span>
             </div>
           </div>
 
@@ -3137,10 +3134,7 @@ export default function GlucoPage() {
 
       {/* Footer */}
       <footer className="z-10 hidden flex-none border-t bg-background px-4 py-1.5 sm:block">
-        <div className="mx-auto flex max-w-[1100px] items-center justify-center text-muted-foreground sm:justify-between">
-          <p className="hidden text-[11px] font-bold uppercase tracking-[0.4em] opacity-30 sm:block">
-            GlucoWeb Biomedical Interface • Engine v2.5.0-Release
-          </p>
+        <div className="mx-auto flex max-w-[1100px] items-center justify-center text-muted-foreground">
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-1.5 opacity-40">
               <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
