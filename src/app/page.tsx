@@ -86,6 +86,10 @@ import {
   CHART_TOOLTIP_WRAPPER_STYLE,
 } from "@/lib/chart-tooltip";
 
+// Prueba de rendimiento: mantener desactivadas todas las transiciones del gráfico.
+const ENABLE_CHART_TRANSITIONS = false;
+const ENABLE_CHART_INERTIA = false;
+
 function chartEventSymbol(type: GlucoEvent["type"]) {
   if (type === "medication") return "✚";
   if (type === "sleep") return "☾";
@@ -215,12 +219,17 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
   return (
     <g
       ref={markerRef}
+      data-chart-event-marker="true"
       role="button"
       tabIndex={0}
       aria-label={chartEventLabel(event)}
       className="group cursor-pointer outline-none"
       transform={`translate(${x}, ${y})`}
-      onClick={activate}
+      onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+      onClick={(mouseEvent) => {
+        mouseEvent.stopPropagation();
+        activate();
+      }}
       onMouseEnter={() => onTooltipVisibilityChange(true)}
       onMouseLeave={() => onTooltipVisibilityChange(false)}
       onFocus={() => onTooltipVisibilityChange(true)}
@@ -232,7 +241,7 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
         }
       }}
     >
-      <rect x={-22} y={-4} width={44} height={44} fill="transparent" pointerEvents="none" />
+      <rect x={-22} y={-4} width={44} height={44} fill="transparent" pointerEvents="all" />
       {!hasDuration ? <line x1={0} y1={22} x2={0} y2={36} stroke={color} strokeWidth={tooltipOpen ? 2 : 1} strokeDasharray="3 3" className="transition-[stroke-width]" aria-hidden="true" /> : null}
       <circle cx={0} cy={10} r={tooltipOpen ? 14 : 12} fill="var(--card)" stroke={color} strokeWidth={tooltipOpen ? 3 : 2} className="transition-[r,stroke-width,filter] group-hover:[filter:drop-shadow(0_3px_5px_rgb(0_0_0_/_0.24))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))]" />
       {event.type === "meal" ? (
@@ -354,6 +363,7 @@ export default function GlucoPage() {
   const [windowEndMs, setWindowEndMs] = useState<number>(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [activeView, setActiveView] = useState<"dashboard" | "analysis" | "settings">(
@@ -759,6 +769,14 @@ export default function GlucoPage() {
     });
   };
 
+  const loginErrorMessage = error
+    ? /status undefined|api error/i.test(error)
+      ? "No pudimos conectar con LibreLinkUp. Revisá tu conexión e intentá nuevamente."
+      : /email and password are required/i.test(error)
+        ? "Ingresá tu email y contraseña para continuar."
+        : error
+    : null;
+
   const handleLogout = () => {
     Cookies.remove("gluco_session");
     setIsLoggedIn(false);
@@ -993,7 +1011,7 @@ export default function GlucoPage() {
     const to = windowStart;
     const toEnd = windowEnd;
 
-    if (reduceMotion || isChartPanning || (Math.abs(from - to) < 1 && Math.abs(fromEnd - toEnd) < 1)) {
+    if (!ENABLE_CHART_TRANSITIONS || reduceMotion || isChartPanning || (Math.abs(from - to) < 1 && Math.abs(fromEnd - toEnd) < 1)) {
       chartWindowStartRef.current = to;
       chartWindowEndRef.current = toEnd;
       setChartWindowStart(to);
@@ -1220,6 +1238,7 @@ export default function GlucoPage() {
 
   const handleChartPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || chartContextMenu) return;
+    if (event.target instanceof Element && event.target.closest("[data-chart-event-marker]")) return;
     if (chartInertiaFrameRef.current !== null) cancelAnimationFrame(chartInertiaFrameRef.current);
     chartInertiaFrameRef.current = null;
     chartPanRef.current = {
@@ -1255,7 +1274,7 @@ export default function GlucoPage() {
     chartPanRef.current = null;
     setIsChartDragging(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    if (reduceMotion || Math.abs(velocity) < 0.08 || width <= 0) {
+    if (!ENABLE_CHART_INERTIA || reduceMotion || Math.abs(velocity) < 0.08 || width <= 0) {
       setIsChartPanning(false);
       return;
     }
@@ -1420,86 +1439,134 @@ export default function GlucoPage() {
 
   if (!isLoggedIn) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-background p-4">
+      <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
+        <div aria-hidden="true" className="absolute -left-20 top-[14%] h-64 w-64 rounded-full bg-primary/8 blur-3xl" />
+        <div aria-hidden="true" className="absolute -right-24 bottom-[8%] h-72 w-72 rounded-full bg-primary/6 blur-3xl" />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-sm"
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="relative w-full max-w-4xl"
         >
-          <Card className="border-border shadow-lg">
-            <CardHeader className="text-center pb-6">
-              <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20 rotate-3">
-                <Droplets className="w-8 h-8 text-primary-foreground" />
+          <div className="grid overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-[0_24px_70px_-32px_rgba(0,0,0,0.48)] md:grid-cols-[0.92fr_1.08fr]">
+            <section className="relative hidden min-h-[540px] flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground md:flex">
+              <div aria-hidden="true" className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full border border-primary-foreground/15" />
+              <div aria-hidden="true" className="absolute -bottom-10 -right-10 h-44 w-44 rounded-full border border-primary-foreground/20" />
+              <div className="relative flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-foreground/12">
+                  <Droplets className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <span className="text-lg font-extrabold tracking-[-0.02em]">GLUCOWEB</span>
               </div>
-              <CardTitle className="text-3xl font-bold tracking-tight italic">
-                GLUCOWEB
-              </CardTitle>
-              <CardDescription className="text-[11px] uppercase tracking-widest font-bold">
-                Med-Analytics Interface
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="email"
-                    className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground"
-                  >
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="usuario@ejemplo.com"
-                    className="bg-muted/30 border-muted-foreground/20"
-                    value={credentials.email}
-                    onChange={(e) =>
-                      setCredentials({ ...credentials, email: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="password"
-                    className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground"
-                  >
-                    Contraseña
-                  </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    className="bg-muted/30 border-muted-foreground/20"
-                    value={credentials.password}
-                    onChange={(e) =>
-                      setCredentials({
-                        ...credentials,
-                        password: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-                {error && (
-                  <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-[11px] font-bold uppercase tracking-widest border border-destructive/20 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    {error}
+              <div className="relative max-w-xs">
+                <h1 className="text-balance text-4xl font-semibold leading-[1.08] tracking-[-0.03em]">
+                  Tus datos de glucosa, en contexto.
+                </h1>
+                <p className="mt-5 text-base leading-relaxed text-primary-foreground/78">
+                  Monitoreá tendencias, revisá eventos y entendé mejor cada jornada desde un solo lugar.
+                </p>
+              </div>
+              <div className="relative flex items-center gap-2 text-sm text-primary-foreground/72">
+                <Activity className="h-4 w-4" aria-hidden="true" />
+                <span>Monitoreo y análisis de glucosa</span>
+              </div>
+            </section>
+
+            <section className="flex min-h-[540px] flex-col justify-center px-6 py-8 sm:px-10 md:px-12">
+              <CardHeader className="px-0">
+                <div className="mb-3 flex items-center gap-3 md:hidden">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_var(--primary)]">
+                    <Droplets className="h-6 w-6" aria-hidden="true" />
                   </div>
-                )}
-                <Button
-                  type="submit"
-                  className="w-full font-bold h-11 text-xs tracking-[0.1em]"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    "ACCEDER AL PANEL"
+                  <span className="text-lg font-extrabold tracking-[-0.02em]">GLUCOWEB</span>
+                </div>
+                <CardTitle className="text-2xl font-semibold tracking-[-0.025em] sm:text-3xl">
+                  Ingresá a tu panel
+                </CardTitle>
+                <CardDescription className="max-w-sm text-sm leading-relaxed">
+                  Usá las credenciales de tu cuenta LibreLinkUp para continuar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="mt-8 px-0">
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm font-medium">
+                      Email
+                    </Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="username"
+                      placeholder="nombre@ejemplo.com"
+                      className="h-12 bg-background px-4 text-base sm:h-12 sm:text-base"
+                      value={credentials.email}
+                      onChange={(e) => {
+                        setCredentials({ ...credentials, email: e.target.value });
+                        if (error) setError(null);
+                      }}
+                      aria-invalid={Boolean(error)}
+                      aria-describedby={loginErrorMessage ? "login-error" : undefined}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-sm font-medium">
+                      Contraseña
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        name="password"
+                        type={showLoginPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        className="h-12 bg-background px-4 pr-12 text-base sm:h-12 sm:text-base"
+                        value={credentials.password}
+                        onChange={(e) => {
+                          setCredentials({ ...credentials, password: e.target.value });
+                          if (error) setError(null);
+                        }}
+                        aria-invalid={Boolean(error)}
+                        aria-describedby={loginErrorMessage ? "login-error" : undefined}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword((visible) => !visible)}
+                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        aria-label={showLoginPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        aria-pressed={showLoginPassword}
+                      >
+                        {showLoginPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                      </button>
+                    </div>
+                  </div>
+                  {loginErrorMessage && (
+                    <div id="login-error" role="alert" aria-live="polite" className="flex items-start gap-3 rounded-xl bg-destructive/10 p-3.5 text-sm leading-relaxed text-destructive ring-1 ring-inset ring-destructive/20">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>{loginErrorMessage}</span>
+                    </div>
                   )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+                  <Button
+                    type="submit"
+                    className="h-12 w-full text-sm font-semibold"
+                    disabled={loading}
+                    aria-busy={loading}
+                  >
+                    {loading ? (
+                      <><RefreshCw className="animate-spin" aria-hidden="true" /> Conectando…</>
+                    ) : (
+                      "Ingresar"
+                    )}
+                  </Button>
+                  <p className="text-center text-xs leading-relaxed text-muted-foreground">
+                    GlucoWeb se conecta con LibreLinkUp para sincronizar tu información.
+                  </p>
+                </form>
+              </CardContent>
+            </section>
+          </div>
         </motion.div>
       </main>
     );
@@ -1643,7 +1710,7 @@ export default function GlucoPage() {
   };
 
   const showDots = chartGraph.length <= 220;
-  const enableAnimation = chartGraph.length <= 900;
+  const enableAnimation = ENABLE_CHART_TRANSITIONS && chartGraph.length <= 900;
 
   const scatterDataRaw = chartGraph.filter(
     (p: any) => p?.value !== null && p?.value !== undefined,
