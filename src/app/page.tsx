@@ -213,7 +213,6 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
   const activate = () => onSelect(event);
 
   useLayoutEffect(() => {
-    if (!tooltipOpen) return;
     const referenceLineLayer = markerRef.current?.closest<SVGGElement>(".recharts-reference-line");
     referenceLineLayer?.parentElement?.append(referenceLineLayer);
   }, [tooltipOpen]);
