@@ -35,6 +35,34 @@ export interface EventInput {
   metadata?: Record<string, unknown>;
 }
 
+export interface InsulinDose {
+  name: string;
+  insulin_type: string;
+  units: number;
+}
+
+export function eventInsulinDoses(event: Pick<GlucoEvent, "type" | "title" | "metadata">): InsulinDose[] {
+  if (event.type !== "insulin") return [];
+  const stored = Array.isArray(event.metadata.insulin_doses) ? event.metadata.insulin_doses : [];
+  const doses = stored.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const dose = value as Record<string, unknown>;
+    const name = typeof dose.name === "string" ? dose.name.trim() : "";
+    const units = Number(dose.units);
+    if (!name || !isInsulinType(dose.insulin_type) || !Number.isFinite(units) || units <= 0) return [];
+    return [{ name, insulin_type: dose.insulin_type, units }];
+  });
+  if (doses.length) return doses;
+
+  const units = Number(event.metadata.units);
+  if (!Number.isFinite(units) || units <= 0 || !isInsulinType(event.metadata.insulin_type)) return [];
+  return [{
+    name: typeof event.metadata.insulin_name === "string" ? event.metadata.insulin_name : event.title,
+    insulin_type: event.metadata.insulin_type,
+    units,
+  }];
+}
+
 export const EVENT_RELATION_TYPES = [
   "meal_insulin",
   "correction",
@@ -125,17 +153,43 @@ export function validateEventInput(value: unknown):
   }
 
   if (input.type === "insulin") {
-    const units = Number(metadata.units);
-    if (!Number.isFinite(units) || units <= 0 || units > 250) {
-      return { success: false, error: "Ingresá una dosis válida mayor que 0 y de hasta 250 U." };
-    }
-    if (!isInsulinType(metadata.insulin_type)) {
-      return { success: false, error: "Seleccioná un tipo de insulina válido." };
+    const rawDoses = Array.isArray(metadata.insulin_doses) ? metadata.insulin_doses : null;
+    const doses: InsulinDose[] = [];
+    if (rawDoses) {
+      if (rawDoses.length < 1 || rawDoses.length > 6) {
+        return { success: false, error: "Seleccioná entre 1 y 6 insulinas." };
+      }
+      const names = new Set<string>();
+      for (const value of rawDoses) {
+        if (!value || typeof value !== "object") return { success: false, error: "La dosis de insulina no es válida." };
+        const dose = value as Record<string, unknown>;
+        const name = typeof dose.name === "string" ? dose.name.trim() : "";
+        const units = Number(dose.units);
+        if (!name || name.length > 80 || names.has(name.toLocaleLowerCase())) {
+          return { success: false, error: "Seleccioná insulinas válidas y sin repetir." };
+        }
+        if (!isInsulinType(dose.insulin_type)) return { success: false, error: `Seleccioná un tipo válido para ${name}.` };
+        if (!Number.isFinite(units) || units <= 0 || units > 250) return { success: false, error: `Ingresá una dosis válida para ${name}.` };
+        names.add(name.toLocaleLowerCase());
+        doses.push({ name, insulin_type: dose.insulin_type, units });
+      }
+      metadata.insulin_doses = doses;
+      metadata.units = doses.reduce((sum, dose) => sum + dose.units, 0);
+      metadata.insulin_name = doses[0].name;
+      metadata.insulin_type = doses[0].insulin_type;
+    } else {
+      const units = Number(metadata.units);
+      if (!Number.isFinite(units) || units <= 0 || units > 250) {
+        return { success: false, error: "Ingresá una dosis válida mayor que 0 y de hasta 250 U." };
+      }
+      if (!isInsulinType(metadata.insulin_type)) {
+        return { success: false, error: "Seleccioná un tipo de insulina válido." };
+      }
+      metadata.units = units;
     }
     if (metadata.dose_purpose != null && !["meal", "correction"].includes(String(metadata.dose_purpose))) {
       return { success: false, error: "Seleccioná si la dosis fue de comida o de corrección." };
     }
-    metadata.units = units;
   }
 
   if (input.type === "exercise") {

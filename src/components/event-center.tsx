@@ -49,6 +49,7 @@ import type {
   GlucoEvent,
   LinkedEvent,
 } from "@/lib/events";
+import { eventInsulinDoses } from "@/lib/events";
 import type { MealItem } from "@/lib/foods";
 import { INSULIN_TYPE_LABELS, type PatientInsulin } from "@/lib/insulins";
 
@@ -121,7 +122,10 @@ function renderEventIcon(type: EventType, className: string) {
 
 function eventSummary(event: GlucoEvent) {
   if (event.type === "meal" && typeof event.metadata.carbs_g === "number") return `${event.metadata.carbs_g} g CH`;
-  if (event.type === "insulin" && typeof event.metadata.units === "number") return `${event.metadata.units} U`;
+  if (event.type === "insulin") {
+    const doses = eventInsulinDoses(event);
+    if (doses.length) return doses.map((dose) => `${dose.name} ${dose.units} U`).join(" · ");
+  }
   if (event.type === "exercise") return String(event.metadata.intensity ?? "");
   return event.notes ?? "";
 }
@@ -138,8 +142,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
   const [endedAt, setEndedAt] = useState("");
   const [notes, setNotes] = useState("");
   const [carbs, setCarbs] = useState("");
-  const [units, setUnits] = useState("");
-  const [insulinType, setInsulinType] = useState("rapid");
+  const [insulinDoses, setInsulinDoses] = useState<Record<string, string>>({});
   const [isCorrection, setIsCorrection] = useState(false);
   const [intensity, setIntensity] = useState("medium");
   const [saving, setSaving] = useState(false);
@@ -235,8 +238,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setEndedAt("");
     setNotes("");
     setCarbs("");
-    setUnits("");
-    setInsulinType(insulins[0]?.insulin_type ?? "rapid");
+    setInsulinDoses(insulins[0] ? { [insulins[0].name]: "" } : {});
     setIsCorrection(false);
     setIntensity("medium");
     setMealSelection([]);
@@ -255,8 +257,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setEndedAt(event.ended_at ? localDateTime(new Date(event.ended_at)) : "");
     setNotes(event.notes ?? "");
     setCarbs(event.metadata.carbs_g == null ? "" : String(event.metadata.carbs_g));
-    setUnits(event.metadata.units == null ? "" : String(event.metadata.units));
-    setInsulinType(String(event.metadata.insulin_type ?? "rapid"));
+    setInsulinDoses(Object.fromEntries(eventInsulinDoses(event).map((dose) => [dose.name, String(dose.units)])));
     setIsCorrection(event.metadata.dose_purpose === "correction");
     setIntensity(String(event.metadata.intensity ?? "medium"));
     setMealSelection([]);
@@ -463,16 +464,23 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     const metadata: Record<string, unknown> = {};
     if (type === "meal") metadata.carbs_g = mealSelection.length ? selectedMealCarbs : Number(carbs);
     if (type === "insulin") {
-      metadata.units = Number(units);
-      metadata.insulin_type = insulinType;
-      metadata.insulin_name = title.trim();
+      const doses = insulins.flatMap((insulin) => Object.hasOwn(insulinDoses, insulin.name)
+        ? [{ name: insulin.name, insulin_type: insulin.insulin_type, units: Number(insulinDoses[insulin.name]) }]
+        : []);
+      metadata.insulin_doses = doses;
       metadata.dose_purpose = isCorrection ? "correction" : "meal";
     }
     if (type === "exercise") metadata.intensity = intensity;
 
+    let payloadTitle = title;
+    if (type === "insulin") {
+      const selectedNames = insulins.filter((insulin) => Object.hasOwn(insulinDoses, insulin.name)).map((insulin) => insulin.name);
+      const combinedTitle = selectedNames.join(" + ");
+      payloadTitle = combinedTitle.length > 120 ? `Dosis combinada (${selectedNames.length} insulinas)` : combinedTitle || "Insulina";
+    }
     const payload: EventInput = {
       type,
-      title,
+      title: payloadTitle,
       occurred_at: new Date(occurredAt).toISOString(),
       ended_at: type === "exercise" && endedAt ? new Date(endedAt).toISOString() : null,
       notes: notes || null,
@@ -631,16 +639,16 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                         <legend className="text-xs font-semibold text-muted-foreground">Insulina</legend>
                         <div className="grid grid-cols-2 gap-2">
                           {insulins.map((insulin) => {
-                            const selected = title === insulin.name && insulinType === insulin.insulin_type;
-                            return <button key={`${insulin.name}-${insulin.insulin_type}`} type="button" aria-pressed={selected} onClick={() => { setTitle(insulin.name); setInsulinType(insulin.insulin_type); }} className={`min-h-14 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-primary" : "bg-background hover:bg-muted"}`}><span className="block truncate text-sm font-bold">{insulin.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{INSULIN_TYPE_LABELS[insulin.insulin_type]}</span></button>;
+                            const selected = Object.hasOwn(insulinDoses, insulin.name);
+                            return <div key={`${insulin.name}-${insulin.insulin_type}`} className={`overflow-hidden rounded-xl border transition-colors ${selected ? "border-primary bg-primary/5" : "bg-background"}`}><button type="button" aria-pressed={selected} onClick={() => setInsulinDoses((current) => { const next = { ...current }; if (Object.hasOwn(next, insulin.name)) delete next[insulin.name]; else next[insulin.name] = ""; return next; })} className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-input"}`}>{selected ? <Check className="h-3.5 w-3.5" /> : null}</span><span className="min-w-0"><span className="block truncate text-sm font-bold">{insulin.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{INSULIN_TYPE_LABELS[insulin.insulin_type]}</span></span></button>{selected ? <div className="border-t px-2 py-2"><InsetNumberStepper id={`event-units-${insulin.sort_order}`} label={`Dosis de ${insulin.name}`} value={insulinDoses[insulin.name]} onValueChange={(value) => setInsulinDoses((current) => ({ ...current, [insulin.name]: String(value) }))} step={1} min={0} unit="U" required /></div> : null}</div>;
                           })}
                         </div>
+                        <p className="text-xs leading-5 text-muted-foreground">Podés seleccionar más de una si las aplicaste al mismo tiempo.</p>
                       </fieldset>
                     ) : <InsetField id="event-title" label="Nombre"><Input id="event-title" className={insetControlClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={copy[type].placeholder} maxLength={120} required /></InsetField>}
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <InsetField id="event-occurred-at" label="Fecha y hora"><Input id="event-occurred-at" className={insetControlClass} type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></InsetField>
                       {type === "meal" ? <InsetNumberStepper id="event-carbs" label={mealSelection.length ? "Carbohidratos calculados" : "Carbohidratos"} value={mealSelection.length ? Number(selectedMealCarbs.toFixed(1)) : carbs} onValueChange={setCarbs} step={1} min={0} unit="g CH" readOnly={mealSelection.length > 0} required /> : null}
-                      {type === "insulin" ? <InsetNumberStepper id="event-units" label="Dosis" value={units} onValueChange={setUnits} step={1} min={0} unit="U" required /> : null}
                       {type === "exercise" ? <InsetField id="event-ended-at" label="Finalización"><Input id="event-ended-at" className={insetControlClass} type="datetime-local" value={endedAt} onChange={(event) => setEndedAt(event.target.value)} required /></InsetField> : null}
                     </div>
                     {type === "meal" ? <MealComposer session={session} value={mealSelection} disabled={saving} onChange={(next) => { setMealSelection(next); setMealCompositionDirty(true); if (next.length) setCarbs(String(next.reduce((sum, item) => sum + Number(item.food.carbs_g) * item.quantity, 0))); }} /> : null}
