@@ -460,6 +460,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     event.preventDefault();
     setSaving(true);
     setFormError(null);
+    const isNewEvent = editing === null;
 
     const metadata: Record<string, unknown> = {};
     if (type === "meal") metadata.carbs_g = mealSelection.length ? selectedMealCarbs : Number(carbs);
@@ -508,6 +509,11 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
       }
       reset(type);
       setDetail(null);
+      if (isNewEvent) {
+        setOpen(false);
+        await onChanged();
+        return;
+      }
       setPanelView("today");
       await Promise.all([onChanged(), openDetail(result.data)]);
     } catch (requestError) {
