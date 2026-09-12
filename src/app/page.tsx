@@ -488,6 +488,7 @@ export default function GlucoPage() {
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(60);
 
   const nextRefreshAtRef = useRef<number | null>(null);
+  const syncCardRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false);
   const credentialsRef = useRef(credentials);
   const sessionRef = useRef(session);
@@ -504,6 +505,26 @@ export default function GlucoPage() {
   useEffect(() => {
     graphPointsRef.current = graphPoints;
   }, [graphPoints]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+
+    const updateBorderProgress = () => {
+      const card = syncCardRef.current;
+      const nextAt = nextRefreshAtRef.current;
+      if (card) {
+        const remaining = nextAt ? Math.max(0, nextAt - Date.now()) : 60000;
+        const progress = isLoggedIn && activeView === "dashboard" && isMonitorToday
+          ? Math.min(100, Math.max(0, 100 - (remaining / 60000) * 100))
+          : 0;
+        card.style.setProperty("--sync-countdown-progress", `${progress}%`);
+      }
+      animationFrame = window.requestAnimationFrame(updateBorderProgress);
+    };
+
+    animationFrame = window.requestAnimationFrame(updateBorderProgress);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [activeView, isLoggedIn, isMonitorToday]);
 
   // Sync activeView with URL Hash
   useEffect(() => {
@@ -2730,7 +2751,15 @@ export default function GlucoPage() {
                 {/* Right Column - Sidemenu */}
                 <div className="lg:col-span-3 flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
-                    <Card className="border bg-card/30">
+                    <Card
+                      ref={syncCardRef}
+                      className="sync-card border-transparent bg-card/30"
+                      aria-label={
+                        isMonitorToday
+                          ? `Próxima actualización en ${secondsUntilRefresh} segundos`
+                          : "Sincronización pausada"
+                      }
+                    >
                       <CardContent className="py-3.5 space-y-2">
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                           Diagnóstico de salud

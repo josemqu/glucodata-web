@@ -183,6 +183,54 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The countdown completes clockwise around the sync card as the next refresh
+   approaches. The text remains the precise representation of the same state. */
+.sync-card {
+  --sync-countdown-progress: 0%;
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--primary) 5%, transparent);
+}
+
+.sync-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from -90deg,
+    color-mix(in oklch, var(--primary) 92%, white) var(--sync-countdown-progress),
+    color-mix(in oklch, var(--primary) 12%, transparent) 0
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 5px color-mix(in oklch, var(--primary) 30%, transparent));
+  transition: filter 180ms ease;
+}
+
+.sync-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.sync-card:hover::before,
+.sync-card:focus-within::before {
+  filter: drop-shadow(0 0 7px color-mix(in oklch, var(--primary) 44%, transparent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-card::before {
+    transition: none;
+    filter: none;
+  }
+}
+
 .glucose-chart-stage .recharts-wrapper,
 .glucose-chart-stage .recharts-surface {
   display: block;
