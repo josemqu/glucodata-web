@@ -63,6 +63,7 @@ import {
   ReferenceLine,
   ReferenceArea,
 } from "recharts";
+import { GlucoseLineGradient } from "@/components/glucose-line-gradient";
 import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 import { getHistoricalGlucoseAction } from "./actions";
@@ -1725,12 +1726,6 @@ export default function GlucoPage() {
     return uniqueSorted.length > 0 ? uniqueSorted : undefined;
   })();
 
-  const breakPointPercentage = (value: number) => {
-    if (dataMax === dataMin) return "0%";
-    const percentage = ((value - dataMin) / (dataMax - dataMin)) * 100;
-    return `${Math.max(0, Math.min(100, percentage))}%`;
-  };
-
   const showDots = chartGraph.length <= 220;
   const enableAnimation = ENABLE_CHART_TRANSITIONS && chartGraph.length <= 900;
 
@@ -2307,111 +2302,13 @@ export default function GlucoPage() {
                               return (
                                 <>
                                   <defs>
-                                    <linearGradient
+                                    <GlucoseLineGradient
                                       id={gradientId}
-                                      x1="0"
-                                      y1="1"
-                                      x2="0"
-                                      y2="0"
-                                    >
-                                      <stop
-                                        offset="0%"
-                                        stopColor={getGlucoseColor(dataMin)}
-                                      />
-
-                                      {targetConfig.hypo > dataMin &&
-                                        targetConfig.hypo < dataMax && (
-                                          <>
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.hypo,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.hypo - 1,
-                                              )}
-                                            />
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.hypo,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.hypo + 1,
-                                              )}
-                                            />
-                                          </>
-                                        )}
-
-                                      {targetConfig.low > dataMin &&
-                                        targetConfig.low < dataMax && (
-                                          <>
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.low,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.low - 1,
-                                              )}
-                                            />
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.low,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.low + 1,
-                                              )}
-                                            />
-                                          </>
-                                        )}
-
-                                      {targetConfig.high > dataMin &&
-                                        targetConfig.high < dataMax && (
-                                          <>
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.high,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.high - 1,
-                                              )}
-                                            />
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.high,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.high + 1,
-                                              )}
-                                            />
-                                          </>
-                                        )}
-
-                                      {targetConfig.hyper > dataMin &&
-                                        targetConfig.hyper < dataMax && (
-                                          <>
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.hyper,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.hyper - 1,
-                                              )}
-                                            />
-                                            <stop
-                                              offset={breakPointPercentage(
-                                                targetConfig.hyper,
-                                              )}
-                                              stopColor={getGlucoseColor(
-                                                targetConfig.hyper + 1,
-                                              )}
-                                            />
-                                          </>
-                                        )}
-
-                                      <stop
-                                        offset="100%"
-                                        stopColor={getGlucoseColor(dataMax)}
-                                      />
-                                    </linearGradient>
+                                      minimum={yMin}
+                                      maximum={yMax}
+                                      thresholds={[targetConfig.hypo, targetConfig.low, targetConfig.high, targetConfig.hyper]}
+                                      getColor={getGlucoseColor}
+                                    />
 
                                     <linearGradient
                                       id="colorGluc"

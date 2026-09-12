@@ -190,7 +190,7 @@
   isolation: isolate;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 24px color-mix(in oklch, var(--primary) 5%, transparent);
+  box-shadow: none;
 }
 
 .sync-card::before {
@@ -202,7 +202,7 @@
   padding: 1.5px;
   border-radius: inherit;
   background: conic-gradient(
-    from -90deg,
+    from 0deg,
     color-mix(in oklch, var(--primary) 92%, white) var(--sync-countdown-progress),
     color-mix(in oklch, var(--primary) 12%, transparent) 0
   );
@@ -210,18 +210,11 @@
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  filter: drop-shadow(0 0 5px color-mix(in oklch, var(--primary) 30%, transparent));
-  transition: filter 180ms ease;
 }
 
 .sync-card > * {
   position: relative;
   z-index: 1;
-}
-
-.sync-card:hover::before,
-.sync-card:focus-within::before {
-  filter: drop-shadow(0 0 7px color-mix(in oklch, var(--primary) 44%, transparent));
 }
 
 @media (prefers-reduced-motion: reduce) {
