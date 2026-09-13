@@ -76,6 +76,10 @@ export interface EventCenterHandle {
   openNewAt: (occurredAt: Date, type: EventType) => void;
 }
 
+function defaultInsulinDose(insulin: PatientInsulin): string {
+  return insulin.insulin_type === "long" || insulin.insulin_type === "ultra_long" ? "24" : "";
+}
+
 const choices: Array<{ type: EventType; label: string; icon: typeof Activity }> = [
   { type: "meal", label: "Comida", icon: Utensils },
   { type: "insulin", label: "Insulina", icon: Syringe },
@@ -238,7 +242,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setEndedAt("");
     setNotes("");
     setCarbs("");
-    setInsulinDoses(insulins[0] ? { [insulins[0].name]: "" } : {});
+    setInsulinDoses(insulins[0] ? { [insulins[0].name]: defaultInsulinDose(insulins[0]) } : {});
     setIsCorrection(false);
     setIntensity("medium");
     setMealSelection([]);
@@ -646,7 +650,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                         <div className="grid grid-cols-2 gap-2">
                           {insulins.map((insulin) => {
                             const selected = Object.hasOwn(insulinDoses, insulin.name);
-                            return <div key={`${insulin.name}-${insulin.insulin_type}`} className={`overflow-hidden rounded-xl border transition-colors ${selected ? "border-primary bg-primary/5" : "bg-background"}`}><button type="button" aria-pressed={selected} onClick={() => setInsulinDoses((current) => { const next = { ...current }; if (Object.hasOwn(next, insulin.name)) delete next[insulin.name]; else next[insulin.name] = ""; return next; })} className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-input"}`}>{selected ? <Check className="h-3.5 w-3.5" /> : null}</span><span className="min-w-0"><span className="block truncate text-sm font-bold">{insulin.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{INSULIN_TYPE_LABELS[insulin.insulin_type]}</span></span></button>{selected ? <div className="border-t px-2 py-2"><InsetNumberStepper id={`event-units-${insulin.sort_order}`} label={`Dosis de ${insulin.name}`} value={insulinDoses[insulin.name]} onValueChange={(value) => setInsulinDoses((current) => ({ ...current, [insulin.name]: String(value) }))} step={1} min={0} unit="U" required /></div> : null}</div>;
+                            return <div key={`${insulin.name}-${insulin.insulin_type}`} className={`overflow-hidden rounded-xl border transition-colors ${selected ? "border-primary bg-primary/5" : "bg-background"}`}><button type="button" aria-pressed={selected} onClick={() => setInsulinDoses((current) => { const next = { ...current }; if (Object.hasOwn(next, insulin.name)) delete next[insulin.name]; else next[insulin.name] = defaultInsulinDose(insulin); return next; })} className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-input"}`}>{selected ? <Check className="h-3.5 w-3.5" /> : null}</span><span className="min-w-0"><span className="block truncate text-sm font-bold">{insulin.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{INSULIN_TYPE_LABELS[insulin.insulin_type]}</span></span></button>{selected ? <div className="border-t px-2 py-2"><InsetNumberStepper id={`event-units-${insulin.sort_order}`} label={`Dosis de ${insulin.name}`} value={insulinDoses[insulin.name]} onValueChange={(value) => setInsulinDoses((current) => ({ ...current, [insulin.name]: String(value) }))} step={1} min={0} unit="U" required /></div> : null}</div>;
                           })}
                         </div>
                         <p className="text-xs leading-5 text-muted-foreground">Podés seleccionar más de una si las aplicaste al mismo tiempo.</p>
