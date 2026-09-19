@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { LibreLinkUpClient } from "../_shared/librelink.ts";
+import { SYNC_SECRET_SHA256 } from "../_shared/sync-auth.ts";
 
 Deno.serve(async (request: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -9,7 +10,11 @@ Deno.serve(async (request: Request) => {
   const syncSecret = Deno.env.get("GLUCO_SYNC_SECRET");
   const bearer = request.headers.get("authorization");
   if (bearer !== `Bearer ${serviceKey}` && (!syncSecret || bearer !== `Bearer ${syncSecret}`)) {
-    return new Response("Unauthorized", { status: 401 });
+    const token = /^Bearer (\S+)$/i.exec(bearer ?? "")?.[1];
+    if (!token || token.length > 512) return new Response("Unauthorized", { status: 401 });
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    if (hash !== SYNC_SECRET_SHA256) return new Response("Unauthorized", { status: 401 });
   }
   if (Deno.env.get("GLUCO_IMPORTS_PAUSED") === "true") return Response.json({ success: true, paused: true });
   const database = createClient(url, serviceKey, {

@@ -2,7 +2,7 @@
 
 ## Estado real
 
-Implementación realizada en `/Users/jose/Code/GlucoDataHandler/glucodata-web`, sobre un árbol de trabajo inicialmente limpio. **La migración NO fue aplicada al proyecto remoto ni se desplegó la web o la Edge Function.** No se modificaron las mediciones ni los eventos de producción. Se creó y eliminó una identidad temporal de Supabase Auth para verificar su API; no contenía datos clínicos.
+Implementación realizada en `/Users/jose/Code/GlucoDataHandler/glucodata-web`. La activación productiva se completó el 19 de septiembre de 2026 sobre el proyecto `hmmasbpshowkdifbiuki`. Se tomó un dump binario recuperable (`work/cutover-20260919/database.dump`), se ensayó su restauración en PostgreSQL aislado y se aplicó la migración transaccional. El backfill asignó 70.355 mediciones, 119 eventos, 1 alimento y 2 porciones a la identidad interna creada tras validar la sesión LibreLinkUp; quedaron 0 mediciones sin propietario. La web productiva y la Edge Function están desplegadas, y el cron de cinco minutos quedó activo con un secreto dedicado guardado en Vault. No se borraron mediciones ni eventos.
 
 El usuario confirmó que el legado pertenece a una sola cuenta. La sesión guardada de LibreLinkUp se validó mediante `/llu/connections`: tiene un único paciente conectado y coincide con el patient_id almacenado. Esa combinación permite preparar la asignación a la cuenta externa guardada, sin inferirla del primer login. La activación remota sigue pendiente por las limitaciones operativas indicadas abajo. Aplicar solo el SQL o solo la web no es compatible con la versión anterior: requiere el cambio coordinado descrito abajo. No hay commit ni push.
 

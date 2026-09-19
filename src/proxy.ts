@@ -5,6 +5,12 @@ export function proxy(request: NextRequest) {
     "Cache-Control": "private, no-store, max-age=0",
     "Referrer-Policy": "no-referrer",
   };
+  if (process.env.GLUCO_MAINTENANCE === "true") {
+    return new NextResponse("Estamos actualizando GlucoWeb. Volvé a intentar en unos minutos.", {
+      status: 503,
+      headers: { ...headers, "Content-Type": "text/plain; charset=utf-8", "Retry-After": "120" },
+    });
+  }
   // Never render a page containing credentials in its URL. This cannot erase
   // URLs already recorded by an upstream proxy or browser before this request.
   const sensitive = ["password", "email", "token", "access_token", "refresh_token"];

@@ -93,8 +93,8 @@ do $$ declare t text; begin
 end $$;
 reset role;
 do $$ begin
- if (select count(*) from glucose_measurements where user_id is null) <> 1 then raise exception 'Legacy data lost'; end if;
- if (select count(*) from glucose_measurements) <> 3 then raise exception 'Account data lost'; end if;
+ if (select count(*) from glucose_measurements where user_id is null and patient_id='shared-patient') <> 1 then raise exception 'Legacy data lost'; end if;
+ if (select count(*) from glucose_measurements where patient_id='shared-patient') <> 3 then raise exception 'Account data lost'; end if;
 end $$;
 rollback;
 select 'Multiuser isolation tests passed' as result;

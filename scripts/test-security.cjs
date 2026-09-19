@@ -73,3 +73,18 @@ test('native login fallback does not reflect or process submitted secrets', asyn
   assert.match(page, /<form method="post" action="\/api\/auth\/login"/);
   assert.doesNotMatch(page, /Cookies\.set\("gluco_session"/);
 });
+test('maintenance blocks reads and writes before authentication during cutover', () => {
+  const previous = process.env.GLUCO_MAINTENANCE;
+  process.env.GLUCO_MAINTENANCE = 'true';
+  try {
+    for (const method of ['GET', 'POST']) {
+      const response = proxy(new NextRequest('https://app.example.test/api/events', { method }));
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get('retry-after'), '120');
+      assert.match(response.headers.get('cache-control'), /no-store/);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.GLUCO_MAINTENANCE;
+    else process.env.GLUCO_MAINTENANCE = previous;
+  }
+});

@@ -22,6 +22,7 @@ function setup({env={},sessions=[],failPatient=null}={}) {
  const mocks={
   'jsr:@supabase/functions-js/edge-runtime.d.ts':{},
   'https://esm.sh/@supabase/supabase-js@2.39.7':{createClient:()=>{clients++;return database;}},
+  '../_shared/sync-auth.ts':{SYNC_SECRET_SHA256:require('node:crypto').createHash('sha256').update('deployed-cron').digest('hex')},
   '../_shared/librelink.ts':{LibreLinkUpClient:class{
    constructor(_email,_password,region,token,userId){Object.assign(this,{region,token,userId});}
    async getConnections(){return [{patientId:failPatient===this.userId?'revoked':'shared'}];}
@@ -73,4 +74,10 @@ test('keyset pagination processes every account exactly once',async()=>{
  assert.equal((await result.json()).completed,101);
  assert.deepEqual(state.pages,[undefined,'099']);
  assert.equal(new Set(state.writes.map(w=>w.rows[0].user_id)).size,101);
+});
+
+test('dedicated cron digest authorizes without shared service credentials',async()=>{
+ const state=setup();
+ assert.equal((await state.run('deployed-cron')).status,200);
+ assert.equal((await state.run('wrong-deployed-cron')).status,401);
 });
