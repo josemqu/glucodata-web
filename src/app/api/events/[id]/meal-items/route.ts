@@ -11,7 +11,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 function failure(error: unknown) {
   const status = error instanceof EventAuthError ? error.status : 500;
-  const message = error instanceof Error ? error.message : "No se pudo procesar la composición de la comida.";
+  const message = error instanceof EventAuthError ? error.message : "No se pudo procesar la composición de la comida.";
   return NextResponse.json({ success: false, error: message }, { status });
 }
 

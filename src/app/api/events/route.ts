@@ -9,7 +9,7 @@ import {
 
 function failure(error: unknown) {
   const status = error instanceof EventAuthError ? error.status : 500;
-  const message = error instanceof Error ? error.message : "No se pudo procesar el evento.";
+  const message = error instanceof EventAuthError ? error.message : "No se pudo procesar el evento.";
   return NextResponse.json({ success: false, error: message }, { status });
 }
 

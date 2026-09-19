@@ -12,6 +12,7 @@ sql() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 "$@"; }
 sql < supabase/tests/fixtures/bootstrap.sql
 for migration in supabase/migrations/*.sql; do sql < "$migration"; done
 sql < supabase/tests/multiuser.sql
+sql < supabase/tests/manual-glucose.sql
 sql <<'SQL'
 insert into auth.users(id) values('00000000-0000-4000-8000-000000000003');
 insert into app_users(id,librelink_user_id) values('00000000-0000-4000-8000-000000000003','backfill-test');

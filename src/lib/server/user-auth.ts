@@ -49,6 +49,9 @@ export async function requireUser() {
 // Only a successful provider credential login may establish an identity. Never
 // use a caller's x-libre-user-id or an unverified provider JWT as ownership proof.
 export async function loginUser(email: string, password: string) {
+  if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password || email.length > 320 || password.length > 4096) {
+    throw new EventAuthError("Ingresá un email y una contraseña válidos.", 400);
+  }
   const client = new LibreLinkUpClient(email, password);
   await client.login();
   const connections = await client.getConnections();
@@ -89,12 +92,7 @@ export async function loginUser(email: string, password: string) {
   return requireUser();
 }
 export async function libreContext(email?: string, password?: string) {
-  let user;
-  try { user = await requireUser(); }
-  catch (error) {
-    if (!(error instanceof EventAuthError) || !email || !password) throw error;
-    user = await loginUser(email, password);
-  }
+  const user = email && password ? await loginUser(email, password) : await requireUser();
   const result = await adminDatabase().from("user_provider_sessions").select("token,librelink_user_id,region,patient_id").eq("user_id", user.userId).single();
   if (result.error || !result.data) throw new EventAuthError("Volvé a iniciar sesión con LibreLinkUp.", 401);
   const stored = result.data;
@@ -106,8 +104,27 @@ export async function libreContext(email?: string, password?: string) {
 }
 export async function logoutUser() {
   const jar = await cookies();
-  const token = jar.get("gluco_access")?.value;
-  if (token) await adminDatabase().auth.admin.signOut(token, "local");
-  jar.delete("gluco_access");
-  jar.delete("gluco_refresh");
+  let revoked = false;
+  try {
+    let token = jar.get("gluco_access")?.value;
+    const auth = publicDatabase();
+    const user = token ? (await auth.auth.getUser(token)).data.user : null;
+    if (!user) {
+      const refresh = jar.get("gluco_refresh")?.value;
+      if (refresh) {
+        const result = await auth.auth.refreshSession({ refresh_token: refresh });
+        token = result.data.session?.access_token;
+      } else token = undefined;
+    }
+    if (token) {
+      const result = await adminDatabase().auth.admin.signOut(token, "local");
+      revoked = !result.error;
+    } else revoked = !jar.get("gluco_refresh");
+  } finally {
+    jar.delete("gluco_access");
+    jar.delete("gluco_refresh");
+    jar.delete("gluco_session");
+    jar.delete("gluco_config");
+  }
+  if (!revoked) throw new EventAuthError("Se cerró la sesión local, pero no se pudo revocar la sesión remota.", 503);
 }

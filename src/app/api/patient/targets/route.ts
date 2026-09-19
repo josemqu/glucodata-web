@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { EventAuthError, requireUser } from "@/lib/server/user-auth";
 const defaults = { low: 70, high: 180, hypo: 60, hyper: 250 };
 function failure(error: unknown) {
-  return NextResponse.json({ error: error instanceof Error ? error.message : "No se pudo guardar la configuración." }, { status: error instanceof EventAuthError ? error.status : 500 });
+  return NextResponse.json({ error: error instanceof EventAuthError ? error.message : "No se pudo guardar la configuración." }, { status: error instanceof EventAuthError ? error.status : 500 });
 }
 export async function GET() {
   try {

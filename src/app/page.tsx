@@ -23,6 +23,7 @@ import {
   ChevronsUp,
   ChevronsDown,
   Activity,
+  Droplet,
   Target,
   TrendingUp,
   Syringe,
@@ -48,7 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getLatestGlucoseAction, getMonitorGlucoseDayAction, logoutAction } from "./actions";
+import { getLatestGlucoseAction, getMonitorGlucoseDayAction, getSessionAction, logoutAction } from "./actions";
 import Cookies from "js-cookie";
 import {
   ComposedChart,
@@ -70,7 +71,7 @@ import { AnalysisView } from "@/components/analysis-view";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import { MonitorDatePicker } from "@/components/monitor-date-picker";
 import type { GlucoEvent } from "@/lib/events";
-import type { EventType } from "@/lib/events";
+import { isManualGlucose, type EventFormType } from "@/lib/events";
 import {
   DEFAULT_PATIENT_INSULINS,
   INSULIN_TYPES,
@@ -114,7 +115,7 @@ function chartEventLabel(event: GlucoEvent) {
     note: "Nota",
     other: "Evento",
   };
-  const type = labels[event.type];
+  const type = isManualGlucose(event) ? "Glucemia manual" : labels[event.type];
   const time = new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return `Abrir ${type.toLowerCase()}: ${event.title}, ${time}`;
 }
@@ -133,6 +134,7 @@ function chartEventTypeLabel(type: GlucoEvent["type"]) {
 }
 
 function chartEventMeasurement(event: GlucoEvent) {
+  if (isManualGlucose(event)) return `${event.metadata.glucose_mg_dl} mg/dL`;
   if (event.type === "insulin" && typeof event.metadata.units === "number") {
     return `${event.metadata.units} U`;
   }
@@ -206,7 +208,8 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
   const x = viewBox?.x ?? 0;
   const y = 12;
   const color = chartEventColor(event.type);
-  const tooltipX = x < 86 ? 16 : x > 300 ? -166 : -75;
+  const tooltipWidth = isManualGlucose(event) ? 210 : 150;
+  const tooltipX = x < 86 ? 16 : x > 300 ? -tooltipWidth - 16 : -tooltipWidth / 2;
   const eventTime = new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const hasDuration = Boolean(event.ended_at && new Date(event.ended_at).getTime() > new Date(event.occurred_at).getTime());
   const measurement = chartEventMeasurement(event);
@@ -245,7 +248,9 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
       <rect x={-22} y={-4} width={44} height={44} fill="transparent" pointerEvents="all" />
       {!hasDuration ? <line x1={0} y1={22} x2={0} y2={36} stroke={color} strokeWidth={tooltipOpen ? 2 : 1} strokeDasharray="3 3" className="transition-[stroke-width]" aria-hidden="true" /> : null}
       <circle cx={0} cy={10} r={tooltipOpen ? 14 : 12} fill="var(--card)" stroke={color} strokeWidth={tooltipOpen ? 3 : 2} className="transition-[r,stroke-width,filter] group-hover:[filter:drop-shadow(0_3px_5px_rgb(0_0_0_/_0.24))] group-focus:[filter:drop-shadow(0_0_3px_var(--ring))]" />
-      {event.type === "meal" ? (
+      {isManualGlucose(event) ? (
+        <Droplet x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
+      ) : event.type === "meal" ? (
         <Utensils x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
       ) : event.type === "insulin" ? (
         <Syringe x={-7} y={3} width={14} height={14} stroke={color} strokeWidth={2.25} aria-hidden="true" />
@@ -257,12 +262,12 @@ function EventChartMarker({ viewBox, event, onSelect, tooltipOpen, onTooltipVisi
         <text x={0} y={14} textAnchor="middle" fontSize={13} fill={color} aria-hidden="true">{chartEventSymbol(event.type)}</text>
       )}
       {tooltipOpen ? (
-        <foreignObject x={tooltipX} y={28} width={150} height={58} overflow="visible" pointerEvents="none" aria-hidden="true">
+        <foreignObject x={tooltipX} y={28} width={tooltipWidth} height={58} overflow="visible" pointerEvents="none" aria-hidden="true">
           <div className="rounded-lg border border-border/60 bg-card/95 px-2.5 py-2 text-left shadow-lg backdrop-blur-md">
             <p className="truncate text-[11px] font-bold leading-tight text-foreground">{event.title}</p>
             <p className="mt-1 flex items-center justify-between gap-2 text-[9px] font-semibold text-muted-foreground">
               <span className="flex min-w-0 items-center gap-1 truncate">
-                <span>{chartEventTypeLabel(event.type)}</span>
+                <span>{isManualGlucose(event) ? "Glucemia manual" : chartEventTypeLabel(event.type)}</span>
                 {measurement ? <><span aria-hidden="true">·</span><strong className="font-numbers font-bold tabular-nums text-foreground/80">{measurement}</strong></> : null}
               </span>
               <span className="font-numbers tabular-nums">{eventTime}</span>
@@ -280,7 +285,8 @@ type ChartContextMenuState = {
   occurredAt: Date;
 };
 
-const chartContextChoices: Array<{ type: EventType; label: string; icon: typeof Utensils }> = [
+const chartContextChoices: Array<{ type: EventFormType; label: string; icon: typeof Utensils }> = [
+  { type: "glucose", label: "Glucemia manual", icon: Droplet },
   { type: "meal", label: "Comida", icon: Utensils },
   { type: "insulin", label: "Insulina", icon: Syringe },
   { type: "exercise", label: "Ejercicio", icon: Dumbbell },
@@ -290,7 +296,7 @@ const chartContextChoices: Array<{ type: EventType; label: string; icon: typeof 
 function ChartEventContextMenu({ menu, onClose, onSelect }: {
   menu: ChartContextMenuState;
   onClose: () => void;
-  onSelect: (type: EventType) => void;
+  onSelect: (type: EventFormType) => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -313,7 +319,7 @@ function ChartEventContextMenu({ menu, onClose, onSelect }: {
   }, [onClose]);
 
   const menuWidth = 224;
-  const menuHeight = 246;
+  const menuHeight = 292;
   const left = Math.max(8, Math.min(menu.x, window.innerWidth - menuWidth - 8));
   const top = Math.max(8, Math.min(menu.y, window.innerHeight - menuHeight - 8));
   const dateLabel = menu.occurredAt.toLocaleDateString([], { day: "2-digit", month: "short" });
@@ -560,20 +566,15 @@ export default function GlucoPage() {
 
   // Load session and config
   useEffect(() => {
-    const savedSession = Cookies.get("gluco_session");
-    if (savedSession) {
-      try {
-        const parsed = JSON.parse(savedSession);
-        setSession(parsed);
-        fetchData(undefined, parsed).finally(() => {
-          setIsInitializing(false);
-        });
-        return;
-      } catch (e) {
-        Cookies.remove("gluco_session");
+    // Retire JS-readable provider sessions; restore only a server-verified session.
+    Cookies.remove("gluco_session");
+    Cookies.remove("gluco_config");
+    void getSessionAction().then(async restored => {
+      if (restored) {
+        setSession(restored);
+        await fetchData({ email: "", password: "" }, restored);
       }
-    }
-    setIsInitializing(false);
+    }).catch(() => setError("No se pudo restaurar la sesión. Volvé a ingresar.")).finally(() => setIsInitializing(false));
   }, []);
 
   useEffect(() => {
@@ -617,9 +618,6 @@ export default function GlucoPage() {
         const newSession = result.data?.session;
         if (newSession && newSession.token) {
           setSession(newSession);
-          Cookies.set("gluco_session", JSON.stringify(newSession), {
-            expires: 7,
-          });
         }
         setData(result.data);
         setIsLoggedIn(true);
@@ -792,7 +790,10 @@ export default function GlucoPage() {
     setAnalysisPercentiles([]);
     setGraphPoints([]);
     setWindowEndMs(Date.now());
-    fetchData().finally(() => {
+    const submitted = { ...credentials };
+    credentialsRef.current = { email: "", password: "" };
+    setCredentials({ email: "", password: "" });
+    fetchData(submitted, null).finally(() => {
       nextRefreshAtRef.current = Date.now() + 60000;
       setSecondsUntilRefresh(60);
     });
@@ -808,7 +809,8 @@ export default function GlucoPage() {
 
   const handleLogout = async () => {
     authEpochRef.current++;
-    await logoutAction();
+    try { await logoutAction(); }
+    catch { /* Clear local clinical data even if remote revocation failed. */ }
     Cookies.remove("gluco_config");
     setTargetConfig({ low: 70, high: 180, hypo: 60, hyper: 250 });
     setHistoricalData([]);
@@ -1528,7 +1530,7 @@ export default function GlucoPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="mt-8 px-0">
-                <form onSubmit={handleLogin} className="space-y-5">
+                <form method="post" action="/api/auth/login" onSubmit={handleLogin} className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-sm font-medium">
                       Email

@@ -1,7 +1,7 @@
 "use server";
 
 import { GlucoseData } from "@/lib/librelink";
-import { libreContext, loginUser, logoutUser } from "@/lib/server/user-auth";
+import { libreContext, logoutUser, requireUser, EventAuthError } from "@/lib/server/user-auth";
 
 import { calculateStats, calculatePercentiles } from "@/lib/metrics";
 
@@ -32,7 +32,6 @@ export async function getLatestGlucoseAction(
   sessionData?: { token: string; userId: string; region: string },
 ) {
   try {
-    if (email && password && !sessionData?.token) await loginUser(email, password);
     const { database: supabase, client, patientId, connections, userId } = await libreContext(email, password);
     const requestTime = Date.now();
     const { measurement: rawGlucose, graph: apiGraph } =
@@ -59,7 +58,7 @@ export async function getLatestGlucoseAction(
         .order("timestamp", { ascending: true });
 
       if (dbError) {
-        console.error("Error fetching from Supabase:", dbError);
+        console.error("No se pudo consultar el historial.");
         return [];
       }
 
@@ -101,7 +100,7 @@ export async function getLatestGlucoseAction(
         .maybeSingle();
 
       if (lastRowError) {
-        console.error("Error fetching last measurement from Supabase:", lastRowError);
+        console.error("No se pudo consultar la última medición.");
       }
 
       const lastGlucoseTime = lastRow?.timestamp
@@ -156,7 +155,7 @@ export async function getLatestGlucoseAction(
   } catch (error: unknown) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "No se pudo completar la consulta.",
+      error: error instanceof EventAuthError ? error.message : "No se pudo completar la consulta.",
     };
   }
 }
@@ -217,7 +216,7 @@ export async function getHistoricalGlucoseAction(
       data: resultData,
     };
   } catch (error: unknown) {
-    return { success: false, error: error instanceof Error ? error.message : "No se pudo completar la consulta." };
+    return { success: false, error: error instanceof EventAuthError ? error.message : "No se pudo completar la consulta." };
   }
 }
 
@@ -291,8 +290,15 @@ export async function getMonitorGlucoseDayAction(
       data: resultData,
     };
   } catch (error: unknown) {
-    return { success: false, error: error instanceof Error ? error.message : "No se pudo cargar el día seleccionado." };
+    return { success: false, error: error instanceof EventAuthError ? error.message : "No se pudo cargar el día seleccionado." };
   }
 }
 
 export async function logoutAction() { await logoutUser(); }
+
+export async function getSessionAction() {
+  try {
+    const { userId } = await requireUser();
+    return { token: "internal", userId, region: "" };
+  } catch { return null; }
+}

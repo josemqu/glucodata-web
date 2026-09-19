@@ -13,6 +13,13 @@ export const EVENT_TYPES = [
 
 export type EventType = (typeof EVENT_TYPES)[number];
 
+// Manual capillary readings use the existing health event storage and ownership rules.
+export type EventFormType = EventType | "glucose";
+
+export function isManualGlucose(event: Pick<GlucoEvent, "type" | "metadata">): boolean {
+  return event.type === "health" && event.metadata.measurement_type === "capillary_glucose";
+}
+
 export interface GlucoEvent {
   id: string;
   patient_id: string;
@@ -143,6 +150,21 @@ export function validateEventInput(value: unknown):
   const metadata = input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
     ? input.metadata as Record<string, unknown>
     : {};
+
+  if (metadata.measurement_type === "capillary_glucose") {
+    if (input.type !== "health") return { success: false, error: "La glucemia manual debe guardarse como una medición de salud." };
+    const glucose = metadata.glucose_mg_dl;
+    if (typeof glucose !== "number" || !Number.isInteger(glucose) || glucose <= 0 || glucose > 1000) {
+      return { success: false, error: "Ingresá el valor numérico del glucómetro entre 1 y 1000 mg/dL, sin decimales." };
+    }
+    if (metadata.unit !== "mg/dL" || metadata.source !== "blood_glucose_meter") {
+      return { success: false, error: "La medición debe indicar glucómetro de sangre y la unidad mg/dL." };
+    }
+    if (new Date(occurredAt).getTime() > Date.now()) {
+      return { success: false, error: "La medición no puede tener una fecha u hora futura." };
+    }
+    if (endedAt) return { success: false, error: "La medición de glucemia lleva una sola fecha y hora." };
+  }
 
   if (input.type === "meal") {
     const carbs = Number(metadata.carbs_g);

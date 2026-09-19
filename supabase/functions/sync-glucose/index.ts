@@ -3,13 +3,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { LibreLinkUpClient } from "../_shared/librelink.ts";
 
 Deno.serve(async (request: Request) => {
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const url = Deno.env.get("SUPABASE_URL");
+  if (!serviceKey || !url) return new Response("Sync unavailable", { status: 503 });
   const syncSecret = Deno.env.get("GLUCO_SYNC_SECRET");
   const bearer = request.headers.get("authorization");
   if (bearer !== `Bearer ${serviceKey}` && (!syncSecret || bearer !== `Bearer ${syncSecret}`)) {
     return new Response("Unauthorized", { status: 401 });
   }
-  const database = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, {
+  if (Deno.env.get("GLUCO_IMPORTS_PAUSED") === "true") return Response.json({ success: true, paused: true });
+  const database = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   let completed = 0;

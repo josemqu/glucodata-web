@@ -9,6 +9,7 @@ import {
   BookOpenText,
   Copy,
   Dumbbell,
+  Droplet,
   Link2,
   Pencil,
   Plus,
@@ -45,11 +46,11 @@ import type {
   EventInput,
   EventLinkSuggestion,
   EventRelationType,
-  EventType,
+  EventFormType,
   GlucoEvent,
   LinkedEvent,
 } from "@/lib/events";
-import { eventInsulinDoses } from "@/lib/events";
+import { eventInsulinDoses, isManualGlucose, validateEventInput } from "@/lib/events";
 import type { MealItem } from "@/lib/foods";
 import { INSULIN_TYPE_LABELS, type PatientInsulin } from "@/lib/insulins";
 
@@ -73,21 +74,23 @@ interface EventCenterProps {
 
 export interface EventCenterHandle {
   openEvent: (event: GlucoEvent) => void;
-  openNewAt: (occurredAt: Date, type: EventType) => void;
+  openNewAt: (occurredAt: Date, type: EventFormType) => void;
 }
 
 function defaultInsulinDose(insulin: PatientInsulin): string {
   return insulin.insulin_type === "long" || insulin.insulin_type === "ultra_long" ? "24" : "";
 }
 
-const choices: Array<{ type: EventType; label: string; icon: typeof Activity }> = [
+const choices: Array<{ type: EventFormType; label: string; icon: typeof Activity }> = [
+  { type: "glucose", label: "Glucemia", icon: Droplet },
   { type: "meal", label: "Comida", icon: Utensils },
   { type: "insulin", label: "Insulina", icon: Syringe },
   { type: "exercise", label: "Ejercicio", icon: Dumbbell },
   { type: "note", label: "Nota", icon: BookOpenText },
 ];
 
-const copy: Record<EventType, { title: string; placeholder: string }> = {
+const copy: Record<EventFormType, { title: string; placeholder: string }> = {
+  glucose: { title: "Registrar glucemia manual", placeholder: "" },
   meal: { title: "Registrar comida", placeholder: "Ej. Almuerzo" },
   insulin: { title: "Registrar insulina", placeholder: "Ej. Fiasp" },
   exercise: { title: "Registrar ejercicio", placeholder: "Ej. Caminata" },
@@ -112,11 +115,12 @@ function headers(session: LibreSession) {
   };
 }
 
-function eventIcon(type: EventType) {
+function eventIcon(type: EventFormType) {
   return choices.find((choice) => choice.type === type)?.icon ?? Activity;
 }
 
-function renderEventIcon(type: EventType, className: string) {
+function renderEventIcon(type: EventFormType, className: string) {
+  if (type === "glucose") return <Droplet className={className} />;
   if (type === "meal") return <Utensils className={className} />;
   if (type === "insulin") return <Syringe className={className} />;
   if (type === "exercise") return <Dumbbell className={className} />;
@@ -125,6 +129,7 @@ function renderEventIcon(type: EventType, className: string) {
 }
 
 function eventSummary(event: GlucoEvent) {
+  if (isManualGlucose(event)) return `${event.metadata.glucose_mg_dl} mg/dL · Glucómetro de sangre${event.notes ? ` · ${event.notes}` : ""}`;
   if (event.type === "meal" && typeof event.metadata.carbs_g === "number") return `${event.metadata.carbs_g} g CH`;
   if (event.type === "insulin") {
     const doses = eventInsulinDoses(event);
@@ -139,12 +144,13 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
   const panelRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [panelView, setPanelView] = useState<"register" | "today" | "compare">("register");
-  const [type, setType] = useState<EventType>("meal");
+  const [type, setType] = useState<EventFormType>("meal");
   const [editing, setEditing] = useState<GlucoEvent | null>(null);
   const [title, setTitle] = useState("");
   const [occurredAt, setOccurredAt] = useState(localDateTime);
   const [endedAt, setEndedAt] = useState("");
   const [notes, setNotes] = useState("");
+  const [glucose, setGlucose] = useState("");
   const [carbs, setCarbs] = useState("");
   const [insulinDoses, setInsulinDoses] = useState<Record<string, string>>({});
   const [isCorrection, setIsCorrection] = useState(false);
@@ -233,7 +239,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     };
   }, [open]);
 
-  const reset = useCallback((nextType: EventType = "meal", nextOccurredAt = new Date()) => {
+  const reset = useCallback((nextType: EventFormType = "meal", nextOccurredAt = new Date()) => {
     setEditing(null);
     setDuplicating(null);
     setType(nextType);
@@ -242,6 +248,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setEndedAt("");
     setNotes("");
     setCarbs("");
+    setGlucose("");
     setInsulinDoses(insulins[0] ? { [insulins[0].name]: defaultInsulinDose(insulins[0]) } : {});
     setIsCorrection(false);
     setIntensity("medium");
@@ -250,12 +257,13 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     setFormError(null);
   }, [insulins]);
 
-  const edit = (event: GlucoEvent) => {
+  const edit = useCallback((event: GlucoEvent) => {
     setDetail(null);
     setPanelView("register");
     setEditing(event);
     setDuplicating(null);
-    setType(event.type);
+    setType(isManualGlucose(event) ? "glucose" : event.type);
+    setGlucose(isManualGlucose(event) ? String(event.metadata.glucose_mg_dl) : "");
     setTitle(event.title);
     setOccurredAt(localDateTime(new Date(event.occurred_at)));
     setEndedAt(event.ended_at ? localDateTime(new Date(event.ended_at)) : "");
@@ -296,7 +304,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
         }
       })();
     }
-  };
+  }, [session]);
 
   const duplicateMeal = async (event: GlucoEvent) => {
     setDetail(null);
@@ -353,6 +361,10 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
   }, [session]);
 
   const openDetail = useCallback(async (event: GlucoEvent) => {
+    if (isManualGlucose(event)) {
+      edit(event);
+      return;
+    }
     setDetailRequestTitle(event.title);
     setDetailLoading(true);
     setDetailError(null);
@@ -369,7 +381,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
     } finally {
       setDetailLoading(false);
     }
-  }, [refreshRelationships, session]);
+  }, [edit, refreshRelationships, session]);
 
   useImperativeHandle(ref, () => ({
     openEvent(event) {
@@ -462,41 +474,50 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return;
     setSaving(true);
     setFormError(null);
     const isNewEvent = editing === null;
 
-    const metadata: Record<string, unknown> = {};
-    if (type === "meal") metadata.carbs_g = mealSelection.length ? selectedMealCarbs : Number(carbs);
-    if (type === "insulin") {
-      const doses = insulins.flatMap((insulin) => Object.hasOwn(insulinDoses, insulin.name)
-        ? [{ name: insulin.name, insulin_type: insulin.insulin_type, units: Number(insulinDoses[insulin.name]) }]
-        : []);
-      metadata.insulin_doses = doses;
-      metadata.dose_purpose = isCorrection ? "correction" : "meal";
-    }
-    if (type === "exercise") metadata.intensity = intensity;
-
-    let payloadTitle = title;
-    if (type === "insulin") {
-      const selectedNames = insulins.filter((insulin) => Object.hasOwn(insulinDoses, insulin.name)).map((insulin) => insulin.name);
-      const combinedTitle = selectedNames.join(" + ");
-      payloadTitle = combinedTitle.length > 120 ? `Dosis combinada (${selectedNames.length} insulinas)` : combinedTitle || "Insulina";
-    }
-    const payload: EventInput = {
-      type,
-      title: payloadTitle,
-      occurred_at: new Date(occurredAt).toISOString(),
-      ended_at: type === "exercise" && endedAt ? new Date(endedAt).toISOString() : null,
-      notes: notes || null,
-      metadata,
-    };
-
     try {
+      const metadata: Record<string, unknown> = { ...editing?.metadata };
+      if (type === "glucose") {
+        metadata.measurement_type = "capillary_glucose";
+        metadata.glucose_mg_dl = Number(glucose);
+        metadata.unit = "mg/dL";
+        metadata.source = "blood_glucose_meter";
+      }
+      if (type === "meal") metadata.carbs_g = mealSelection.length ? selectedMealCarbs : Number(carbs);
+      if (type === "insulin") {
+        const doses = insulins.flatMap((insulin) => Object.hasOwn(insulinDoses, insulin.name)
+          ? [{ name: insulin.name, insulin_type: insulin.insulin_type, units: Number(insulinDoses[insulin.name]) }]
+          : []);
+        metadata.insulin_doses = doses;
+        metadata.dose_purpose = isCorrection ? "correction" : "meal";
+      }
+      if (type === "exercise") metadata.intensity = intensity;
+
+      let payloadTitle = type === "glucose" ? "Glucómetro de sangre" : title;
+      if (type === "insulin") {
+        const selectedNames = insulins.filter((insulin) => Object.hasOwn(insulinDoses, insulin.name)).map((insulin) => insulin.name);
+        const combinedTitle = selectedNames.join(" + ");
+        payloadTitle = combinedTitle.length > 120 ? `Dosis combinada (${selectedNames.length} insulinas)` : combinedTitle || "Insulina";
+      }
+      const payload: EventInput = {
+        type: type === "glucose" ? "health" : type,
+        title: payloadTitle,
+        occurred_at: new Date(occurredAt).toISOString(),
+        ended_at: type === "exercise" && endedAt ? new Date(endedAt).toISOString() : null,
+        notes: notes || null,
+        metadata,
+      };
+
+      const validated = validateEventInput(payload);
+      if (!validated.success) throw new Error(validated.error);
       const response = await fetch(editing ? `/api/events/${editing.id}` : "/api/events", {
         method: editing ? "PATCH" : "POST",
         headers: headers(session),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(validated.data),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "No se pudo guardar el evento.");
@@ -519,7 +540,11 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
         return;
       }
       setPanelView("today");
-      await Promise.all([onChanged(), openDetail(result.data)]);
+      if (isManualGlucose(result.data)) {
+        await onChanged();
+      } else {
+        await Promise.all([onChanged(), openDetail(result.data)]);
+      }
     } catch (requestError) {
       setFormError(requestError instanceof Error ? requestError.message : "No se pudo guardar el evento.");
     } finally {
@@ -635,10 +660,10 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                   </div>
 
                   <div className="border-b bg-muted/20 p-2" aria-label="Tipo de evento">
-                    <div className="grid grid-cols-4 gap-1 rounded-xl bg-muted/60 p-1">
+                    <div className="grid grid-cols-5 gap-1 rounded-xl bg-muted/60 p-1">
                       {choices.map((choice) => {
                         const Icon = choice.icon;
-                        return <button key={choice.type} type="button" aria-label={choice.label} aria-pressed={type === choice.type} disabled={Boolean(editing || duplicating)} onClick={() => { const selectedAt = new Date(occurredAt); reset(choice.type, Number.isNaN(selectedAt.getTime()) ? new Date() : selectedAt); }} className={`flex min-h-12 items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${type === choice.type ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"}`}><Icon className="h-4 w-4" /><span className="hidden min-[390px]:inline">{choice.label}</span></button>;
+                        return <button key={choice.type} type="button" aria-label={choice.label} aria-pressed={type === choice.type} disabled={Boolean(editing || duplicating)} onClick={() => { const selectedAt = new Date(occurredAt); reset(choice.type, Number.isNaN(selectedAt.getTime()) ? new Date() : selectedAt); }} className={`flex min-h-12 flex-col items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${type === choice.type ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"}`}><Icon className="h-4 w-4" /><span className="text-[10px] sm:text-xs">{choice.label}</span></button>;
                       })}
                     </div>
                   </div>
@@ -655,9 +680,9 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                         </div>
                         <p className="text-xs leading-5 text-muted-foreground">Podés seleccionar más de una si las aplicaste al mismo tiempo.</p>
                       </fieldset>
-                    ) : <InsetField id="event-title" label="Nombre"><Input id="event-title" className={insetControlClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={copy[type].placeholder} maxLength={120} required /></InsetField>}
+                    ) : type === "glucose" ? <><InsetField id="event-glucose" label="Glucemia (mg/dL)"><Input id="event-glucose" className={insetControlClass} type="number" inputMode="numeric" min={1} max={1000} step={1} value={glucose} onChange={(event) => setGlucose(event.target.value)} placeholder="Ej. 110" aria-describedby="event-glucose-help" required /></InsetField><p id="event-glucose-help" className="text-xs leading-5 text-muted-foreground">Medición con glucómetro de sangre. Se muestra como evento y no modifica las estadísticas del sensor.</p></> : <InsetField id="event-title" label="Nombre"><Input id="event-title" className={insetControlClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={copy[type].placeholder} maxLength={120} required /></InsetField>}
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <InsetField id="event-occurred-at" label="Fecha y hora"><Input id="event-occurred-at" className={insetControlClass} type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></InsetField>
+                      <InsetField id="event-occurred-at" label="Fecha y hora"><Input id="event-occurred-at" className={insetControlClass} type="datetime-local" max={type === "glucose" ? localDateTime() : undefined} value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required /></InsetField>
                       {type === "meal" ? <InsetNumberStepper id="event-carbs" label={mealSelection.length ? "Carbohidratos calculados" : "Carbohidratos"} value={mealSelection.length ? Number(selectedMealCarbs.toFixed(1)) : carbs} onValueChange={setCarbs} step={1} min={0} unit="g CH" readOnly={mealSelection.length > 0} required /> : null}
                       {type === "exercise" ? <InsetField id="event-ended-at" label="Finalización"><Input id="event-ended-at" className={insetControlClass} type="datetime-local" value={endedAt} onChange={(event) => setEndedAt(event.target.value)} required /></InsetField> : null}
                     </div>
@@ -697,7 +722,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                 <div className="mt-4 overflow-hidden rounded-2xl border bg-card px-4 shadow-sm sm:px-5">
                   {!loading && visibleEvents.length === 0 ? <div className="flex flex-col items-center py-10 text-center"><BookOpenText className="h-6 w-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No hay eventos en este rango</p><p className="mt-1 text-xs text-muted-foreground">Cambiá el rango del gráfico o registrá un evento.</p></div> : null}
                   {visibleEvents.map((event) => {
-                    const Icon = eventIcon(event.type);
+                    const Icon = eventIcon(isManualGlucose(event) ? "glucose" : event.type);
                     return (
                       <article key={event.id} className="group flex items-center gap-3 border-b py-3.5 last:border-b-0">
                         <div className="mt-0.5 rounded-lg bg-muted p-2 text-primary"><Icon className="h-4 w-4" /></div>

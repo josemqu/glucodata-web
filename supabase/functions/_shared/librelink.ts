@@ -100,7 +100,6 @@ export class LibreLinkUpClient {
   private topLevelDomain: string = "io";
   private apiVersion: string = "4.17.0";
   private product: string = "llu.android";
-  private autoAcceptTerms: boolean = true;
 
   constructor(
     private email?: string,
@@ -127,6 +126,10 @@ export class LibreLinkUpClient {
   }
 
   private getUrl(endpoint: string): string {
+    // Region is never a hostname/path supplied by the caller or upstream JSON.
+    if (this.region && !/^[a-z][a-z0-9]{1,7}$/.test(this.region)) {
+      throw new Error("Región de LibreLinkUp inválida.");
+    }
     const baseUrl = this.region
       ? `https://api-${this.region}.libreview.${this.topLevelDomain}`
       : `https://api.libreview.${this.topLevelDomain}`;
@@ -157,11 +160,13 @@ export class LibreLinkUpClient {
     endpoint: string,
     method: string = "GET",
     body?: any,
-    lastError4Type: string = "",
+    redirects: number = 0,
   ): Promise<any> {
     const url = this.getUrl(endpoint);
     const response = await fetch(url, {
       method,
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
       headers: this.getHeaders(),
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -169,33 +174,16 @@ export class LibreLinkUpClient {
     const data = await response.json();
 
     if (data.status === 0 && data.data?.redirect && data.data?.region) {
+      if (redirects >= 3) throw new Error("Demasiadas redirecciones de LibreLinkUp.");
       this.region = data.data.region;
-      return this.request(endpoint, method, body, lastError4Type);
+      return this.request(endpoint, method, body, redirects + 1);
     }
-
     if (data.status === 4) {
-      const step = data.data?.step;
-      const type = step?.type;
-      const ticket = data.data?.authTicket;
-
-      if (ticket?.token) {
-        this.token = ticket.token;
-      }
-
-      if (type && type !== lastError4Type && this.autoAcceptTerms) {
-        await this.request(`/auth/continue/${type}`, "POST", null, type);
-        return this.request(endpoint, method, body, type);
-      }
-
-      throw new Error(
-        data.error?.message || `Required action: ${type || "Accept Terms"}`,
-      );
+      throw new Error("Abrí LibreLinkUp para revisar las condiciones pendientes antes de continuar.");
     }
-
-    if (data.status !== 0) {
-      throw new Error(
-        data.error?.message || `API error with status ${data.status}`,
-      );
+    if (!response.ok || data.status !== 0) {
+      // Never propagate upstream messages: they may echo credentials or tokens.
+      throw new Error("No se pudo autenticar o consultar LibreLinkUp.");
     }
 
     return data;
@@ -232,7 +220,7 @@ export class LibreLinkUpClient {
     patientId: string,
   ): Promise<{ measurement: GlucoseData | null; graph: GlucoseData[] }> {
     if (!this.token) await this.login();
-    const data = await this.request(`/llu/connections/${patientId}/graph`);
+    const data = await this.request(`/llu/connections/${encodeURIComponent(patientId)}/graph`);
 
     const mapMeasurement = (m: any): GlucoseData | null => {
       if (!m) return null;

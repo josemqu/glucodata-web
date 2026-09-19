@@ -19,7 +19,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 function failure(error: unknown) {
   const status = error instanceof EventAuthError ? error.status : 500;
-  const message = error instanceof Error ? error.message : "No se pudieron procesar las relaciones.";
+  const message = error instanceof EventAuthError ? error.message : "No se pudieron procesar las relaciones.";
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
