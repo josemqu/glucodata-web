@@ -1134,12 +1134,47 @@ export default function GlucoPage() {
     );
   }, [filteredGraph]);
 
+  // Las glucemias manuales viven como eventos y no en la serie del CGM.
+  // Se agregan solo a la serie visual; las métricas de tiempo en rango
+  // continúan calculándose exclusivamente con las lecturas del CGM.
+  const chartPoints = useMemo(() => {
+    const manualPoints = events
+      .filter(isManualGlucose)
+      .map((event) => ({
+        value: Number(event.metadata.glucose_mg_dl),
+        time: new Date(event.occurred_at).getTime(),
+        trend: null,
+        isHigh: null,
+        isLow: null,
+        unit: "mg/dL",
+      }))
+      .filter((point) => Number.isFinite(point.value) && Number.isFinite(point.time));
+
+    const allPoints: MonitorGlucosePoint[] = [
+      ...(graphPoints as MonitorGlucosePoint[]),
+      ...manualPoints,
+    ];
+    return allPoints
+      .filter((point) => Number.isFinite(point.time))
+      .sort((first, second) => first.time - second.time);
+  }, [events, graphPoints]);
+
+  const filteredChartGraphWithValues = useMemo(() => {
+    return chartPoints.filter(
+      (point) =>
+        point.time >= windowStart &&
+        point.time <= windowEnd &&
+        point.value !== null &&
+        point.value !== undefined,
+    );
+  }, [chartPoints, windowStart, windowEnd]);
+
   const calculatedTrend = useMemo(() => {
     return calculateTrend(graphPoints, 60);
   }, [graphPoints]);
 
   const chartGraph = useMemo(() => {
-    const cleaned = graphPoints
+    const cleaned = chartPoints
       .filter((p: any) => typeof p?.time === "number" && !Number.isNaN(p.time))
       .filter((p: any) => p.time >= chartDataStart && p.time <= chartDataEnd)
       .sort((a: any, b: any) => a.time - b.time)
@@ -1215,7 +1250,7 @@ export default function GlucoPage() {
       { time: chartDataStart, value: null },
       { time: chartDataEnd, value: null },
     ];
-  }, [graphPoints, chartDataStart, chartDataEnd]);
+  }, [chartPoints, chartDataStart, chartDataEnd]);
 
   useEffect(() => {
     if (graphPoints.length === 0) return;
@@ -1343,7 +1378,7 @@ export default function GlucoPage() {
     return [...keys].map((key) => monitorDayCacheRef.current.get(key)?.status ?? "loading");
   }, [windowStart, windowEnd, monitorCacheVersion]);
   const monitorWindowLoading = visibleDayStates.some((status) => status === "loading" || status === "partial");
-  const monitorWindowEmpty = !monitorWindowLoading && filteredGraphWithValues.length === 0 && visibleDayStates.every((status) => status === "empty");
+  const monitorWindowEmpty = !monitorWindowLoading && filteredChartGraphWithValues.length === 0 && visibleDayStates.every((status) => status === "empty");
   const monitorWindowHasError = visibleDayStates.includes("error");
   const canMoveForward = windowEnd < Date.now() - 60_000;
   const currentMonitorWindowLabel = monitorWindowLabel(windowStart, windowEnd);
@@ -1372,14 +1407,14 @@ export default function GlucoPage() {
 
   // Calculate the actual range of values in the current visible data set
   const dataMin = useMemo(() => {
-    if (filteredGraphWithValues.length === 0) return targetConfig.low;
-    return Math.min(...filteredGraphWithValues.map((p: any) => p.value));
-  }, [filteredGraphWithValues, targetConfig.low]);
+    if (filteredChartGraphWithValues.length === 0) return targetConfig.low;
+    return Math.min(...filteredChartGraphWithValues.map((p: any) => p.value));
+  }, [filteredChartGraphWithValues, targetConfig.low]);
 
   const dataMax = useMemo(() => {
-    if (filteredGraphWithValues.length === 0) return targetConfig.high;
-    return Math.max(...filteredGraphWithValues.map((p: any) => p.value));
-  }, [filteredGraphWithValues, targetConfig.high]);
+    if (filteredChartGraphWithValues.length === 0) return targetConfig.high;
+    return Math.max(...filteredChartGraphWithValues.map((p: any) => p.value));
+  }, [filteredChartGraphWithValues, targetConfig.high]);
 
   const timeStats = useMemo(() => {
     if (filteredGraphWithValues.length === 0) return null;
@@ -1690,11 +1725,11 @@ export default function GlucoPage() {
     ].filter((v) => typeof v === "number" && !Number.isNaN(v));
 
     const minCandidate =
-      filteredGraphWithValues.length > 0
+      filteredChartGraphWithValues.length > 0
         ? Math.min(dataMin, ...thresholds)
         : Math.min(targetConfig.low, ...thresholds);
     const maxCandidate =
-      filteredGraphWithValues.length > 0
+      filteredChartGraphWithValues.length > 0
         ? Math.max(dataMax, ...thresholds)
         : Math.max(targetConfig.high, ...thresholds);
 
