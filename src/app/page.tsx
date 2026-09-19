@@ -48,9 +48,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getLatestGlucoseAction, getMonitorGlucoseDayAction } from "./actions";
+import { getLatestGlucoseAction, getMonitorGlucoseDayAction, logoutAction } from "./actions";
 import Cookies from "js-cookie";
-import { supabase } from "@/lib/supabase";
 import {
   ComposedChart,
   Area,
@@ -409,6 +408,7 @@ export default function GlucoPage() {
   const [session, setSession] = useState<any>(null);
 
   const loadEvents = useCallback(async () => {
+    const epoch = authEpochRef.current;
     if (!session?.token || !session?.userId) return;
     setEventsLoading(true);
     setEventsError(null);
@@ -422,6 +422,7 @@ export default function GlucoPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "No se pudieron cargar los eventos.");
+      if (epoch !== authEpochRef.current) return;
       setEvents(result.data ?? []);
     } catch (requestError) {
       setEventsError(requestError instanceof Error ? requestError.message : "No se pudieron cargar los eventos.");
@@ -438,13 +439,15 @@ export default function GlucoPage() {
   }), [session]);
 
   const loadInsulins = useCallback(async () => {
+    const epoch = authEpochRef.current;
     if (!session?.token || !session?.userId) return;
     setInsulinsLoading(true);
     try {
       const response = await fetch("/api/patient/insulins", { headers: sessionHeaders() });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "No se pudo cargar la configuración de insulina.");
-      if (result.data?.length) setInsulins(result.data);
+      if (epoch !== authEpochRef.current) return;
+      setInsulins(result.data?.length ? result.data : DEFAULT_PATIENT_INSULINS);
     } catch (requestError) {
       setInsulinsMessage(requestError instanceof Error ? requestError.message : "No se pudo cargar la configuración de insulina.");
     } finally {
@@ -491,6 +494,7 @@ export default function GlucoPage() {
   const nextRefreshAtRef = useRef<number | null>(null);
   const syncCardRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false);
+  const authEpochRef = useRef(0);
   const credentialsRef = useRef(credentials);
   const sessionRef = useRef(session);
   const graphPointsRef = useRef<any[]>(graphPoints);
@@ -557,16 +561,6 @@ export default function GlucoPage() {
   // Load session and config
   useEffect(() => {
     const savedSession = Cookies.get("gluco_session");
-    const savedConfig = Cookies.get("gluco_config");
-
-    if (savedConfig) {
-      try {
-        setTargetConfig(JSON.parse(savedConfig));
-      } catch (e) {
-        console.error("Error parsing config", e);
-      }
-    }
-
     if (savedSession) {
       try {
         const parsed = JSON.parse(savedSession);
@@ -582,34 +576,34 @@ export default function GlucoPage() {
     setIsInitializing(false);
   }, []);
 
-  const saveConfig = (newConfig: typeof targetConfig) => {
-    setTargetConfig(newConfig);
-    Cookies.set("gluco_config", JSON.stringify(newConfig), { expires: 365 });
+  useEffect(() => {
+    if (!isLoggedIn || !session?.userId) return;
+    const controller = new AbortController();
+    void fetch("/api/patient/targets", { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error("No se pudo cargar la configuración.");
+        return response.json();
+      })
+      .then(result => setTargetConfig(result.data))
+      .catch(error => { if (!controller.signal.aborted) setError(error.message); });
+    return () => controller.abort();
+  }, [isLoggedIn, session?.userId]);
 
-    // Best-effort persist to Supabase for other clients (e.g., Chrome extension)
-    supabase
-      .from("glucose_target_config")
-      .upsert(
-        {
-          id: "default",
-          low: newConfig.low,
-          high: newConfig.high,
-          hypo: newConfig.hypo,
-          hyper: newConfig.hyper,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" },
-      )
-      .then((result) => {
-        const error = result?.error;
-        if (error) console.error("Error saving config to Supabase", error);
+  const saveConfig = async (newConfig: typeof targetConfig) => {
+    try {
+      const response = await fetch("/api/patient/targets", {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newConfig),
       });
+      if (!response.ok) throw new Error((await response.json()).error);
+      setTargetConfig(newConfig);
+    } catch (error) { setError(error instanceof Error ? error.message : "No se pudo guardar la configuración."); }
   };
 
   const fetchData = async (
     creds = credentialsRef.current,
     sessionData = sessionRef.current,
   ) => {
+    const epoch = authEpochRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -618,9 +612,18 @@ export default function GlucoPage() {
         creds.password,
         sessionData,
       );
+      if (epoch !== authEpochRef.current) return;
       if (result.success) {
+        const newSession = result.data?.session;
+        if (newSession && newSession.token) {
+          setSession(newSession);
+          Cookies.set("gluco_session", JSON.stringify(newSession), {
+            expires: 7,
+          });
+        }
         setData(result.data);
         setIsLoggedIn(true);
+        setCredentials({ email: "", password: "" });
         setLastFetch(new Date());
 
         if (!result.data?.glucose && (!result.data?.graph || result.data.graph.length === 0)) {
@@ -685,15 +688,9 @@ export default function GlucoPage() {
           );
         }
 
-        const newSession = result.data?.session;
-        if (newSession && newSession.token) {
-          setSession(newSession);
-          Cookies.set("gluco_session", JSON.stringify(newSession), {
-            expires: 7,
-          });
-        }
       } else {
-        setError(result.error);
+        setError(result.error ?? "No se pudieron cargar los datos.");
+        setSession(null);
         if (isLoggedIn) {
           setIsLoggedIn(false);
           Cookies.remove("gluco_session");
@@ -707,6 +704,7 @@ export default function GlucoPage() {
   };
 
   const loadMonitorDay = useCallback((value: string) => {
+    const epoch = authEpochRef.current;
     const cached = monitorDayCacheRef.current.get(value);
     if (cached?.status === "ready" || cached?.status === "empty") {
       cached.lastAccessedAt = Date.now();
@@ -726,6 +724,7 @@ export default function GlucoPage() {
       credentialsRef.current.password,
       sessionRef.current,
     ).then((result) => {
+      if (epoch !== authEpochRef.current) return [];
       if (!result.success) throw new Error(result.error);
       const points = result.data?.graph ?? [];
       monitorDayCacheRef.current.set(value, {
@@ -751,12 +750,13 @@ export default function GlucoPage() {
       setMonitorCacheVersion((version) => version + 1);
       return points;
     }).catch((requestError) => {
+      if (epoch !== authEpochRef.current) return [];
       const message = requestError instanceof Error ? requestError.message : "No se pudo cargar este día.";
       monitorDayCacheRef.current.set(value, { status: "error", points: cached?.points ?? [], error: message, lastAccessedAt: Date.now() });
       setMonitorCacheVersion((version) => version + 1);
       throw requestError;
     }).finally(() => {
-      monitorDayRequestsRef.current.delete(value);
+      if (epoch === authEpochRef.current) monitorDayRequestsRef.current.delete(value);
     });
 
     monitorDayRequestsRef.current.set(value, request);
@@ -784,6 +784,12 @@ export default function GlucoPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    authEpochRef.current++;
+    monitorDayCacheRef.current.clear();
+    monitorDayRequestsRef.current.clear();
+    setHistoricalData([]);
+    setAnalysisStats(null);
+    setAnalysisPercentiles([]);
     setGraphPoints([]);
     setWindowEndMs(Date.now());
     fetchData().finally(() => {
@@ -800,7 +806,15 @@ export default function GlucoPage() {
         : error
     : null;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    authEpochRef.current++;
+    await logoutAction();
+    Cookies.remove("gluco_config");
+    setTargetConfig({ low: 70, high: 180, hypo: 60, hyper: 250 });
+    setHistoricalData([]);
+    setAnalysisStats(null);
+    setAnalysisPercentiles([]);
+    setInsulins([]);
     Cookies.remove("gluco_session");
     setIsLoggedIn(false);
     setData(null);
@@ -810,9 +824,11 @@ export default function GlucoPage() {
     setEvents([]);
     setCredentials({ email: "", password: "" });
     setActiveView("dashboard");
+    window.location.reload();
   };
 
   const fetchHistoricalData = async (days: number = analysisDays) => {
+    const epoch = authEpochRef.current;
     setLoadingAnalysis(true);
     try {
       const result = await getHistoricalGlucoseAction(
@@ -822,6 +838,7 @@ export default function GlucoPage() {
         session,
         targetConfig
       );
+      if (epoch !== authEpochRef.current) return;
       if (result.success && result.data) {
         setHistoricalData(result.data.history || []);
         setAnalysisStats(result.data.stats);

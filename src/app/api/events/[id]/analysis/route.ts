@@ -22,7 +22,7 @@ export async function GET(request: Request, context: RouteContext) {
     const patientId = await requireActivePatient(request);
     const { id } = await context.params;
     if (!UUID_PATTERN.test(id)) return NextResponse.json({ success: false, error: "El identificador del evento no es válido." }, { status: 400 });
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
     const { data: event, error: eventError } = await database
       .from("events")
       .select("*")

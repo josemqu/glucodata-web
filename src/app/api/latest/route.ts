@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { calculateTrend } from "@/lib/trend";
-import { createClient } from "@supabase/supabase-js";
+import { integrationContext } from "@/lib/server/integration-auth";
 
 const DEFAULT_TARGETS = {
   low: 70,
@@ -32,17 +32,11 @@ function computeStatus(val: number, targets: typeof DEFAULT_TARGETS) {
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "private, no-store",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
   };
-}
-
-function unauthorized() {
-  return NextResponse.json(
-    { success: false, error: "Unauthorized" },
-    { status: 401, headers: corsHeaders() },
-  );
 }
 
 export async function OPTIONS() {
@@ -50,50 +44,23 @@ export async function OPTIONS() {
 }
 
 export async function GET(req: Request) {
-  const apiToken = process.env.GLUCO_API_TOKEN || "";
-  if (!apiToken) {
-    return NextResponse.json(
-      { success: false, error: "Server is missing GLUCO_API_TOKEN" },
-      { status: 500, headers: corsHeaders() },
-    );
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Server is missing NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY",
-      },
-      { status: 500, headers: corsHeaders() },
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const authHeader = req.headers.get("authorization") || "";
-  const token = authHeader.toLowerCase().startsWith("bearer ")
-    ? authHeader.slice("bearer ".length).trim()
-    : "";
-
-  if (!token || token !== apiToken) {
-    return unauthorized();
-  }
+  let context;
+  try { context = await integrationContext(req); }
+  catch { return NextResponse.json({ success: false, error: "La integración no está disponible." }, { status: 503, headers: corsHeaders() }); }
+  if (!context) return NextResponse.json({ success: false, error: "Token de integración inválido." }, { status: 401, headers: corsHeaders() });
+  const { database: supabase, userId, patientId } = context;
 
   const { data: configRow, error: configError } = await supabase
     .from("glucose_target_config")
     .select("low,high,hypo,hyper")
     .eq("id", "default")
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (configError) {
     return NextResponse.json(
-      { success: false, error: configError.message },
-      { status: 500, headers: corsHeaders() },
+      { success: false, error: "No se pudo consultar la configuración." },
+      { status: 503, headers: corsHeaders() },
     );
   }
 
@@ -110,13 +77,15 @@ export async function GET(req: Request) {
   const { data: recentData, error } = await supabase
     .from("glucose_measurements")
     .select("timestamp,value,trend,is_high,is_low,unit,patient_id")
+    .eq("user_id", userId)
+    .eq("patient_id", patientId)
     .gte("timestamp", startTime)
     .order("timestamp", { ascending: true });
 
   if (error) {
     return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500, headers: corsHeaders() },
+      { success: false, error: "No se pudieron consultar las mediciones." },
+      { status: 503, headers: corsHeaders() },
     );
   }
 

@@ -19,7 +19,7 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const patientId = await requireActivePatient(request);
     const { id } = await context.params;
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("events")
       .select("*")
       .eq("id", id)
@@ -40,7 +40,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const parsed = validateEventInput(await request.json());
     if (!parsed.success) return NextResponse.json(parsed, { status: 400 });
 
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("events")
       .update({ ...parsed.data, updated_at: new Date().toISOString() })
       .eq("id", id)
@@ -59,7 +59,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const patientId = await requireActivePatient(request);
     const { id } = await context.params;
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("events")
       .delete()
       .eq("id", id)

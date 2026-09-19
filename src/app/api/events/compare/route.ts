@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Seleccioná entre 2 y 8 eventos válidos." }, { status: 400 });
     }
 
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
     const { data: eventRows, error: eventError } = await database
       .from("events")
       .select("*")

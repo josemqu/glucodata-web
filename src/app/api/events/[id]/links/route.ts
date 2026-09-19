@@ -60,7 +60,7 @@ export async function GET(request: Request, context: RouteContext) {
     const patientId = await requireActivePatient(request);
     const { id } = await context.params;
     if (!UUID_PATTERN.test(id)) return NextResponse.json({ success: false, error: "El identificador del evento no es válido." }, { status: 400 });
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
     const { data: parent, error: parentError } = await database
       .from("events")
       .select("*")
@@ -139,7 +139,7 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ success: false, error: "La relación no es válida." }, { status: 400 });
     }
 
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
     const { data: events, error: eventsError } = await database
       .from("events")
       .select("*")
@@ -179,7 +179,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const linkId = new URL(request.url).searchParams.get("link_id") ?? "";
     if (!UUID_PATTERN.test(id) || !UUID_PATTERN.test(linkId)) return NextResponse.json({ success: false, error: "La relación no tiene identificadores válidos." }, { status: 400 });
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("event_links")
       .delete()
       .eq("id", linkId)

@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const search = (url.searchParams.get("search")?.trim() ?? "").slice(0, 80);
     const favoritesOnly = url.searchParams.get("favorite") === "true";
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
 
     let query = database
       .from("foods")
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const parsed = validateFoodInput(await request.json());
     if (!parsed.success) return NextResponse.json(parsed, { status: 400 });
 
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("foods")
       .insert({ ...parsed.data, patient_id: patientId })
       .select("*")

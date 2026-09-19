@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createClient } from "@supabase/supabase-js";
+import { integrationContext } from "@/lib/server/integration-auth";
 
 const DEFAULT_TARGETS = { low: 70, high: 180, hypo: 60, hyper: 250 };
 const ALLOWED_HOURS = new Set([1, 3, 6, 12, 24]);
@@ -8,6 +8,7 @@ const ALLOWED_HOURS = new Set([1, 3, 6, 12, 24]);
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "private, no-store",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
@@ -19,74 +20,39 @@ export async function OPTIONS() {
 }
 
 export async function GET(req: Request) {
-  const apiToken = process.env.GLUCO_API_TOKEN || "";
-  const authHeader = req.headers.get("authorization") || "";
-  const token = authHeader.toLowerCase().startsWith("bearer ")
-    ? authHeader.slice("bearer ".length).trim()
-    : "";
-
-  if (!apiToken || !token || token !== apiToken) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401, headers: corsHeaders() },
-    );
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      { success: false, error: "Server is missing Supabase configuration" },
-      { status: 500, headers: corsHeaders() },
-    );
-  }
+  let context;
+  try { context = await integrationContext(req); }
+  catch { return NextResponse.json({ success: false, error: "La integración no está disponible." }, { status: 503, headers: corsHeaders() }); }
+  if (!context) return NextResponse.json({ success: false, error: "Token de integración inválido." }, { status: 401, headers: corsHeaders() });
+  const { database: supabase, userId, patientId } = context;
 
   const requestURL = new URL(req.url);
   const requestedHours = Number(requestURL.searchParams.get("hours") ?? 24);
   const hours = ALLOWED_HOURS.has(requestedHours) ? requestedHours : 24;
   const startTime = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // The web app scopes its graph to the active LibreLink patient. The API token
-  // has no patient identity of its own, so use the patient from the latest stored
-  // measurement and apply the same patient_id filter to the requested window.
-  const { data: latestMeasurement, error: latestError } = await supabase
-    .from("glucose_measurements")
-    .select("patient_id")
-    .order("timestamp", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (latestError) {
-    return NextResponse.json(
-      { success: false, error: latestError.message },
-      { status: 500, headers: corsHeaders() },
-    );
-  }
-
-  const patientId = latestMeasurement?.patient_id;
   const historyQuery = supabase
     .from("glucose_measurements")
     .select("timestamp,value,unit")
+    .eq("user_id", userId)
+    .eq("patient_id", patientId)
     .gte("timestamp", startTime)
     .order("timestamp", { ascending: true });
 
   const [{ data: measurements, error }, { data: config, error: configError }] =
     await Promise.all([
-      patientId ? historyQuery.eq("patient_id", patientId) : historyQuery.limit(0),
+      historyQuery,
       supabase
         .from("glucose_target_config")
         .select("low,high,hypo,hyper")
         .eq("id", "default")
+        .eq("user_id", userId)
         .maybeSingle(),
     ]);
 
   if (error || configError) {
     return NextResponse.json(
-      { success: false, error: error?.message ?? configError?.message },
-      { status: 500, headers: corsHeaders() },
+      { success: false, error: "No se pudo consultar el historial o la configuración." },
+      { status: 503, headers: corsHeaders() },
     );
   }
 

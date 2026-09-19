@@ -1,13 +1,9 @@
 "use server";
 
-import { LibreLinkUpClient, GlucoseData, Patient } from "@/lib/librelink";
-import { supabase as supabaseAnon } from "@/lib/supabase";
-import { createClient } from "@supabase/supabase-js";
-import { calculateStats, calculatePercentiles, GlucoseStats, PercentilePoint } from "@/lib/metrics";
+import { GlucoseData } from "@/lib/librelink";
+import { libreContext, loginUser, logoutUser } from "@/lib/server/user-auth";
 
-// En una app real, estas credenciales vendrían de variables de entorno o de un formulario de login seguro
-const LIBRE_EMAIL = process.env.LIBRE_EMAIL || "";
-const LIBRE_PASSWORD = process.env.LIBRE_PASSWORD || "";
+import { calculateStats, calculatePercentiles } from "@/lib/metrics";
 
 // Simple in-memory cache for analysis results
 type MonitorDayResult = {
@@ -24,7 +20,7 @@ type MonitorDayResult = {
   hasData: boolean;
 };
 
-const analysisCache = new Map<string, { data: any, timestamp: number }>();
+const analysisCache = new Map<string, { data: { stats: ReturnType<typeof calculateStats> | null; percentileData: ReturnType<typeof calculatePercentiles>; history: { value: number; time: number }[]; patient: import("@/lib/librelink").Patient; days: number }, timestamp: number }>();
 const monitorDayCache = new Map<string, { data: MonitorDayResult, timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const MONITOR_DAY_PAGE_SIZE = 500;
@@ -36,42 +32,9 @@ export async function getLatestGlucoseAction(
   sessionData?: { token: string; userId: string; region: string },
 ) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    const canWriteToSupabase = !!(supabaseUrl && serviceRoleKey);
-    if (!serviceRoleKey) {
-      console.warn(
-        "SUPABASE_SERVICE_ROLE_KEY is not set. Server action will use anon key and may be blocked by RLS.",
-      );
-    }
-    const supabase =
-      supabaseUrl && serviceRoleKey
-        ? createClient(supabaseUrl, serviceRoleKey, {
-            auth: { persistSession: false, autoRefreshToken: false },
-          })
-        : supabaseAnon;
-
+    if (email && password && !sessionData?.token) await loginUser(email, password);
+    const { database: supabase, client, patientId, connections, userId } = await libreContext(email, password);
     const requestTime = Date.now();
-    const client = new LibreLinkUpClient(
-      email || LIBRE_EMAIL,
-      password || LIBRE_PASSWORD,
-      sessionData?.region,
-      sessionData?.token,
-      sessionData?.userId,
-    );
-
-    // Solo logueamos si no tenemos token
-    if (!sessionData?.token) {
-      await client.login();
-    }
-    const connections = await client.getConnections();
-
-    if (connections.length === 0) {
-      throw new Error("No hay pacientes conectados");
-    }
-
-    // Tomamos el primer paciente por defecto
-    const patientId = connections[0].patientId;
     const { measurement: rawGlucose, graph: apiGraph } =
       await client.getGlucose(patientId);
 
@@ -110,18 +73,23 @@ export async function getLatestGlucoseAction(
       }));
     };
 
+    const readings = new Map(apiGraph.map(reading => [reading.time, reading]));
+    if (glucose) readings.set(glucose.time, glucose);
+    if (readings.size && process.env.GLUCO_IMPORTS_PAUSED !== "true") {
+      const { error } = await supabase.from("glucose_measurements").upsert(
+        [...readings.values()].map(reading => ({
+          user_id: userId, patient_id: patientId, timestamp: new Date(reading.time).toISOString(),
+          value: reading.value, trend: reading.trend, is_high: reading.isHigh,
+          is_low: reading.isLow, unit: reading.unit,
+        })), { onConflict: "user_id,patient_id,timestamp" },
+      );
+      if (error) throw new Error("No se pudieron guardar las mediciones.");
+    }
+
     // If the latest measurement is not online/recent, we still want to show history
     if (!glucose) {
-      const currentSession = client.getSession();
-      if (currentSession.token) {
-        await supabase.from("provider_sessions").upsert({
-          id: "librelinkup",
-          token: currentSession.token,
-          user_id: currentSession.userId,
-          region: currentSession.region,
-          updated_at: new Date().toISOString(),
-        });
-      }
+      const currentSession = { token: "internal", userId, region: "" };
+
 
       const lastGlucoseThresholdMs = 5 * 60 * 1000;
       const { data: lastRow, error: lastRowError } = await supabase
@@ -170,70 +138,11 @@ export async function getLatestGlucoseAction(
       };
     }
 
-    // Guardar datos en Supabase si existen
-    if (glucose) {
-      if (!canWriteToSupabase) {
-        console.warn(
-          "Skipping glucose_measurements upsert: missing SUPABASE_SERVICE_ROLE_KEY (RLS blocks anon writes).",
-        );
-      } else {
-        const { error: upsertLatestError } = await supabase
-          .from("glucose_measurements")
-          .upsert(
-            {
-              timestamp: new Date(glucose.time).toISOString(),
-              value: glucose.value,
-              trend: glucose.trend,
-              is_high: glucose.isHigh,
-              is_low: glucose.isLow,
-              unit: glucose.unit,
-              patient_id: patientId,
-            },
-            { onConflict: "patient_id, timestamp" },
-          );
-
-        if (upsertLatestError) {
-          console.error("Error upserting latest measurement to Supabase:", upsertLatestError);
-        }
-      }
-    }
-
-    // También podemos guardar los datos del gráfico de la API para poblar la base de datos inicialmente
-    if (apiGraph && apiGraph.length > 0) {
-      if (!canWriteToSupabase) {
-        console.warn(
-          "Skipping glucose_measurements graph upsert: missing SUPABASE_SERVICE_ROLE_KEY (RLS blocks anon writes).",
-        );
-      } else {
-        const formattedGraph = apiGraph.map((m) => ({
-          timestamp: new Date(m.time).toISOString(),
-          value: m.value,
-          trend: m.trend,
-          is_high: m.isHigh,
-          is_low: m.isLow,
-          unit: m.unit,
-          patient_id: patientId,
-        }));
-
-        await supabase
-          .from("glucose_measurements")
-          .upsert(formattedGraph, { onConflict: "patient_id, timestamp" });
-      }
-    }
-
     const finalGraph = await fetchHistory();
 
-    // 7. Persist session for the background Edge Function (avoiding 429 errors)
-    const currentSession = client.getSession();
-    if (currentSession.token) {
-      await supabase.from("provider_sessions").upsert({
-        id: "librelinkup",
-        token: currentSession.token,
-        user_id: currentSession.userId,
-        region: currentSession.region,
-        updated_at: new Date().toISOString(),
-      });
-    }
+    // Browser compatibility marker; provider tokens stay on the server.
+    const currentSession = { token: "internal", userId, region: "" };
+
 
     return {
       success: true,
@@ -244,10 +153,10 @@ export async function getLatestGlucoseAction(
         session: currentSession,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : "No se pudo completar la consulta.",
     };
   }
 }
@@ -259,29 +168,10 @@ export async function getHistoricalGlucoseAction(
   targetConfig?: { low: number; high: number; hypo: number; hyper: number }
 ) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const client = new LibreLinkUpClient(
-      email || LIBRE_EMAIL,
-      password || LIBRE_PASSWORD,
-      sessionData?.region,
-      sessionData?.token,
-      sessionData?.userId,
-    );
-
-    if (!sessionData?.token) {
-      await client.login();
-    }
-    const connections = await client.getConnections();
-    if (connections.length === 0) throw new Error("No hay pacientes conectados");
-    const patientId = connections[0].patientId;
+    const { database: supabase, patientId, connections, userId } = await libreContext(email, password);
 
     // Check cache
-    const cacheKey = `${patientId}_${days}_${JSON.stringify(targetConfig)}`;
+    const cacheKey = `${userId}:${patientId}_${days}_${JSON.stringify(targetConfig)}`;
     const cached = analysisCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
       return {
@@ -326,8 +216,8 @@ export async function getHistoricalGlucoseAction(
       success: true,
       data: resultData,
     };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return { success: false, error: error instanceof Error ? error.message : "No se pudo completar la consulta." };
   }
 }
 
@@ -336,8 +226,9 @@ export async function getMonitorGlucoseDayAction(
   endIso: string,
   email?: string,
   password?: string,
-  sessionData?: { token: string; userId: string; region: string },
+  _sessionData?: { token: string; userId: string; region: string },
 ) {
+  void _sessionData; // Legacy argument retained for existing callers; never authorizes database access.
   try {
     const start = new Date(startIso);
     const end = new Date(endIso);
@@ -346,33 +237,13 @@ export async function getMonitorGlucoseDayAction(
       return { success: false, error: "El rango diario no es válido." };
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Falta la configuración de datos históricos." };
-    }
-
-    const client = new LibreLinkUpClient(
-      email || LIBRE_EMAIL,
-      password || LIBRE_PASSWORD,
-      sessionData?.region,
-      sessionData?.token,
-      sessionData?.userId,
-    );
-    if (!sessionData?.token) await client.login();
-    const connections = await client.getConnections();
-    if (connections.length === 0) return { success: false, error: "No hay pacientes conectados." };
-
-    const patientId = connections[0].patientId;
-    const cacheKey = `${patientId}:${start.toISOString()}:${end.toISOString()}`;
+    const { database: supabase, patientId, userId } = await libreContext(email, password);
+    const cacheKey = `${userId}:${patientId}:${start.toISOString()}:${end.toISOString()}`;
     const cached = monitorDayCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return { success: true, data: cached.data };
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
     const rows: Array<{
       timestamp: string;
       value: number | string;
@@ -423,3 +294,5 @@ export async function getMonitorGlucoseDayAction(
     return { success: false, error: error instanceof Error ? error.message : "No se pudo cargar el día seleccionado." };
   }
 }
+
+export async function logoutAction() { await logoutUser(); }

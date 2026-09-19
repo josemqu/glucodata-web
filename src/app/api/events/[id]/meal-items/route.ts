@@ -16,7 +16,7 @@ function failure(error: unknown) {
 }
 
 async function requireMeal(patientId: string, eventId: string) {
-  const { data, error } = await createEventsDatabase()
+  const { data, error } = await (await createEventsDatabase())
     .from("events")
     .select("id")
     .eq("patient_id", patientId)
@@ -35,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ success: false, error: "Comida no encontrada." }, { status: 404 });
     }
 
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("meal_items")
       .select("*")
       .eq("patient_id", patientId)
@@ -60,7 +60,7 @@ export async function PUT(request: Request, context: RouteContext) {
     );
     if (!parsed.success) return NextResponse.json(parsed, { status: 400 });
 
-    const { data, error } = await createEventsDatabase().rpc("replace_meal_items", {
+    const { data, error } = await (await createEventsDatabase()).rpc("replace_meal_items", {
       p_patient_id: patientId,
       p_event_id: id,
       p_items: parsed.data,

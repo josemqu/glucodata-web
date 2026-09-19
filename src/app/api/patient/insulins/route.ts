@@ -12,7 +12,7 @@ function failure(error: unknown) {
 export async function GET(request: Request) {
   try {
     const patientId = await requireActivePatient(request);
-    const { data, error } = await createEventsDatabase()
+    const { data, error } = await (await createEventsDatabase())
       .from("patient_insulins")
       .select("id,patient_id,name,insulin_type,sort_order")
       .eq("patient_id", patientId)
@@ -30,7 +30,7 @@ export async function PUT(request: Request) {
     const parsed = validatePatientInsulins(await request.json());
     if (!parsed.success) return NextResponse.json(parsed, { status: 400 });
 
-    const { data, error } = await createEventsDatabase().rpc("replace_patient_insulins", {
+    const { data, error } = await (await createEventsDatabase()).rpc("replace_patient_insulins", {
       p_patient_id: patientId,
       p_insulins: parsed.data,
     });

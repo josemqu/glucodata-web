@@ -2,131 +2,59 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { LibreLinkUpClient } from "../_shared/librelink.ts";
 
-const LIBRE_EMAIL = Deno.env.get("LIBRE_EMAIL");
-const LIBRE_PASSWORD = Deno.env.get("LIBRE_PASSWORD");
-
-Deno.serve(async (_req: Request) => {
-  console.log("Starting Glucose Sync...");
-  const requestTime = Date.now();
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-
+Deno.serve(async (request: Request) => {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const syncSecret = Deno.env.get("GLUCO_SYNC_SECRET");
+  const bearer = request.headers.get("authorization");
+  if (bearer !== `Bearer ${serviceKey}` && (!syncSecret || bearer !== `Bearer ${syncSecret}`)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  const database = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  let completed = 0;
+  let failed = 0;
   try {
-    // 1. Get current session
-    const { data: sessionData, error: sessionError } = await supabase
-      .from("provider_sessions")
-      .select("*")
-      .eq("id", "librelinkup")
-      .single();
-
-    if (sessionError && sessionError.code !== "PGRST116") {
-      throw sessionError;
+    // Stable keyset pagination; one expired provider token cannot stop others.
+    let after = "";
+    while (true) {
+      let query = database.from("user_provider_sessions").select("user_id,librelink_user_id,patient_id,token,region").order("user_id").limit(100);
+      if (after) query = query.gt("user_id", after);
+      const { data: sessions, error } = await query;
+      if (error) throw error;
+      if (!sessions?.length) break;
+      for (const session of sessions) {
+        after = session.user_id;
+        try {
+          const client = new LibreLinkUpClient(undefined, undefined, session.region, session.token, session.librelink_user_id);
+          const connections = await client.getConnections();
+          if (!connections.some(patient => patient.patientId === session.patient_id)) throw new Error("Patient access revoked");
+          const { measurement, graph } = await client.getGlucose(session.patient_id);
+          const readings = new Map(graph.map(reading => [reading.time, reading]));
+          if (measurement && Date.now() - measurement.time <= 5 * 60 * 1000) readings.set(measurement.time, measurement);
+          const rows = [...readings.values()].map(reading => ({
+            user_id: session.user_id, patient_id: session.patient_id,
+            timestamp: new Date(reading.time).toISOString(), value: reading.value,
+            trend: reading.trend, is_high: reading.isHigh, is_low: reading.isLow, unit: reading.unit,
+          }));
+          if (rows.length) {
+            const saved = await database.from("glucose_measurements").upsert(rows, { onConflict: "user_id,patient_id,timestamp" });
+            if (saved.error) throw saved.error;
+          }
+          const updated = client.getSession();
+          const saved = await database.from("user_provider_sessions").update({ token: updated.token, region: updated.region, updated_at: new Date().toISOString() })
+            .eq("user_id", session.user_id).eq("token", session.token);
+          if (saved.error) throw saved.error;
+          completed++;
+        } catch {
+          // Do not log provider tokens, patient IDs or glucose values.
+          failed++;
+        }
+      }
+      if (sessions.length < 100) break;
     }
-
-    const client = new LibreLinkUpClient(
-      LIBRE_EMAIL,
-      LIBRE_PASSWORD,
-      sessionData?.region,
-      sessionData?.token,
-      sessionData?.user_id,
-    );
-
-    // 2. Try to get data (using existing token if available)
-    let connections;
-    try {
-      if (!sessionData?.token) throw new Error("No token stored");
-      connections = await client.getConnections();
-    } catch (e) {
-      console.log("Token invalid or expired, logging in again...");
-      await client.login();
-      connections = await client.getConnections();
-    }
-
-    if (connections.length === 0) {
-      throw new Error("No connected patients found");
-    }
-
-    const patientId = connections[0].patientId;
-    const { measurement, graph } = await client.getGlucose(patientId);
-    const onlineThresholdMs = 60 * 1000;
-    const isRecentOnline =
-      !!measurement &&
-      typeof measurement.time === "number" &&
-      requestTime - measurement.time <= onlineThresholdMs;
-
-    // 3. Save latest measurement
-    if (isRecentOnline && measurement) {
-      console.log(
-        `Saving measurement: ${measurement.value} @ ${new Date(measurement.time).toISOString()}`,
-      );
-      const { error: upsertError } = await supabase
-        .from("glucose_measurements")
-        .upsert(
-          {
-            timestamp: new Date(measurement.time).toISOString(),
-            value: measurement.value,
-            trend: measurement.trend,
-            is_high: measurement.isHigh,
-            is_low: measurement.isLow,
-            unit: measurement.unit,
-            patient_id: patientId,
-          },
-          { onConflict: "patient_id, timestamp" },
-        );
-
-      if (upsertError) throw upsertError;
-    }
-
-    // 4. Also upsert historical graph data to fill gaps
-    if (graph && graph.length > 0) {
-      const historicalData = graph.map((m) => ({
-        timestamp: new Date(m.time).toISOString(),
-        value: m.value,
-        trend: m.trend,
-        is_high: m.isHigh,
-        is_low: m.isLow,
-        unit: m.unit,
-        patient_id: patientId,
-      }));
-
-      const { error: graphError } = await supabase
-        .from("glucose_measurements")
-        .upsert(historicalData, { onConflict: "patient_id, timestamp" });
-      if (graphError)
-        console.warn("Error upserting historical data:", graphError);
-    }
-
-    // 5. Persist updated session (CRITICAL to avoid 429)
-    const newSession = client.getSession();
-    const { error: updateError } = await supabase
-      .from("provider_sessions")
-      .upsert({
-        id: "librelinkup",
-        token: newSession.token,
-        user_id: newSession.userId,
-        region: newSession.region,
-        updated_at: new Date().toISOString(),
-      });
-
-    if (updateError) throw updateError;
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Sync complete",
-        value: measurement?.value,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("Sync Error:", message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json({ success: failed === 0, completed, failed }, { status: failed ? 207 : 200 });
+  } catch {
+    return Response.json({ success: false, completed, failed, error: "Sync storage unavailable" }, { status: 500 });
   }
 });

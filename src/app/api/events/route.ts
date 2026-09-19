@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
     const type = url.searchParams.get("type");
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
 
     let query = database
       .from("events")
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json(parsed, { status: 400 });
     }
 
-    const database = createEventsDatabase();
+    const database = await createEventsDatabase();
     const { data, error } = await database
       .from("events")
       .insert({ ...parsed.data, patient_id: patientId })
