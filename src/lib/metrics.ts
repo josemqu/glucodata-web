@@ -22,13 +22,15 @@ export interface RangeDistribution {
 
 export interface PercentilePoint {
   time: string; // HH:mm
-  p5: number;
-  p25: number;
-  p50: number; // median
-  p75: number;
-  p95: number;
-  rangeP5P95: [number, number];
-  rangeP25P75: [number, number];
+  timeMinutes: number;
+  count: number;
+  p5: number | null;
+  p25: number | null;
+  p50: number | null; // median
+  p75: number | null;
+  p95: number | null;
+  rangeP5P95: [number | null, number | null];
+  rangeP25P75: [number | null, number | null];
 }
 
 export function calculateGMI(meanGlucoseMgDl: number): number {
@@ -166,15 +168,25 @@ export function calculateStats(
   };
 }
 
-export function calculatePercentiles(data: { value: number; time: number }[]): PercentilePoint[] {
+export function calculatePercentiles(
+  data: { value: number; time: number }[],
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+): PercentilePoint[] {
   // Group by hour/minute buckets (e.g., 30-minute intervals)
   const buckets: Record<number, number[]> = {};
-  const INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
 
   data.forEach((p) => {
-    const date = new Date(p.time);
-    const msSinceStartOfDay = (date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds()) * 1000;
-    const bucketIndex = Math.floor(msSinceStartOfDay / INTERVAL_MS);
+    if (!Number.isFinite(p.value) || !Number.isFinite(p.time)) return;
+    const parts = timeFormatter.formatToParts(p.time);
+    const hour = Number(parts.find((part) => part.type === "hour")?.value);
+    const minute = Number(parts.find((part) => part.type === "minute")?.value);
+    const bucketIndex = hour * 2 + Math.floor(minute / 30);
     
     if (!buckets[bucketIndex]) buckets[bucketIndex] = [];
     buckets[bucketIndex].push(p.value);
@@ -185,22 +197,17 @@ export function calculatePercentiles(data: { value: number; time: number }[]): P
   // Ensure we have all buckets (0 to 47 for 30min intervals)
   for (let i = 0; i < 48; i++) {
     const values = buckets[i] || [];
-    if (values.length === 0) {
-      // If bucket is empty, we might want to interpolate or just skip
-      // For now, let's add nulls or skip
-      continue;
-    }
-
     values.sort((a, b) => a - b);
-    
-    const getPercentile = (p: number) => {
-      const idx = Math.floor((p / 100) * (values.length - 1));
+
+    const getPercentile = (percentile: number): number | null => {
+      if (values.length === 0) return null;
+      const idx = Math.floor((percentile / 100) * (values.length - 1));
       return values[idx];
     };
 
-    const totalSeconds = i * (INTERVAL_MS / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const timeMinutes = i * 30;
+    const hours = Math.floor(timeMinutes / 60);
+    const minutes = timeMinutes % 60;
     const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 
     const p5 = getPercentile(5);
@@ -211,6 +218,8 @@ export function calculatePercentiles(data: { value: number; time: number }[]): P
 
     result.push({
       time: timeStr,
+      timeMinutes,
+      count: values.length,
       p5,
       p25,
       p50,

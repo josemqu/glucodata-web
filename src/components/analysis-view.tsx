@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import {
   ComposedChart,
@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import type { TooltipContentProps } from "recharts";
 import {
   Card,
   CardContent,
@@ -20,7 +21,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   CHART_SERIES_ANIMATION_DURATION_MS,
   CHART_SERIES_ANIMATION_EASING,
@@ -33,24 +33,19 @@ import {
 } from "@/lib/chart-tooltip";
 import { 
   calculatePercentiles, 
-  calculateGMI, 
-  calculateCV, 
   getTIRStatus, 
   getCVStatus,
   calculateStats,
   type GlucoseStats,
   type PercentilePoint
 } from "@/lib/metrics";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { 
   Info, 
   TrendingUp, 
   Activity, 
   Target, 
   Clock, 
-  Calendar,
-  ChevronRight,
-  ChevronLeft,
   RefreshCw
 } from "lucide-react";
 
@@ -78,7 +73,6 @@ export function AnalysisView({
   preCalculatedPercentiles,
   loading = false
 }: AnalysisViewProps) {
-  const [selectedDays, setSelectedDays] = useState(days);
   const reduceMotion = useReducedMotion();
 
   const stats = useMemo(() => {
@@ -93,13 +87,25 @@ export function AnalysisView({
 
   const { p50Min, p50Max } = useMemo(() => {
     if (!percentileData.length) return { p50Min: 0, p50Max: 300 };
-    const p50s = percentileData.map(d => d.p50).filter(v => v !== null && v !== undefined) as number[];
+    const p50s = percentileData
+      .map((point) => point.p50)
+      .filter((value): value is number => value !== null && Number.isFinite(value));
     if (!p50s.length) return { p50Min: 0, p50Max: 300 };
     return {
       p50Min: Math.min(...p50s),
       p50Max: Math.max(...p50s)
     };
   }, [percentileData]);
+
+  const yTicks = Array.from(new Set([
+    0,
+    targetConfig.hypo,
+    targetConfig.low,
+    targetConfig.high,
+    targetConfig.hyper,
+    300,
+  ].filter((value) => Number.isFinite(value) && value >= 0 && value <= 300)))
+    .sort((first, second) => first - second);
 
   const getGlucoseColor = (val: number) => {
     if (val === undefined || val === null) return "#94a3b8";
@@ -116,7 +122,18 @@ export function AnalysisView({
     return `${Math.max(0, Math.min(100, percentage))}%`;
   };
 
-  if (history.length === 0) {
+  const hasPercentileReadings = percentileData.some((point) => point.count > 0);
+
+  if (history.length === 0 && !hasPercentileReadings) {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <h3 className="text-lg font-bold">Cargando análisis</h3>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
         <Activity className="w-12 h-12 text-muted-foreground animate-pulse" />
@@ -181,12 +198,13 @@ export function AnalysisView({
               </span>
               {loading && <RefreshCw className="w-3 h-3 text-primary animate-spin" />}
             </CardTitle>
+            <CardDescription className="mt-1 text-[10px]">Hora local · percentiles por bloque de 30 min</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="relative flex min-h-0 flex-1 flex-col p-0">
           <div className="glucose-chart-stage relative min-h-[250px] w-full flex-1 overflow-hidden">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={percentileData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <ComposedChart data={percentileData} margin={{ top: 8, right: 10, left: 0, bottom: 26 }}>
                 <defs>
                   <linearGradient id="colorMedian" x1="0" y1="1" x2="0" y2="0">
                     <stop offset="0%" stopColor={getGlucoseColor(p50Min)} />
@@ -230,21 +248,28 @@ export function AnalysisView({
                     <stop offset="95%" stopColor="#94a3b8" stopOpacity={0.05}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.45} />
                 <XAxis 
-                  dataKey="time" 
+                  dataKey="timeMinutes"
+                  type="number"
+                  domain={[0, 1440]}
+                  allowDataOverflow
                   hide
                 />
                 <YAxis 
                   domain={[0, 300]}
-                  hide
+                  ticks={yTicks}
+                  width={38}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
                 />
                 <Tooltip 
                   offset={CHART_TOOLTIP_OFFSET}
                   isAnimationActive={CHART_TOOLTIP_IS_ANIMATION_ACTIVE}
                   allowEscapeViewBox={{ x: false, y: true }}
                   wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
-                  content={<CustomTooltip />} 
+                  content={(props) => <CustomTooltip {...props} />}
                   cursor={CHART_TOOLTIP_CURSOR}
                 />
                 
@@ -254,7 +279,7 @@ export function AnalysisView({
                   dataKey="rangeP5P95"
                   stroke="none"
                   fill="url(#colorP5P95)"
-                  connectNulls
+                  connectNulls={false}
                   animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
                   animationEasing={CHART_SERIES_ANIMATION_EASING}
                   isAnimationActive={!reduceMotion}
@@ -266,7 +291,7 @@ export function AnalysisView({
                   dataKey="rangeP25P75"
                   stroke="none"
                   fill="url(#colorP25P75)"
-                  connectNulls
+                  connectNulls={false}
                   animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
                   animationEasing={CHART_SERIES_ANIMATION_EASING}
                   isAnimationActive={!reduceMotion}
@@ -280,7 +305,7 @@ export function AnalysisView({
                   strokeWidth={3}
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
-                  connectNulls
+                  connectNulls={false}
                   animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
                   animationEasing={CHART_SERIES_ANIMATION_EASING}
                   isAnimationActive={!reduceMotion}
@@ -349,7 +374,7 @@ export function AnalysisView({
             </ResponsiveContainer>
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-border/45 bg-card/85 px-2 pb-1 pt-1.5 backdrop-blur-sm"
+              className="pointer-events-none absolute bottom-0 left-[38px] right-[10px] border-t border-border/45 bg-card/85 px-0 pb-1 pt-1.5"
             >
               <div className="grid grid-cols-7 sm:hidden">
                 {AGP_MOBILE_TIME_TICKS.map((hour, index) => (
@@ -386,7 +411,7 @@ export function AnalysisView({
                 ))}
               </div>
             </div>
-            <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-card/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground backdrop-blur-sm">
+            <div className="pointer-events-none absolute left-10 top-2 rounded-md bg-card/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
               mg/dL · 0–300
             </div>
             <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1 rounded-md bg-card/80 px-2 py-1 text-[9px] font-semibold text-muted-foreground backdrop-blur-sm sm:flex-row sm:gap-3">
@@ -444,7 +469,18 @@ export function AnalysisView({
   );
 }
 
-function MetricCard({ title, value, unit, description, status, icon, target, loading }: any) {
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  unit?: string;
+  description: string;
+  status: "success" | "warning" | "error" | "info";
+  icon: ReactNode;
+  target?: string;
+  loading: boolean;
+}
+
+function MetricCard({ title, value, unit, description, status, icon, target, loading }: MetricCardProps) {
   const colors = {
     success: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
     warning: "text-amber-500 bg-amber-500/10 border-amber-500/20",
@@ -483,7 +519,7 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
   );
 }
 
-function RangeBar({ label, value, color, loading }: any) {
+function RangeBar({ label, value, color, loading }: { label: string; value: number; color: string; loading: boolean }) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
@@ -509,7 +545,7 @@ function RangeBar({ label, value, color, loading }: any) {
   );
 }
 
-function LegendItem({ color, label }: any) {
+function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5 whitespace-nowrap">
       <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
@@ -518,13 +554,17 @@ function LegendItem({ color, label }: any) {
   );
 }
 
-function CustomTooltip({ active, payload }: any) {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
+function CustomTooltip({ active, payload }: TooltipContentProps) {
+  if (active && payload?.length) {
+    const data = payload[0]?.payload as PercentilePoint | undefined;
+    if (!data || data.count === 0) return null;
     return (
       <div className="rounded-xl border border-border/60 bg-popover/80 p-2.5 shadow-lg backdrop-blur-md">
         <p className="text-[11px] font-black tracking-widest uppercase mb-2 border-b border-border pb-1">
           {data.time}
+        </p>
+        <p className="mb-2 text-[10px] text-muted-foreground">
+          {data.count} {data.count === 1 ? "muestra" : "muestras"} en este horario
         </p>
         <div className="space-y-1">
           <TooltipRow label="Percentil 95" value={data.p95} color="text-muted-foreground" />
@@ -539,11 +579,11 @@ function CustomTooltip({ active, payload }: any) {
   return null;
 }
 
-function TooltipRow({ label, value, color }: any) {
+function TooltipRow({ label, value, color }: { label: string; value: number | null; color: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-tighter">{label}</span>
-      <span className={`text-xs ${color}`}>{value} mg/dL</span>
+      <span className={`text-xs ${color}`}>{value === null ? "—" : `${value} mg/dL`}</span>
     </div>
   );
 }

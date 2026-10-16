@@ -164,13 +164,14 @@ export async function getHistoricalGlucoseAction(
   email?: string,
   password?: string,
   sessionData?: { token: string; userId: string; region: string },
-  targetConfig?: { low: number; high: number; hypo: number; hyper: number }
+  targetConfig?: { low: number; high: number; hypo: number; hyper: number },
+  timeZone = "UTC",
 ) {
   try {
     const { database: supabase, patientId, connections, userId } = await libreContext(email, password);
 
     // Check cache
-    const cacheKey = `${userId}:${patientId}_${days}_${JSON.stringify(targetConfig)}`;
+    const cacheKey = `${userId}:${patientId}_${days}_${JSON.stringify(targetConfig)}_${timeZone}`;
     const cached = analysisCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
       return {
@@ -196,7 +197,7 @@ export async function getHistoricalGlucoseAction(
     }));
 
     const stats = targetConfig ? calculateStats(history, targetConfig) : null;
-    const percentileData = calculatePercentiles(history);
+    const percentileData = calculatePercentiles(history, timeZone);
 
     const resultData = {
       stats,

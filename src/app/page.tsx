@@ -838,7 +838,8 @@ export default function GlucoPage() {
         credentials.email,
         credentials.password,
         session,
-        targetConfig
+        targetConfig,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
       );
       if (epoch !== authEpochRef.current) return;
       if (result.success && result.data) {
