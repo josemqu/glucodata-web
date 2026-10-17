@@ -22,7 +22,7 @@ type MonitorDayResult = {
 
 const analysisCache = new Map<string, { data: { stats: ReturnType<typeof calculateStats> | null; percentileData: ReturnType<typeof calculatePercentiles>; history: { value: number; time: number }[]; patient: import("@/lib/librelink").Patient; days: number }, timestamp: number }>();
 const monitorDayCache = new Map<string, { data: MonitorDayResult, timestamp: number }>();
-type YearOverviewDay = { date: string; average: number; count: number };
+type YearOverviewDay = { date: string; average: number; count: number; timeInRangePercent: number | null; coverageMinutes: number };
 const yearOverviewCache = new Map<string, { data: YearOverviewDay[]; timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const MONITOR_DAY_PAGE_SIZE = 500;
@@ -30,6 +30,8 @@ const MONITOR_DAY_MAX_ROWS = 5000;
 const YEAR_OVERVIEW_PAGE_SIZE = 1000;
 const YEAR_OVERVIEW_PAGE_BATCH_SIZE = 8;
 const YEAR_OVERVIEW_MAX_ROWS = 250_000;
+const YEAR_OVERVIEW_MAX_GAP_MS = 15 * 60 * 1000;
+const YEAR_OVERVIEW_LAST_READING_MS = 5 * 60 * 1000;
 
 function dateKeyInTimeZone(timestamp: string, formatter: Intl.DateTimeFormat) {
   const parts = formatter.formatToParts(new Date(timestamp));
@@ -75,12 +77,16 @@ function localMidnightUtc(year: number, month: number, day: number, timeZone: st
 export async function getYearOverviewAction(
   year: number,
   timeZone = "UTC",
+  targets: { low: number; high: number } = { low: 70, high: 180 },
 ) {
   try {
     // Validate the zone first, then use its local year at the server boundary.
     const currentYear = Number(new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric" }).format(new Date()));
     if (!Number.isInteger(year) || year < 2000 || year > currentYear) {
       return { success: false, error: "El año seleccionado no es válido." };
+    }
+    if (!Number.isFinite(targets.low) || !Number.isFinite(targets.high) || targets.low >= targets.high) {
+      return { success: false, error: "Los umbrales de glucosa no son válidos." };
     }
 
     const { userId, database: supabase } = await requireUser();
@@ -93,7 +99,7 @@ export async function getYearOverviewAction(
       throw new EventAuthError("Volvé a iniciar sesión con LibreLinkUp.", 401);
     }
     const patientId = providerSession.patient_id;
-    const cacheKey = `${userId}:${patientId}:${year}:${timeZone}`;
+    const cacheKey = `${userId}:${patientId}:${year}:${timeZone}:${targets.low}:${targets.high}`;
     const cached = yearOverviewCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return { success: true, data: cached.data };
@@ -107,7 +113,24 @@ export async function getYearOverviewAction(
       month: "2-digit",
       day: "2-digit",
     });
-    const daily = new Map<string, { sum: number; count: number }>();
+    const daily = new Map<string, { sum: number; count: number; inRangeMs: number; coveredMs: number }>();
+    const midnightCache = new Map<string, number>();
+    const previousReading: { current: { time: number; value: number; date: string } | null } = { current: null };
+    const addDuration = (reading: { time: number; value: number; date: string }, durationMs: number) => {
+      if (durationMs <= 0) return;
+      const current = daily.get(reading.date);
+      if (!current) return;
+      current.coveredMs += durationMs;
+      if (reading.value >= targets.low && reading.value <= targets.high) current.inRangeMs += durationMs;
+    };
+    const localMidnightAfter = (date: string) => {
+      const cachedMidnight = midnightCache.get(date);
+      if (cachedMidnight !== undefined) return cachedMidnight;
+      const [localYear, localMonth, localDay] = date.split("-").map(Number);
+      const midnight = Date.parse(localMidnightUtc(localYear, localMonth - 1, localDay + 1, timeZone));
+      midnightCache.set(date, midnight);
+      return midnight;
+    };
     const readPage = (from: number, to: number, withCount = false) => supabase
         .from("glucose_measurements")
         .select("timestamp,value", withCount ? { count: "exact" } : undefined)
@@ -131,12 +154,21 @@ export async function getYearOverviewAction(
     const aggregate = (rows: Array<{ timestamp: string; value: number | string }>) => {
       for (const row of rows) {
         const value = Number(row.value);
-        if (!Number.isFinite(value)) continue;
+        const time = Date.parse(row.timestamp);
+        if (!Number.isFinite(value) || !Number.isFinite(time)) continue;
         const date = dateKeyInTimeZone(row.timestamp, dateFormatter);
-        const current = daily.get(date) ?? { sum: 0, count: 0 };
+        if (previousReading.current) {
+          let durationMs = Math.min(Math.max(0, time - previousReading.current.time), YEAR_OVERVIEW_MAX_GAP_MS);
+          if (date !== previousReading.current.date) {
+            durationMs = Math.min(durationMs, Math.max(0, localMidnightAfter(previousReading.current.date) - previousReading.current.time));
+          }
+          addDuration(previousReading.current, durationMs);
+        }
+        const current = daily.get(date) ?? { sum: 0, count: 0, inRangeMs: 0, coveredMs: 0 };
         current.sum += value;
         current.count += 1;
         daily.set(date, current);
+        previousReading.current = { time, value, date };
       }
     };
     aggregate(first.data ?? []);
@@ -156,8 +188,19 @@ export async function getYearOverviewAction(
       }
     }
 
+    if (previousReading.current) {
+      const untilMidnight = Math.max(0, localMidnightAfter(previousReading.current.date) - previousReading.current.time);
+      addDuration(previousReading.current, Math.min(YEAR_OVERVIEW_LAST_READING_MS, untilMidnight));
+    }
+
     const result = [...daily.entries()]
-      .map(([date, { sum, count }]) => ({ date, average: sum / count, count }))
+      .map(([date, { sum, count, inRangeMs, coveredMs }]) => ({
+        date,
+        average: sum / count,
+        count,
+        timeInRangePercent: coveredMs > 0 ? (inRangeMs / coveredMs) * 100 : null,
+        coverageMinutes: coveredMs / 60_000,
+      }))
       .sort((first, second) => first.date.localeCompare(second.date));
     yearOverviewCache.set(cacheKey, { data: result, timestamp: Date.now() });
     return { success: true, data: result };
