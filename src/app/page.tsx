@@ -68,6 +68,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 import { getHistoricalGlucoseAction } from "./actions";
 import { AnalysisView } from "@/components/analysis-view";
+import { YearOverviewChart } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import { MonitorDatePicker } from "@/components/monitor-date-picker";
 import type { GlucoEvent } from "@/lib/events";
@@ -380,6 +381,7 @@ export default function GlucoPage() {
   const [analysisStats, setAnalysisStats] = useState<any>(null);
   const [analysisPercentiles, setAnalysisPercentiles] = useState<any[]>([]);
   const [analysisDays, setAnalysisDays] = useState(7);
+  const [analysisMode, setAnalysisMode] = useState<"profile" | "year">("profile");
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [events, setEvents] = useState<GlucoEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -857,10 +859,10 @@ export default function GlucoPage() {
   };
 
   useEffect(() => {
-    if (activeView === "analysis") {
+    if (activeView === "analysis" && analysisMode === "profile") {
       fetchHistoricalData();
     }
-  }, [activeView, analysisDays]);
+  }, [activeView, analysisDays, analysisMode]);
 
   useEffect(() => {
     let tick: ReturnType<typeof setInterval> | undefined;
@@ -2073,38 +2075,70 @@ export default function GlucoPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="flex h-full flex-col gap-2"
             >
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <div className="min-w-0">
                   <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Análisis</h2>
                   <p className="hidden text-[11px] text-muted-foreground sm:block">Perfil diario y métricas del período</p>
                 </div>
-                <div className="grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana de análisis">
-                  {[7, 14, 30, 90].map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setAnalysisDays(d)}
-                      aria-pressed={analysisDays === d}
-                      className={`min-h-9 rounded-md px-2 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-3 ${
-                        analysisDays === d 
-                          ? "bg-background text-primary shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {d} d
-                    </button>
-                  ))}
+                <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
+                  <div role="group" className="grid grid-cols-2 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Tipo de análisis">
+                    {([ ["profile", "Perfil"], ["year", "Año"] ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setAnalysisMode(mode)}
+                        aria-pressed={analysisMode === mode}
+                        className={`min-h-9 rounded-md px-2.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-3 ${
+                          analysisMode === mode
+                            ? "bg-background text-primary shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {analysisMode === "profile" && (
+                    <div role="group" className="grid grid-cols-4 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana de análisis">
+                      {[7, 14, 30, 90].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setAnalysisDays(d)}
+                          aria-pressed={analysisDays === d}
+                          className={`min-h-9 rounded-md px-2 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-3 ${
+                            analysisDays === d
+                              ? "bg-background text-primary shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {d} d
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="flex-1 flex flex-col min-h-0">
-                  <AnalysisView 
-                    history={historicalData} 
-                    targetConfig={targetConfig} 
-                    days={analysisDays} 
+                {analysisMode === "year" ? (
+                  <YearOverviewChart
+                    targets={targetConfig}
+                    onSelectDate={(date) => {
+                      setActiveView("dashboard");
+                      void selectMonitorDate(date);
+                    }}
+                  />
+                ) : (
+                  <AnalysisView
+                    history={historicalData}
+                    targetConfig={targetConfig}
+                    days={analysisDays}
                     preCalculatedStats={analysisStats}
                     preCalculatedPercentiles={analysisPercentiles}
                     loading={loadingAnalysis}
                   />
+                )}
               </div>
             </motion.div>
           ) : activeView === "dashboard" ? (

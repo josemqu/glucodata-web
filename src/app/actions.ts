@@ -1,7 +1,7 @@
 "use server";
 
 import { GlucoseData } from "@/lib/librelink";
-import { libreContext, logoutUser, requireUser, EventAuthError } from "@/lib/server/user-auth";
+import { adminDatabase, libreContext, logoutUser, requireUser, EventAuthError } from "@/lib/server/user-auth";
 
 import { calculateStats, calculatePercentiles } from "@/lib/metrics";
 
@@ -22,9 +22,152 @@ type MonitorDayResult = {
 
 const analysisCache = new Map<string, { data: { stats: ReturnType<typeof calculateStats> | null; percentileData: ReturnType<typeof calculatePercentiles>; history: { value: number; time: number }[]; patient: import("@/lib/librelink").Patient; days: number }, timestamp: number }>();
 const monitorDayCache = new Map<string, { data: MonitorDayResult, timestamp: number }>();
+type YearOverviewDay = { date: string; average: number; count: number };
+const yearOverviewCache = new Map<string, { data: YearOverviewDay[]; timestamp: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const MONITOR_DAY_PAGE_SIZE = 500;
 const MONITOR_DAY_MAX_ROWS = 5000;
+const YEAR_OVERVIEW_PAGE_SIZE = 1000;
+const YEAR_OVERVIEW_PAGE_BATCH_SIZE = 8;
+const YEAR_OVERVIEW_MAX_ROWS = 250_000;
+
+function dateKeyInTimeZone(timestamp: string, formatter: Intl.DateTimeFormat) {
+  const parts = formatter.formatToParts(new Date(timestamp));
+  let year = "";
+  let month = "";
+  let day = "";
+  for (const part of parts) {
+    if (part.type === "year") year = part.value;
+    else if (part.type === "month") month = part.value;
+    else if (part.type === "day") day = part.value;
+  }
+  return `${year}-${month}-${day}`;
+}
+
+function localMidnightUtc(year: number, month: number, day: number, timeZone: string) {
+  const wanted = Date.UTC(year, month, day);
+  let candidate = wanted;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date(candidate));
+    const values = new Map(parts.map((part) => [part.type, Number(part.value)]));
+    const represented = Date.UTC(
+      values.get("year") ?? year,
+      (values.get("month") ?? month + 1) - 1,
+      values.get("day") ?? day,
+      values.get("hour") ?? 0,
+      values.get("minute") ?? 0,
+      values.get("second") ?? 0,
+    );
+    candidate += wanted - represented;
+  }
+  return new Date(candidate).toISOString();
+}
+
+export async function getYearOverviewAction(
+  year: number,
+  timeZone = "UTC",
+) {
+  try {
+    // Validate the zone first, then use its local year at the server boundary.
+    const currentYear = Number(new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric" }).format(new Date()));
+    if (!Number.isInteger(year) || year < 2000 || year > currentYear) {
+      return { success: false, error: "El año seleccionado no es válido." };
+    }
+
+    const { userId, database: supabase } = await requireUser();
+    const { data: providerSession, error: sessionError } = await adminDatabase()
+      .from("user_provider_sessions")
+      .select("patient_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (sessionError || !providerSession?.patient_id) {
+      throw new EventAuthError("Volvé a iniciar sesión con LibreLinkUp.", 401);
+    }
+    const patientId = providerSession.patient_id;
+    const cacheKey = `${userId}:${patientId}:${year}:${timeZone}`;
+    const cached = yearOverviewCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return { success: true, data: cached.data };
+    }
+
+    const start = localMidnightUtc(year, 0, 1, timeZone);
+    const end = localMidnightUtc(year + 1, 0, 1, timeZone);
+    const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const daily = new Map<string, { sum: number; count: number }>();
+    const readPage = (from: number, to: number, withCount = false) => supabase
+        .from("glucose_measurements")
+        .select("timestamp,value", withCount ? { count: "exact" } : undefined)
+        .eq("user_id", userId)
+        .eq("patient_id", patientId)
+        .gte("timestamp", start)
+        .lt("timestamp", end)
+        .order("timestamp", { ascending: true })
+        .range(from, to);
+
+    const first = await readPage(0, YEAR_OVERVIEW_PAGE_SIZE - 1, true);
+    if (first.error) throw first.error;
+    const totalRows = first.count ?? first.data?.length ?? 0;
+    if (first.count === null && (first.data?.length ?? 0) === YEAR_OVERVIEW_PAGE_SIZE) {
+      throw new Error("No se pudo determinar cuántas lecturas tiene el año para resumirlas con seguridad.");
+    }
+    if (totalRows > YEAR_OVERVIEW_MAX_ROWS) {
+      throw new Error("El año contiene más lecturas de las que se pueden resumir de forma segura.");
+    }
+
+    const aggregate = (rows: Array<{ timestamp: string; value: number | string }>) => {
+      for (const row of rows) {
+        const value = Number(row.value);
+        if (!Number.isFinite(value)) continue;
+        const date = dateKeyInTimeZone(row.timestamp, dateFormatter);
+        const current = daily.get(date) ?? { sum: 0, count: 0 };
+        current.sum += value;
+        current.count += 1;
+        daily.set(date, current);
+      }
+    };
+    aggregate(first.data ?? []);
+
+    const rowsPerBatch = YEAR_OVERVIEW_PAGE_SIZE * YEAR_OVERVIEW_PAGE_BATCH_SIZE;
+    for (let batchStart = YEAR_OVERVIEW_PAGE_SIZE; batchStart < totalRows; batchStart += rowsPerBatch) {
+      const offsets = Array.from(
+        { length: Math.min(YEAR_OVERVIEW_PAGE_BATCH_SIZE, Math.ceil((totalRows - batchStart) / YEAR_OVERVIEW_PAGE_SIZE)) },
+        (_, index) => batchStart + index * YEAR_OVERVIEW_PAGE_SIZE,
+      );
+      const pages = await Promise.all(offsets.map((offset) =>
+        readPage(offset, Math.min(offset + YEAR_OVERVIEW_PAGE_SIZE - 1, totalRows - 1)),
+      ));
+      for (const page of pages) {
+        if (page.error) throw page.error;
+        aggregate(page.data ?? []);
+      }
+    }
+
+    const result = [...daily.entries()]
+      .map(([date, { sum, count }]) => ({ date, average: sum / count, count }))
+      .sort((first, second) => first.date.localeCompare(second.date));
+    yearOverviewCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    return { success: true, data: result };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: error instanceof EventAuthError ? error.message : "No se pudo cargar el resumen anual.",
+    };
+  }
+}
 
 export async function getLatestGlucoseAction(
   email?: string,
