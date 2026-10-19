@@ -44,11 +44,12 @@ export function MonitorInsulinLegend({ doses }: { doses: Dose[] }) {
   );
 }
 
-export function MonitorInsulinColumns({ doses, start, end, maximum, onSelect, onHoverChange }: {
+export function MonitorInsulinColumns({ doses, start, end, maximum, tooltipsEnabled, onSelect, onHoverChange }: {
   doses: Dose[];
   start: number;
   end: number;
   maximum: number;
+  tooltipsEnabled: boolean;
   onSelect: (event: GlucoEvent) => void;
   onHoverChange: (id: string | null) => void;
 }) {
@@ -84,7 +85,7 @@ export function MonitorInsulinColumns({ doses, start, end, maximum, onSelect, on
       return { dose, width, x: center - width / 2, y, height, labelInside, labelY };
     });
   }).flat();
-  const active = columns.find(column => column.dose.id === activeId);
+  const active = tooltipsEnabled ? columns.find(column => column.dose.id === activeId) : undefined;
   const tooltipWidth = Math.min(224, plot.width - 16);
   const setActive = (dose: Dose | null) => {
     setActiveId(dose?.id ?? null);
@@ -97,7 +98,7 @@ export function MonitorInsulinColumns({ doses, start, end, maximum, onSelect, on
       <ZIndexLayer zIndex={150}>
         <g clipPath={`url(#${clipId})`}>
           {columns.map(({ dose, x, y, width, height, labelInside, labelY }) => {
-            const selected = dose.id === activeId;
+            const selected = tooltipsEnabled && dose.id === activeId;
             const color = insulinColor(dose.insulin_type);
             const type = INSULIN_TYPE_LABELS[dose.insulin_type as InsulinType];
             const time = new Date(dose.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

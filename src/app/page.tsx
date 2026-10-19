@@ -72,6 +72,7 @@ import { YearOverviewChart } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import { MonitorDatePicker } from "@/components/monitor-date-picker";
 import { MonitorInsulinColumns, MonitorInsulinLegend, useMonitorInsulinDoses } from "@/components/monitor-insulin-columns";
+import { useChartTooltipTimeout } from "@/lib/use-chart-tooltip-timeout";
 import type { GlucoEvent } from "@/lib/events";
 import { isManualGlucose, type EventFormType } from "@/lib/events";
 import {
@@ -394,6 +395,7 @@ export default function GlucoPage() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [hoveredChartEventId, setHoveredChartEventId] = useState<string | null>(null);
+  const { tooltipsEnabled, resumeTooltips, scheduleDismissal } = useChartTooltipTimeout();
   const [monitorDate, setMonitorDate] = useState(() => localDateKey());
   const [monitorDateLoading, setMonitorDateLoading] = useState(false);
   const [monitorDateError, setMonitorDateError] = useState<string | null>(null);
@@ -2371,6 +2373,18 @@ export default function GlucoPage() {
                         tabIndex={0}
                         aria-label={`Historial de glucosa, ${currentMonitorWindowLabel}. Arrastrá horizontalmente para recorrer el tiempo.`}
                         style={{ touchAction: "pan-y" }}
+                        onPointerEnter={resumeTooltips}
+                        onPointerLeave={scheduleDismissal}
+                        onFocusCapture={resumeTooltips}
+                        onKeyDownCapture={resumeTooltips}
+                        onBlurCapture={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget)) scheduleDismissal();
+                        }}
+                        onPointerDownCapture={resumeTooltips}
+                        onPointerUpCapture={(event) => {
+                          if (event.pointerType !== "mouse") scheduleDismissal();
+                        }}
+                        onPointerCancelCapture={scheduleDismissal}
                         onPointerDown={handleChartPointerDown}
                         onPointerMove={handleChartPointerMove}
                         onPointerUp={finishChartPointer}
@@ -2473,7 +2487,7 @@ export default function GlucoPage() {
                                           strokeWidth={1}
                                           strokeDasharray={hasDuration ? undefined : "3 3"}
                                           ifOverflow="hidden"
-                                          label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} tooltipOpen={hoveredChartEventId === event.id} onTooltipVisibilityChange={(open) => setHoveredChartEventId(open ? event.id : null)} />}
+                                          label={<EventChartMarker event={event} onSelect={(selectedEvent) => eventCenterRef.current?.openEvent(selectedEvent)} tooltipOpen={tooltipsEnabled && hoveredChartEventId === event.id} onTooltipVisibilityChange={(open) => setHoveredChartEventId(open ? event.id : null)} />}
                                         />
                                       ];
                                   })}
@@ -2482,6 +2496,7 @@ export default function GlucoPage() {
                                     start={displayedChartWindowStart}
                                     end={displayedChartWindowEnd}
                                     maximum={insulinDoseMaximum}
+                                    tooltipsEnabled={tooltipsEnabled}
                                     onSelect={event => eventCenterRef.current?.openEvent(event)}
                                     onHoverChange={setHoveredChartEventId}
                                   />
@@ -2501,13 +2516,14 @@ export default function GlucoPage() {
                                     hide
                                   />
                                   {!isChartPanning ? <Tooltip
+                                    active={tooltipsEnabled ? undefined : false}
                                     offset={CHART_TOOLTIP_OFFSET}
                                     isAnimationActive={CHART_TOOLTIP_IS_ANIMATION_ACTIVE}
                                     allowEscapeViewBox={{ x: false, y: true }}
                                     wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                                     cursor={CHART_TOOLTIP_CURSOR}
                                     content={({ active, payload, label }) => {
-                                      if (hoveredChartEventId) return null;
+                                      if (!tooltipsEnabled || hoveredChartEventId) return null;
                                       if (active && payload && payload.length) {
                                         const glucoseItem = payload.find(
                                           (p) => p.dataKey === "value" && p.name === "GLUCOSA",
