@@ -410,7 +410,7 @@ export default function GlucoPage() {
   const eventCenterRef = useRef<EventCenterHandle>(null);
   const monitorDayCacheRef = useRef(new Map<string, MonitorDayCacheEntry>());
   const monitorDayRequestsRef = useRef(new Map<string, Promise<MonitorGlucosePoint[]>>());
-  const chartPanRef = useRef<{ pointerId: number; startX: number; startEnd: number; lastX: number; lastAt: number; velocityPxMs: number } | null>(null);
+  const chartPanRef = useRef<{ pointerId: number; startX: number; startEnd: number; rangeMs: number; lastX: number; lastAt: number; velocityPxMs: number } | null>(null);
   const chartInertiaFrameRef = useRef<number | null>(null);
   const isMonitorToday = monitorDate === localDateKey();
 
@@ -773,6 +773,7 @@ export default function GlucoPage() {
   }, []);
 
   const selectMonitorDate = async (value: string) => {
+    if (timeRange === "dtd" && value !== localDateKey()) setTimeRange(24);
     setMonitorDate(value);
     setMonitorDateLoading(true);
     setMonitorDateError(null);
@@ -1037,12 +1038,19 @@ export default function GlucoPage() {
     };
   };
 
-  const [timeRange, setTimeRange] = useState(24); // hours
+  const [timeRange, setTimeRange] = useState<number | "dtd">(24);
   const [showLine, setShowLine] = useState(true);
   const reduceMotion = useReducedMotion();
 
   const windowEnd = windowEndMs;
-  const windowStart = windowEnd - timeRange * 60 * 60 * 1000;
+  const windowStart = timeRange === "dtd"
+    ? localDayBounds(dateKeyFromTime(windowEnd)).start.getTime()
+    : windowEnd - timeRange * 60 * 60 * 1000;
+  useEffect(() => {
+    if (timeRange !== "dtd" || !isLoggedIn || activeView !== "dashboard") return;
+    const timer = setInterval(() => setWindowEndMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [timeRange, isLoggedIn, activeView]);
   const [chartWindowStart, setChartWindowStart] = useState(windowStart);
   const [chartWindowEnd, setChartWindowEnd] = useState(windowEnd);
   const chartWindowStartRef = useRef(windowStart);
@@ -1306,6 +1314,12 @@ export default function GlucoPage() {
   }, []);
 
   const shiftMonitorDay = (direction: -1 | 1) => {
+    if (timeRange === "dtd") {
+      const day = new Date(windowEnd);
+      day.setDate(day.getDate() + direction);
+      void selectMonitorDate(localDateKey(new Date(Math.min(Date.now(), day.getTime()))));
+      return;
+    }
     const next = new Date(windowEnd);
     next.setDate(next.getDate() + direction);
     setHoveredChartEventId(null);
@@ -1320,8 +1334,12 @@ export default function GlucoPage() {
   const updateWindowFromPointer = (clientX: number, width: number) => {
     const pan = chartPanRef.current;
     if (!pan || width <= 0) return;
-    const rangeMs = timeRange * 60 * 60 * 1000;
+    const rangeMs = pan.rangeMs;
     const deltaX = clientX - pan.startX;
+    if (timeRange === "dtd") {
+      if (Math.abs(deltaX) < 3) return;
+      setTimeRange(rangeMs / (60 * 60 * 1000));
+    }
     setWindowEndMs(Math.min(Date.now(), pan.startEnd - (deltaX / width) * rangeMs));
   };
 
@@ -1334,6 +1352,7 @@ export default function GlucoPage() {
       pointerId: event.pointerId,
       startX: event.clientX,
       startEnd: windowEnd,
+      rangeMs: Math.max(1, windowEnd - windowStart),
       lastX: event.clientX,
       lastAt: performance.now(),
       velocityPxMs: 0,
@@ -1358,7 +1377,7 @@ export default function GlucoPage() {
     const pan = chartPanRef.current;
     if (!pan || pan.pointerId !== event.pointerId) return;
     const width = event.currentTarget.clientWidth;
-    const rangeMs = timeRange * 60 * 60 * 1000;
+    const rangeMs = pan.rangeMs;
     let velocity = pan.velocityPxMs;
     chartPanRef.current = null;
     setIsChartDragging(false);
@@ -1392,7 +1411,7 @@ export default function GlucoPage() {
   const monitorWindowLoading = visibleDayStates.some((status) => status === "loading" || status === "partial");
   const monitorWindowEmpty = !monitorWindowLoading && filteredChartGraphWithValues.length === 0 && visibleDayStates.every((status) => status === "empty");
   const monitorWindowHasError = visibleDayStates.includes("error");
-  const canMoveForward = windowEnd < Date.now() - 60_000;
+  const canMoveForward = timeRange !== "dtd" && windowEnd < Date.now() - 60_000;
   const currentMonitorWindowLabel = monitorWindowLabel(windowStart, windowEnd);
 
   useEffect(() => {
@@ -1400,7 +1419,7 @@ export default function GlucoPage() {
     if (!saved) return;
     try {
       const parsed = JSON.parse(saved);
-      if (typeof parsed?.timeRange === "number") {
+      if (parsed?.timeRange === "dtd" || (typeof parsed?.timeRange === "number" && Number.isFinite(parsed.timeRange) && parsed.timeRange > 0 && parsed.timeRange <= 25)) {
         setTimeRange(parsed.timeRange);
       }
       if (typeof parsed?.showLine === "boolean") {
@@ -2159,12 +2178,12 @@ export default function GlucoPage() {
               className="flex h-full flex-col gap-2"
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
+                <div className="hidden min-w-0 sm:block">
                   <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Monitor</h2>
                   <p className="hidden text-[11px] text-muted-foreground sm:block">Lecturas y distribución del período</p>
                 </div>
-                <div className="flex w-full shrink-0 items-center justify-between gap-1 sm:w-auto sm:justify-end">
-                  <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Navegación temporal del monitor">
+                <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1 sm:flex sm:w-auto sm:justify-end">
+                  <div className="col-span-2 flex items-center justify-self-start gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Navegación temporal del monitor">
                     <Button type="button" variant="ghost" size="icon-sm" className="rounded-md" onClick={() => shiftMonitorDay(-1)} aria-label="Ver el día anterior">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -2173,20 +2192,25 @@ export default function GlucoPage() {
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-5 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana del monitor">
-                    {[1, 3, 6, 12, 24].map((h) => (
+                  <div className="grid grid-cols-6 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana del monitor">
+                    {([1, 3, 6, 12, 24, "dtd"] as const).map((h) => (
                       <button
                         key={h}
                         type="button"
-                        onClick={() => setTimeRange(h)}
+                        onClick={() => {
+                          setTimeRange(h);
+                          if (h === "dtd") returnMonitorToNow();
+                        }}
                         aria-pressed={timeRange === h}
-                        className={`min-h-9 rounded-md px-1.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-2.5 ${
+                        aria-label={h === "dtd" ? "Día hasta ahora, desde las 00:00 (DTD)" : undefined}
+                        title={h === "dtd" ? "Día hasta ahora · desde las 00:00" : undefined}
+                        className={`min-h-9 whitespace-nowrap rounded-md px-1.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-2.5 ${
                           timeRange === h
                             ? "bg-background text-primary shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        {h} h
+                        {h === "dtd" ? "DTD" : `${h} h`}
                       </button>
                     ))}
                   </div>
@@ -2313,7 +2337,7 @@ export default function GlucoPage() {
                           </span>
                         </div>
                         <p className="text-[8px] font-bold text-muted-foreground">
-                          Durante las últimas {timeRange} h
+                          {timeRange === "dtd" ? "Hoy, desde las 00:00" : `Durante las últimas ${Number(timeRange.toFixed(1))} h`}
                         </p>
                       </CardContent>
                     </Card>
