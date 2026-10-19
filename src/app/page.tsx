@@ -71,6 +71,7 @@ import { AnalysisView } from "@/components/analysis-view";
 import { YearOverviewChart } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import { MonitorDatePicker } from "@/components/monitor-date-picker";
+import { MonitorInsulinColumns, MonitorInsulinLegend, useMonitorInsulinDoses } from "@/components/monitor-insulin-columns";
 import type { GlucoEvent } from "@/lib/events";
 import { isManualGlucose, type EventFormType } from "@/lib/events";
 import {
@@ -384,6 +385,12 @@ export default function GlucoPage() {
   const [analysisMode, setAnalysisMode] = useState<"profile" | "year">("profile");
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [events, setEvents] = useState<GlucoEvent[]>([]);
+  const insulinDoses = useMonitorInsulinDoses(events);
+  const insulinDoseMaximum = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const dose of insulinDoses) totals.set(dose.time, (totals.get(dose.time) ?? 0) + dose.units);
+    return Array.from(totals.values()).reduce((maximum, total) => Math.max(maximum, total), 1);
+  }, [insulinDoses]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [hoveredChartEventId, setHoveredChartEventId] = useState<string | null>(null);
@@ -1869,6 +1876,8 @@ export default function GlucoPage() {
     return endedAt >= windowStart && occurredAt <= windowEnd;
   });
 
+  const visibleInsulinDoses = insulinDoses.filter(dose => dose.time >= displayedChartWindowStart && dose.time <= displayedChartWindowEnd);
+
   const SimpleDot = (props: any) => {
     const { cx, cy, payload } = props;
     const val = payload?.value;
@@ -2356,6 +2365,7 @@ export default function GlucoPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
+                      <MonitorInsulinLegend doses={visibleInsulinDoses} />
                       <div
                         className={`glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden outline-none sm:min-h-[420px] ${isChartDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
                         tabIndex={0}
@@ -2437,7 +2447,7 @@ export default function GlucoPage() {
                                       strokeWidth={1}
                                     />
                                   ))}
-                                  {visibleEvents.flatMap((event) => {
+                                  {visibleEvents.filter(event => event.type !== "insulin" || !insulinDoses.some(dose => dose.event.id === event.id)).flatMap((event) => {
                                       const occurredAt = new Date(event.occurred_at).getTime();
                                       const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : null;
                                       const hasDuration = endedAt !== null && endedAt > occurredAt;
@@ -2467,6 +2477,14 @@ export default function GlucoPage() {
                                         />
                                       ];
                                   })}
+                                  <MonitorInsulinColumns
+                                    doses={visibleInsulinDoses}
+                                    start={displayedChartWindowStart}
+                                    end={displayedChartWindowEnd}
+                                    maximum={insulinDoseMaximum}
+                                    onSelect={event => eventCenterRef.current?.openEvent(event)}
+                                    onHoverChange={setHoveredChartEventId}
+                                  />
                                   <XAxis
                                     dataKey="time"
                                     type="number"
