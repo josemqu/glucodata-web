@@ -61,7 +61,7 @@ export function MonitorInsulinColumns({ doses, start, end, maximum, tooltipsEnab
   const baseline = plot.y + plot.height - 36;
   // A separate, zero-based dose scale leaves the glucose scale untouched.
   // Keep the same scale while panning through the loaded events.
-  const doseHeight = Math.max(0, (plot.height - 36) * 0.45);
+  const doseHeight = Math.max(0, (plot.height - 36) * 0.75);
   const groups = new Map<number, Dose[]>();
   for (const dose of doses) {
     const group = groups.get(dose.time) ?? [];
