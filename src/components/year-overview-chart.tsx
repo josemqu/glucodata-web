@@ -177,7 +177,8 @@ export function YearOverviewChart({
   };
   const getCellClass = (day?: YearOverviewDay) => {
     if (!day) return "border border-border/60 bg-muted/60";
-    if (metric === "average") return bandClass(day.average, targets);
+    // Match the whole mg/dL value shown in the tooltip and range legend.
+    if (metric === "average") return bandClass(Math.round(day.average), targets);
     return day.timeInRangePercent == null ? "border border-border/60 bg-muted/60" : "";
   };
   const getCellDescription = (day?: YearOverviewDay) => {
