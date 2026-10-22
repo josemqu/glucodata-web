@@ -366,21 +366,36 @@ export async function getHistoricalGlucoseAction(
       };
     }
 
-    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    if (![7, 14, 30, 90].includes(days)) {
+      throw new Error("Ventana de análisis no válida.");
+    }
+    const endDate = new Date().toISOString();
+    const startDate = new Date(Date.parse(endDate) - days * 24 * 60 * 60 * 1000).toISOString();
+    const history: { value: number; time: number }[] = [];
+    let after: string | undefined;
 
-    const { data: dbHistory, error: dbError } = await supabase
-      .from("glucose_measurements")
-      .select("*")
-      .eq("patient_id", patientId)
-      .gte("timestamp", startDate)
-      .order("timestamp", { ascending: true });
-
-    if (dbError) throw dbError;
-
-    const history = (dbHistory || []).map((row) => ({
-      value: Number(row.value),
-      time: new Date(row.timestamp).getTime(),
-    }));
+    // Read every page: a single Data API request silently caps the period.
+    // The timestamp is unique within the authenticated user's patient history.
+    while (true) {
+      let query = supabase
+        .from("glucose_measurements")
+        .select("timestamp,value")
+        .eq("user_id", userId)
+        .eq("patient_id", patientId)
+        .gte("timestamp", startDate)
+        .lte("timestamp", endDate)
+        .order("timestamp", { ascending: true })
+        .limit(1000);
+      if (after) query = query.gt("timestamp", after);
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data?.length) break;
+      for (const row of data) {
+        history.push({ value: Number(row.value), time: new Date(row.timestamp).getTime() });
+      }
+      if (history.length > 250_000) throw new Error("Demasiadas mediciones para analizar el período completo.");
+      after = data[data.length - 1].timestamp;
+    }
 
     const stats = targetConfig ? calculateStats(history, targetConfig) : null;
     const percentileData = calculatePercentiles(history, timeZone);

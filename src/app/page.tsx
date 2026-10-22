@@ -512,6 +512,7 @@ export default function GlucoPage() {
   const syncCardRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false);
   const authEpochRef = useRef(0);
+  const analysisRequestRef = useRef(0);
   const credentialsRef = useRef(credentials);
   const sessionRef = useRef(session);
   const graphPointsRef = useRef<any[]>(graphPoints);
@@ -843,7 +844,11 @@ export default function GlucoPage() {
 
   const fetchHistoricalData = async (days: number = analysisDays) => {
     const epoch = authEpochRef.current;
+    const request = ++analysisRequestRef.current;
     setLoadingAnalysis(true);
+    setHistoricalData([]);
+    setAnalysisStats(null);
+    setAnalysisPercentiles([]);
     try {
       const result = await getHistoricalGlucoseAction(
         days,
@@ -853,7 +858,7 @@ export default function GlucoPage() {
         targetConfig,
         Intl.DateTimeFormat().resolvedOptions().timeZone,
       );
-      if (epoch !== authEpochRef.current) return;
+      if (epoch !== authEpochRef.current || request !== analysisRequestRef.current) return;
       if (result.success && result.data) {
         setHistoricalData(result.data.history || []);
         setAnalysisStats(result.data.stats);
@@ -864,7 +869,7 @@ export default function GlucoPage() {
     } catch (e) {
       console.error("Error fetching historical data:", e);
     } finally {
-      setLoadingAnalysis(false);
+      if (epoch === authEpochRef.current && request === analysisRequestRef.current) setLoadingAnalysis(false);
     }
   };
 

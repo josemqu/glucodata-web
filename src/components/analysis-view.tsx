@@ -146,7 +146,7 @@ export function AnalysisView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {/* Long-period metrics */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <MetricCard
@@ -188,7 +188,7 @@ export function AnalysisView({
       </div>
 
       {/* AGP Chart — primary analytical surface */}
-      <Card className="flex min-h-[360px] flex-[2_1_480px] overflow-hidden border bg-card/20 shadow-sm sm:min-h-[440px]">
+      <Card className="flex min-h-[360px] min-w-0 flex-[2_1_480px] overflow-hidden border bg-card/20 shadow-sm sm:min-h-[440px]">
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
           <div className="flex flex-col w-full sm:w-auto">
             <CardTitle className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
@@ -201,9 +201,16 @@ export function AnalysisView({
             <CardDescription className="mt-1 text-[10px]">Hora local · percentiles por bloque de 30 min</CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="relative flex min-h-0 flex-1 flex-col p-0">
+        <CardContent className="relative flex min-h-0 min-w-0 flex-1 flex-col p-0">
           <div className="glucose-chart-stage relative min-h-[250px] w-full flex-1 overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              minHeight={250}
+              initialDimension={{ width: 320, height: 250 }}
+              className="absolute inset-0"
+            >
               <ComposedChart data={percentileData} margin={{ top: 8, right: 10, left: 0, bottom: 26 }}>
                 <defs>
                   <linearGradient id="colorMedian" x1="0" y1="1" x2="0" y2="0">
