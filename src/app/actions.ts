@@ -28,10 +28,32 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const MONITOR_DAY_PAGE_SIZE = 500;
 const MONITOR_DAY_MAX_ROWS = 5000;
 const YEAR_OVERVIEW_PAGE_SIZE = 1000;
-const YEAR_OVERVIEW_PAGE_BATCH_SIZE = 8;
+const YEAR_OVERVIEW_PAGE_BATCH_SIZE = 32;
 const YEAR_OVERVIEW_MAX_ROWS = 250_000;
 const YEAR_OVERVIEW_MAX_GAP_MS = 15 * 60 * 1000;
 const YEAR_OVERVIEW_LAST_READING_MS = 5 * 60 * 1000;
+
+const analysisTokens = new Map<string, { valid: boolean }>();
+function analysisToken(userId: string) {
+  let token = analysisTokens.get(userId);
+  if (!token) {
+    if (analysisTokens.size >= 128) {
+      const oldest = analysisTokens.keys().next().value!;
+      analysisTokens.get(oldest)!.valid = false;
+      analysisTokens.delete(oldest);
+    }
+    token = { valid: true };
+    analysisTokens.set(userId, token);
+  }
+  return token;
+}
+function invalidateAnalysisResults(userId: string) {
+  const token = analysisTokens.get(userId);
+  if (token) token.valid = false;
+  analysisTokens.delete(userId);
+  for (const key of analysisCache.keys()) if (key.startsWith(`${userId}:`)) analysisCache.delete(key);
+  for (const key of yearOverviewCache.keys()) if (key.startsWith(`${userId}:`)) yearOverviewCache.delete(key);
+}
 
 function dateKeyInTimeZone(timestamp: string, formatter: Intl.DateTimeFormat) {
   const parts = formatter.formatToParts(new Date(timestamp));
@@ -46,11 +68,11 @@ function dateKeyInTimeZone(timestamp: string, formatter: Intl.DateTimeFormat) {
   return `${year}-${month}-${day}`;
 }
 
-function localMidnightUtc(year: number, month: number, day: number, timeZone: string) {
+function localMidnightUtc(year: number, month: number, day: number, timeZone: string, formatter?: Intl.DateTimeFormat) {
   const wanted = Date.UTC(year, month, day);
   let candidate = wanted;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const parts = new Intl.DateTimeFormat("en-US", {
+    const parts = (formatter ?? new Intl.DateTimeFormat("en-US", {
       timeZone,
       year: "numeric",
       month: "2-digit",
@@ -59,7 +81,7 @@ function localMidnightUtc(year: number, month: number, day: number, timeZone: st
       minute: "2-digit",
       second: "2-digit",
       hourCycle: "h23",
-    }).formatToParts(new Date(candidate));
+    })).formatToParts(new Date(candidate));
     const values = new Map(parts.map((part) => [part.type, Number(part.value)]));
     const represented = Date.UTC(
       values.get("year") ?? year,
@@ -69,7 +91,9 @@ function localMidnightUtc(year: number, month: number, day: number, timeZone: st
       values.get("minute") ?? 0,
       values.get("second") ?? 0,
     );
-    candidate += wanted - represented;
+    const correction = wanted - represented;
+    if (correction === 0) break;
+    candidate += correction;
   }
   return new Date(candidate).toISOString();
 }
@@ -78,6 +102,7 @@ export async function getYearOverviewAction(
   year: number,
   timeZone = "UTC",
   targets: { low: number; high: number } = { low: 70, high: 180 },
+  refresh = false,
 ) {
   try {
     // Validate the zone first, then use its local year at the server boundary.
@@ -99,12 +124,15 @@ export async function getYearOverviewAction(
       throw new EventAuthError("Volvé a iniciar sesión con LibreLinkUp.", 401);
     }
     const patientId = providerSession.patient_id;
+    if (refresh) invalidateAnalysisResults(userId);
+    const token = analysisToken(userId);
     const cacheKey = `${userId}:${patientId}:${year}:${timeZone}:${targets.low}:${targets.high}`;
     const cached = yearOverviewCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return { success: true, data: cached.data };
+    if (!refresh && cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return { success: true, data: cached.data, validForMs: CACHE_TTL - (Date.now() - cached.timestamp) };
     }
 
+    const queryStarted = Date.now();
     const start = localMidnightUtc(year, 0, 1, timeZone);
     const end = localMidnightUtc(year + 1, 0, 1, timeZone);
     const dateFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -114,6 +142,10 @@ export async function getYearOverviewAction(
       day: "2-digit",
     });
     const daily = new Map<string, { sum: number; count: number; inRangeMs: number; coveredMs: number }>();
+    const midnightFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    });
     const midnightCache = new Map<string, number>();
     const previousReading: { current: { time: number; value: number; date: string } | null } = { current: null };
     const addDuration = (reading: { time: number; value: number; date: string }, durationMs: number) => {
@@ -127,7 +159,7 @@ export async function getYearOverviewAction(
       const cachedMidnight = midnightCache.get(date);
       if (cachedMidnight !== undefined) return cachedMidnight;
       const [localYear, localMonth, localDay] = date.split("-").map(Number);
-      const midnight = Date.parse(localMidnightUtc(localYear, localMonth - 1, localDay + 1, timeZone));
+      const midnight = Date.parse(localMidnightUtc(localYear, localMonth - 1, localDay + 1, timeZone, midnightFormatter));
       midnightCache.set(date, midnight);
       return midnight;
     };
@@ -151,12 +183,21 @@ export async function getYearOverviewAction(
       throw new Error("El año contiene más lecturas de las que se pueden resumir de forma segura.");
     }
 
+    let localDate = "";
+    let nextMidnight = -Infinity;
+    const pageSize = first.data?.length || YEAR_OVERVIEW_PAGE_SIZE;
+    if (totalRows > 0 && !first.data?.length) throw new Error("El historial anual está incompleto.");
     const aggregate = (rows: Array<{ timestamp: string; value: number | string }>) => {
       for (const row of rows) {
         const value = Number(row.value);
         const time = Date.parse(row.timestamp);
         if (!Number.isFinite(value) || !Number.isFinite(time)) continue;
-        const date = dateKeyInTimeZone(row.timestamp, dateFormatter);
+        // Pages are chronological. Format only when crossing a local midnight.
+        if (time >= nextMidnight) {
+          localDate = dateKeyInTimeZone(row.timestamp, dateFormatter);
+          nextMidnight = localMidnightAfter(localDate);
+        }
+        const date = localDate;
         if (previousReading.current) {
           let durationMs = Math.min(Math.max(0, time - previousReading.current.time), YEAR_OVERVIEW_MAX_GAP_MS);
           if (date !== previousReading.current.date) {
@@ -173,20 +214,23 @@ export async function getYearOverviewAction(
     };
     aggregate(first.data ?? []);
 
-    const rowsPerBatch = YEAR_OVERVIEW_PAGE_SIZE * YEAR_OVERVIEW_PAGE_BATCH_SIZE;
-    for (let batchStart = YEAR_OVERVIEW_PAGE_SIZE; batchStart < totalRows; batchStart += rowsPerBatch) {
-      const offsets = Array.from(
-        { length: Math.min(YEAR_OVERVIEW_PAGE_BATCH_SIZE, Math.ceil((totalRows - batchStart) / YEAR_OVERVIEW_PAGE_SIZE)) },
-        (_, index) => batchStart + index * YEAR_OVERVIEW_PAGE_SIZE,
-      );
-      const pages = await Promise.all(offsets.map((offset) =>
-        readPage(offset, Math.min(offset + YEAR_OVERVIEW_PAGE_SIZE - 1, totalRows - 1)),
-      ));
-      for (const page of pages) {
+    const offsets = Array.from({ length: Math.ceil(Math.max(0, totalRows - pageSize) / pageSize) }, (_, index) => pageSize * (index + 1));
+    const pages: Array<Awaited<ReturnType<typeof readPage>>> = new Array(offsets.length);
+    let nextPage = 0;
+    // Keep the same concurrency bound while immediately filling a freed slot.
+    // A slow page must not stall the next batch of independent reads.
+    await Promise.all(Array.from({ length: Math.min(YEAR_OVERVIEW_PAGE_BATCH_SIZE, offsets.length) }, async () => {
+      while (nextPage < offsets.length) {
+        const index = nextPage++;
+        const offset = offsets[index];
+        const page = await readPage(offset, Math.min(offset + pageSize - 1, totalRows - 1));
         if (page.error) throw page.error;
-        aggregate(page.data ?? []);
+        if (page.data?.length !== Math.min(pageSize, totalRows - offset)) throw new Error("El historial anual está incompleto.");
+        pages[index] = page;
       }
-    }
+    }));
+    // Aggregate in chronological order to preserve duration weighting across pages.
+    for (const page of pages) aggregate(page.data ?? []);
 
     if (previousReading.current) {
       const untilMidnight = Math.max(0, localMidnightAfter(previousReading.current.date) - previousReading.current.time);
@@ -202,8 +246,9 @@ export async function getYearOverviewAction(
         coverageMinutes: coveredMs / 60_000,
       }))
       .sort((first, second) => first.date.localeCompare(second.date));
-    yearOverviewCache.set(cacheKey, { data: result, timestamp: Date.now() });
-    return { success: true, data: result };
+    if (yearOverviewCache.size >= 64) yearOverviewCache.delete(yearOverviewCache.keys().next().value!);
+    if (token.valid) yearOverviewCache.set(cacheKey, { data: result, timestamp: queryStarted });
+    return { success: true, data: result, validForMs: token.valid ? Math.max(0, CACHE_TTL - (Date.now() - queryStarted)) : 0 };
   } catch (error: unknown) {
     return {
       success: false,
@@ -269,6 +314,7 @@ export async function getLatestGlucoseAction(
         })), { onConflict: "user_id,patient_id,timestamp" },
       );
       if (error) throw new Error("No se pudieron guardar las mediciones.");
+      invalidateAnalysisResults(userId);
     }
 
     // If the latest measurement is not online/recent, we still want to show history
@@ -352,50 +398,58 @@ export async function getHistoricalGlucoseAction(
   sessionData?: { token: string; userId: string; region: string },
   targetConfig?: { low: number; high: number; hypo: number; hyper: number },
   timeZone = "UTC",
+  refresh = false,
 ) {
   try {
     const { database: supabase, patientId, connections, userId } = await libreContext(email, password);
 
+    if (refresh) invalidateAnalysisResults(userId);
+    const token = analysisToken(userId);
     // Check cache
     const cacheKey = `${userId}:${patientId}_${days}_${JSON.stringify(targetConfig)}_${timeZone}`;
     const cached = analysisCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    if (!refresh && cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
       return {
         success: true,
-        data: cached.data
+        data: cached.data,
+        validForMs: CACHE_TTL - (Date.now() - cached.timestamp),
       };
     }
 
     if (![7, 14, 30, 90].includes(days)) {
       throw new Error("Ventana de análisis no válida.");
     }
+    const queryStarted = Date.now();
     const endDate = new Date().toISOString();
     const startDate = new Date(Date.parse(endDate) - days * 24 * 60 * 60 * 1000).toISOString();
-    const history: { value: number; time: number }[] = [];
-    let after: string | undefined;
-
-    // Read every page: a single Data API request silently caps the period.
-    // The timestamp is unique within the authenticated user's patient history.
-    while (true) {
-      let query = supabase
-        .from("glucose_measurements")
-        .select("timestamp,value")
-        .eq("user_id", userId)
-        .eq("patient_id", patientId)
-        .gte("timestamp", startDate)
-        .lte("timestamp", endDate)
-        .order("timestamp", { ascending: true })
-        .limit(1000);
-      if (after) query = query.gt("timestamp", after);
-      const { data, error } = await query;
-      if (error) throw error;
-      if (!data?.length) break;
-      for (const row of data) {
-        history.push({ value: Number(row.value), time: new Date(row.timestamp).getTime() });
+    // Disjoint half-open windows allow bounded concurrency without relying on
+    // the Data API's configured page cap. Each window still follows every cursor.
+    const startMs = Date.parse(startDate);
+    const endMs = Date.parse(endDate);
+    const windows = await Promise.all(Array.from({ length: 8 }, async (_, index) => {
+      const from = new Date(startMs + Math.floor((endMs - startMs) * index / 8)).toISOString();
+      const to = new Date(startMs + Math.floor((endMs - startMs) * (index + 1) / 8)).toISOString();
+      const readings: { value: number; time: number }[] = [];
+      let after: string | undefined;
+      while (true) {
+        let query = supabase.from("glucose_measurements")
+          .select("timestamp,value")
+          .eq("user_id", userId).eq("patient_id", patientId)
+          .gte("timestamp", from)
+          .order("timestamp", { ascending: true }).limit(1000);
+        query = index === 7 ? query.lte("timestamp", to) : query.lt("timestamp", to);
+        if (after) query = query.gt("timestamp", after);
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data?.length) break;
+        for (const row of data) readings.push({ value: Number(row.value), time: Date.parse(row.timestamp) });
+        if (readings.length > 250_000) throw new Error("Demasiadas mediciones para analizar el período completo.");
+        after = data[data.length - 1].timestamp;
       }
-      if (history.length > 250_000) throw new Error("Demasiadas mediciones para analizar el período completo.");
-      after = data[data.length - 1].timestamp;
-    }
+      return readings;
+    }));
+    const history = windows.flat();
+    if (history.length > 250_000) throw new Error("Demasiadas mediciones para analizar el período completo.");
 
     const stats = targetConfig ? calculateStats(history, targetConfig) : null;
     const percentileData = calculatePercentiles(history, timeZone);
@@ -411,11 +465,13 @@ export async function getHistoricalGlucoseAction(
     };
 
     // Update cache
-    analysisCache.set(cacheKey, { data: resultData, timestamp: Date.now() });
+    if (analysisCache.size >= 64) analysisCache.delete(analysisCache.keys().next().value!);
+    if (token.valid) analysisCache.set(cacheKey, { data: resultData, timestamp: queryStarted });
 
     return {
       success: true,
       data: resultData,
+      validForMs: token.valid ? Math.max(0, CACHE_TTL - (Date.now() - queryStarted)) : 0,
     };
   } catch (error: unknown) {
     return { success: false, error: error instanceof EventAuthError ? error.message : "No se pudo completar la consulta." };

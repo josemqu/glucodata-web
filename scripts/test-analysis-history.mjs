@@ -11,7 +11,7 @@ function setup(rows, { failPage = -1, cap = 1000 } = {}) {
   const cache = new Map();
   const context = {
     exports: {}, Date, JSON, Number, Error,
-    analysisCache: cache, CACHE_TTL: 60000,
+    analysisCache: cache, CACHE_TTL: 60000, analysisToken: () => ({ valid: true }), invalidateAnalysisResults: () => {},
     EventAuthError: class extends Error {},
     libreContext: async () => ({ userId: 'u', patientId: 'p', connections: [], database: {
       from: () => {
@@ -20,13 +20,14 @@ function setup(rows, { failPage = -1, cap = 1000 } = {}) {
           select: () => query,
           eq: (field, value) => { filters[field] = value; return query; },
           gte: (_, value) => { filters.start = value; return query; },
+          lt: (_, value) => { filters.before = value; return query; },
           lte: (_, value) => { filters.end = value; return query; },
           gt: (_, value) => { filters.after = value; return query; },
           order: () => query, limit: () => query,
           then: resolve => {
             calls.push(filters);
             return Promise.resolve(resolve(calls.length === failPage ? { error: new Error('query failed') } : {
-              data: rows.filter(r => r.user_id === filters.user_id && r.patient_id === filters.patient_id && r.timestamp >= filters.start && r.timestamp <= filters.end && (!filters.after || r.timestamp > filters.after)).slice(0, cap),
+              data: rows.filter(r => r.user_id === filters.user_id && r.patient_id === filters.patient_id && r.timestamp >= filters.start && (!filters.end || r.timestamp <= filters.end) && (!filters.before || r.timestamp < filters.before) && (!filters.after || r.timestamp > filters.after)).slice(0, cap),
             }));
           },
         };

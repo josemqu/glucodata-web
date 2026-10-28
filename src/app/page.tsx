@@ -67,6 +67,7 @@ import { GlucoseLineGradient } from "@/components/glucose-line-gradient";
 import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 import { getHistoricalGlucoseAction } from "./actions";
+import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
 import { AnalysisView } from "@/components/analysis-view";
 import { YearOverviewChart } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
@@ -365,6 +366,26 @@ function ChartEventContextMenu({ menu, onClose, onSelect }: {
   );
 }
 
+type ProfileResult = NonNullable<Awaited<ReturnType<typeof getHistoricalGlucoseAction>>["data"]>;
+function AnalysisProfile({ resource, targetConfig, days, timeZone, onRefresh }: {
+  resource: AnalysisResource<ProfileResult>;
+  targetConfig: { low: number; high: number; hypo: number; hyper: number };
+  days: number; timeZone: string; onRefresh: () => void;
+}) {
+  const fetcher = useCallback((refresh = false) => getHistoricalGlucoseAction(days, undefined, undefined, undefined, targetConfig, timeZone, refresh), [days, targetConfig, timeZone]);
+  const result = useAnalysisResource(resource, String(days), fetcher);
+  return <>
+    <div className="flex items-center justify-between gap-2 text-xs" aria-live="polite">
+      <span>{result.loading ? `Actualizando Perfil de ${days} días…` : `Perfil de ${days} días`}</span>
+      <button type="button" onClick={() => { onRefresh(); void resource.load(String(days), () => getHistoricalGlucoseAction(days, undefined, undefined, undefined, targetConfig, timeZone, true), true); }} className="min-h-9 px-2">Actualizar análisis</button>
+    </div>
+    {result.error ? <div role="alert">{result.error} <button type="button" onClick={() => void result.retry()}>Reintentar</button></div> : null}
+    {!result.error && <AnalysisView history={result.data?.history ?? []} targetConfig={targetConfig} days={days}
+      preCalculatedStats={result.data?.stats} preCalculatedPercentiles={result.data?.percentileData}
+      loading={result.loading} />}
+  </>;
+}
+
 export default function GlucoPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -379,12 +400,10 @@ export default function GlucoPage() {
   const [activeView, setActiveView] = useState<"dashboard" | "analysis" | "settings">(
     "dashboard",
   );
-  const [historicalData, setHistoricalData] = useState<any[]>([]);
-  const [analysisStats, setAnalysisStats] = useState<any>(null);
-  const [analysisPercentiles, setAnalysisPercentiles] = useState<any[]>([]);
   const [analysisDays, setAnalysisDays] = useState(7);
   const [analysisMode, setAnalysisMode] = useState<"profile" | "year">("profile");
-  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [analysisYear, setAnalysisYear] = useState(() => new Date().getFullYear());
+  const [analysisRevision, setAnalysisRevision] = useState(0);
   const [events, setEvents] = useState<GlucoEvent[]>([]);
   const insulinDoses = useMonitorInsulinDoses(events);
   const insulinDoseMaximum = useMemo(() => {
@@ -512,7 +531,6 @@ export default function GlucoPage() {
   const syncCardRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false);
   const authEpochRef = useRef(0);
-  const analysisRequestRef = useRef(0);
   const credentialsRef = useRef(credentials);
   const sessionRef = useRef(session);
   const graphPointsRef = useRef<any[]>(graphPoints);
@@ -548,6 +566,14 @@ export default function GlucoPage() {
     animationFrame = window.requestAnimationFrame(updateBorderProgress);
     return () => window.cancelAnimationFrame(animationFrame);
   }, [activeView, isLoggedIn, isMonitorToday]);
+
+  const analysisTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const analysisScope = JSON.stringify([isLoggedIn, session?.userId, data?.patient?.patientId,
+    targetConfig.low, targetConfig.high, targetConfig.hypo, targetConfig.hyper, analysisTimeZone, analysisRevision]);
+  const profileResource = useMemo(() => new AnalysisResource<NonNullable<Awaited<ReturnType<typeof getHistoricalGlucoseAction>>["data"]>>(), [analysisScope]);
+  const yearResource = useMemo(() => new AnalysisResource<NonNullable<Awaited<ReturnType<typeof import("./actions").getYearOverviewAction>>["data"]>>(), [analysisScope]);
+  const clearAnalysis = useCallback(() => { profileResource.clear(); yearResource.clear(); }, [profileResource, yearResource]);
+  useEffect(() => () => { profileResource.clear(); yearResource.clear(); }, [profileResource, yearResource]);
 
   // Sync activeView with URL Hash
   useEffect(() => {
@@ -631,6 +657,7 @@ export default function GlucoPage() {
         if (newSession && newSession.token) {
           setSession(newSession);
         }
+        setAnalysisRevision(value => value + 1);
         setData(result.data);
         setIsLoggedIn(true);
         setCredentials({ email: "", password: "" });
@@ -798,9 +825,7 @@ export default function GlucoPage() {
     authEpochRef.current++;
     monitorDayCacheRef.current.clear();
     monitorDayRequestsRef.current.clear();
-    setHistoricalData([]);
-    setAnalysisStats(null);
-    setAnalysisPercentiles([]);
+    clearAnalysis();
     setGraphPoints([]);
     setWindowEndMs(Date.now());
     const submitted = { ...credentials };
@@ -822,13 +847,12 @@ export default function GlucoPage() {
 
   const handleLogout = async () => {
     authEpochRef.current++;
+    clearAnalysis();
+    setIsLoggedIn(false);
     try { await logoutAction(); }
     catch { /* Clear local clinical data even if remote revocation failed. */ }
     Cookies.remove("gluco_config");
     setTargetConfig({ low: 70, high: 180, hypo: 60, hyper: 250 });
-    setHistoricalData([]);
-    setAnalysisStats(null);
-    setAnalysisPercentiles([]);
     setInsulins([]);
     Cookies.remove("gluco_session");
     setIsLoggedIn(false);
@@ -842,42 +866,6 @@ export default function GlucoPage() {
     window.location.reload();
   };
 
-  const fetchHistoricalData = async (days: number = analysisDays) => {
-    const epoch = authEpochRef.current;
-    const request = ++analysisRequestRef.current;
-    setLoadingAnalysis(true);
-    setHistoricalData([]);
-    setAnalysisStats(null);
-    setAnalysisPercentiles([]);
-    try {
-      const result = await getHistoricalGlucoseAction(
-        days,
-        credentials.email,
-        credentials.password,
-        session,
-        targetConfig,
-        Intl.DateTimeFormat().resolvedOptions().timeZone,
-      );
-      if (epoch !== authEpochRef.current || request !== analysisRequestRef.current) return;
-      if (result.success && result.data) {
-        setHistoricalData(result.data.history || []);
-        setAnalysisStats(result.data.stats);
-        setAnalysisPercentiles(result.data.percentileData || []);
-      } else {
-        console.error("Error fetching historical data:", result.error);
-      }
-    } catch (e) {
-      console.error("Error fetching historical data:", e);
-    } finally {
-      if (epoch === authEpochRef.current && request === analysisRequestRef.current) setLoadingAnalysis(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeView === "analysis" && analysisMode === "profile") {
-      fetchHistoricalData();
-    }
-  }, [activeView, analysisDays, analysisMode]);
 
   useEffect(() => {
     let tick: ReturnType<typeof setInterval> | undefined;
@@ -2106,7 +2094,7 @@ export default function GlucoPage() {
         <div className="mx-auto h-full min-w-0 max-w-[1100px]">
           {activeView === "analysis" ? (
             <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
+              initial={false}
               animate={{ opacity: 1, scale: 1 }}
               className="flex h-full flex-col gap-2"
             >
@@ -2158,20 +2146,25 @@ export default function GlucoPage() {
               <div className="flex-1 flex flex-col min-h-0">
                 {analysisMode === "year" ? (
                   <YearOverviewChart
+                    key={analysisScope}
                     targets={targetConfig}
+                    resource={yearResource}
+                    timeZone={analysisTimeZone}
+                    onRefresh={clearAnalysis}
+                    year={analysisYear}
+                    onYearChange={setAnalysisYear}
                     onSelectDate={(date) => {
                       setActiveView("dashboard");
                       void selectMonitorDate(date);
                     }}
                   />
                 ) : (
-                  <AnalysisView
-                    history={historicalData}
+                  <AnalysisProfile
+                    onRefresh={clearAnalysis}
+                    resource={profileResource}
                     targetConfig={targetConfig}
                     days={analysisDays}
-                    preCalculatedStats={analysisStats}
-                    preCalculatedPercentiles={analysisPercentiles}
-                    loading={loadingAnalysis}
+                    timeZone={analysisTimeZone}
                   />
                 )}
               </div>
