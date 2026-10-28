@@ -21,12 +21,8 @@ export function proxy(request: NextRequest) {
   }
   if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = request.headers.get("origin");
-    // Solo esta ruta admite escrituras con el token exclusivo del reloj.
-    // La ruta verifica el token y nunca usa cookies como alternativa.
-    if (request.nextUrl.pathname === "/api/wear/events" && request.method === "POST"
-      && /^Bearer gw_wear_[a-f0-9]{64}$/.test(request.headers.get("authorization") ?? "")
-      && !origin && !request.headers.get("sec-fetch-site")) return NextResponse.next({ headers });
-    // Las escrituras con cookies exigen el origen exacto.
+    // Exact origin comparison rejects sibling subdomains too. Cookie-bearing
+    // writes require browser provenance; integration APIs are read-only.
     if (origin !== request.nextUrl.origin || request.headers.get("sec-fetch-site") === "cross-site") {
       return NextResponse.json({ error: "Origen de la solicitud no permitido." }, { status: 403, headers });
     }
