@@ -22,10 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  CHART_SERIES_ANIMATION_DURATION_MS,
-  CHART_SERIES_ANIMATION_EASING,
-} from "@/lib/chart-motion";
-import {
   CHART_TOOLTIP_CURSOR,
   CHART_TOOLTIP_IS_ANIMATION_ACTIVE,
   CHART_TOOLTIP_OFFSET,
@@ -39,7 +35,6 @@ import {
   type GlucoseStats,
   type PercentilePoint
 } from "@/lib/metrics";
-import { motion, useReducedMotion } from "framer-motion";
 import { 
   Info, 
   TrendingUp, 
@@ -73,7 +68,6 @@ export function AnalysisView({
   preCalculatedPercentiles,
   loading = false
 }: AnalysisViewProps) {
-  const reduceMotion = useReducedMotion();
 
   const stats = useMemo(() => {
     if (preCalculatedStats) return preCalculatedStats;
@@ -287,9 +281,7 @@ export function AnalysisView({
                   stroke="none"
                   fill="url(#colorP5P95)"
                   connectNulls={false}
-                  animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
-                  animationEasing={CHART_SERIES_ANIMATION_EASING}
-                  isAnimationActive={!reduceMotion}
+                  isAnimationActive={false}
                 />
 
                 {/* Target range (25th-75th percentile) */}
@@ -299,9 +291,7 @@ export function AnalysisView({
                   stroke="none"
                   fill="url(#colorP25P75)"
                   connectNulls={false}
-                  animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
-                  animationEasing={CHART_SERIES_ANIMATION_EASING}
-                  isAnimationActive={!reduceMotion}
+                  isAnimationActive={false}
                 />
 
                 {/* Median line */}
@@ -313,9 +303,7 @@ export function AnalysisView({
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
                   connectNulls={false}
-                  animationDuration={CHART_SERIES_ANIMATION_DURATION_MS}
-                  animationEasing={CHART_SERIES_ANIMATION_EASING}
-                  isAnimationActive={!reduceMotion}
+                  isAnimationActive={false}
                 />
 
                 {/* Reference Lines for Target Range */}
@@ -541,9 +529,8 @@ function RangeBar({ label, value, color, loading }: { label: string; value: numb
         {loading ? (
           <div className="h-full w-full bg-muted/20 animate-pulse" />
         ) : (
-          <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: `${value}%` }}
+          <div
+            style={{ width: `${value}%` }}
             className={`h-full ${color}`} 
           />
         )}

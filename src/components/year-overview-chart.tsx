@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, RotateCw } from "lucide-react";
+import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
 import { getYearOverviewAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,7 @@ type HoverTooltip = {
   placement: "above" | "below";
 };
 
+const EMPTY_DAYS: YearOverviewDay[] = [];
 const CELL_SIZE = 15;
 const CELL_GAP = 3;
 const WEEKDAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -61,23 +63,33 @@ function formatDay(date: string) {
 }
 
 export function YearOverviewChart({
-  targets,
+  targets, resource, timeZone, year, onYearChange, onRefresh,
   onSelectDate,
 }: {
   targets: Targets;
+  resource: AnalysisResource<YearOverviewDay[]>;
+  timeZone: string;
+  onRefresh: () => void;
+  year: number;
+  onYearChange: (year: number) => void;
   onSelectDate: (date: string) => void;
 }) {
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  const [days, setDays] = useState<YearOverviewDay[]>([]);
   const [metric, setMetric] = useState<Metric>("average");
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltip | null>(null);
   const tooltipDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const currentYear = new Date().getFullYear();
-  const requestKey = `${year}:${targets.low}:${targets.high}:${reloadKey}`;
-  const loading = loadedKey !== requestKey;
+  const fetcher = useCallback((refresh = false) => getYearOverviewAction(year, timeZone, { low: targets.low, high: targets.high }, refresh), [year, timeZone, targets.low, targets.high]);
+  const result = useAnalysisResource(resource, String(year), fetcher);
+  const days = result.data ?? EMPTY_DAYS;
+  const { loading, error } = result;
+  const refresh = () => {
+    onRefresh();
+    void resource.load(String(year), () => getYearOverviewAction(year, timeZone, { low: targets.low, high: targets.high }, true), true);
+  };
+
+  useEffect(() => () => {
+    if (tooltipDismissTimer.current) clearTimeout(tooltipDismissTimer.current);
+  }, []);
 
   const cancelTooltipDismiss = () => {
     if (tooltipDismissTimer.current) clearTimeout(tooltipDismissTimer.current);
@@ -94,8 +106,7 @@ export function YearOverviewChart({
 
   const changeYear = (nextYear: number) => {
     dismissDayTooltip();
-    setError(null);
-    setYear(nextYear);
+    onYearChange(nextYear);
   };
 
   const showDayTooltip = (date: string, day: YearOverviewDay | undefined, element: HTMLButtonElement) => {
@@ -107,28 +118,6 @@ export function YearOverviewChart({
     setHoverTooltip({ date, day, x, y: placement === "above" ? rect.top - 8 : rect.bottom + 8, placement });
   };
 
-  useEffect(() => {
-    let active = true;
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    void getYearOverviewAction(year, timeZone, { low: targets.low, high: targets.high }).then((result) => {
-      if (!active) return;
-      if (!result.success) {
-        setError(result.error ?? "No se pudo cargar el resumen anual.");
-        setDays([]);
-        return;
-      }
-      setDays(result.data ?? []);
-    }).catch(() => {
-      if (active) {
-        setError("No se pudo cargar el resumen anual.");
-        setDays([]);
-      }
-    }).finally(() => {
-      if (active) setLoadedKey(requestKey);
-    });
-
-    return () => { active = false; };
-  }, [requestKey, year, reloadKey, targets.low, targets.high]);
 
   const calendar = useMemo(() => {
     const firstDay = new Date(Date.UTC(year, 0, 1)).getUTCDay();
@@ -199,6 +188,7 @@ export function YearOverviewChart({
           </CardDescription>
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Actualizar análisis anual" onClick={refresh}><RotateCw className="h-4 w-4" /></Button>
           <label className="relative min-w-0 flex-1 sm:flex-none">
             <span className="sr-only">Métrica del mapa anual</span>
             <select
@@ -212,11 +202,11 @@ export function YearOverviewChart({
             <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </label>
           <div className="flex shrink-0 items-center gap-1 rounded-lg bg-muted/60 p-0.5" aria-label="Año del resumen">
-            <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => changeYear(year - 1)} disabled={loading} aria-label="Año anterior">
+            <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => changeYear(year - 1)} disabled={year <= 2000} aria-label="Año anterior">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="min-w-10 text-center font-numbers text-sm font-bold" aria-live="polite">{year}</span>
-            <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => changeYear(year + 1)} disabled={loading || year >= currentYear} aria-label="Año siguiente">
+            <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => changeYear(year + 1)} disabled={year >= currentYear} aria-label="Año siguiente">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -224,9 +214,9 @@ export function YearOverviewChart({
       </CardHeader>
       <CardContent className="p-3 sm:p-4">
         {error && !loading ? (
-          <div className="flex min-h-44 flex-col items-center justify-center gap-3 text-center">
+          <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-muted-foreground">{error}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => { setError(null); setReloadKey((value) => value + 1); }}>
+            <Button type="button" variant="outline" size="sm" onClick={() => { refresh(); }}>
               <RotateCw className="mr-2 h-3.5 w-3.5" /> Reintentar
             </Button>
           </div>
