@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useId, useMemo, type ReactNode } from "react";
+import { AgpHoverMask } from "@/components/agp-hover-mask";
 import { Loader2 } from "lucide-react";
 import {
   ComposedChart,
@@ -68,6 +69,10 @@ export function AnalysisView({
   preCalculatedPercentiles,
   loading = false
 }: AnalysisViewProps) {
+
+  const agpId = useId().replace(/:/g, "");
+  const medianGradientId = `${agpId}-median`;
+  const hoverMaskId = `${agpId}-hover`;
 
   const stats = useMemo(() => {
     if (preCalculatedStats) return preCalculatedStats;
@@ -207,7 +212,7 @@ export function AnalysisView({
             >
               <ComposedChart data={percentileData} margin={{ top: 8, right: 10, left: 0, bottom: 26 }}>
                 <defs>
-                  <linearGradient id="colorMedian" x1="0" y1="1" x2="0" y2="0">
+                  <linearGradient id={medianGradientId} x1="0" y1="1" x2="0" y2="0">
                     <stop offset="0%" stopColor={getGlucoseColor(p50Min)} />
 
                     {targetConfig.hypo > p50Min && targetConfig.hypo < p50Max && (
@@ -240,11 +245,11 @@ export function AnalysisView({
 
                     <stop offset="100%" stopColor={getGlucoseColor(p50Max)} />
                   </linearGradient>
-                  <linearGradient id="colorP25P75" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={`${agpId}-p25-p75`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
                   </linearGradient>
-                  <linearGradient id="colorP5P95" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={`${agpId}-p5-p95`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#94a3b8" stopOpacity={0.05}/>
                   </linearGradient>
@@ -279,7 +284,7 @@ export function AnalysisView({
                   type="monotone"
                   dataKey="rangeP5P95"
                   stroke="none"
-                  fill="url(#colorP5P95)"
+                  fill={`url(#${agpId}-p5-p95)`}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
@@ -289,7 +294,7 @@ export function AnalysisView({
                   type="monotone"
                   dataKey="rangeP25P75"
                   stroke="none"
-                  fill="url(#colorP25P75)"
+                  fill={`url(#${agpId}-p25-p75)`}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
@@ -298,13 +303,33 @@ export function AnalysisView({
                 <Line
                   type="monotone"
                   dataKey="p50"
-                  stroke="url(#colorMedian)"
+                  stroke={`url(#${medianGradientId})`}
                   strokeWidth={3}
                   dot={false}
                   activeDot={{ r: 6, strokeWidth: 0 }}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
+
+                <AgpHoverMask id={hoverMaskId} />
+                {(["p5", "p25", "p50", "p75", "p95"] as const).map((percentile) => (
+                  <Line
+                    key={`highlight-${percentile}`}
+                    type="monotone"
+                    dataKey={percentile}
+                    stroke={percentile === "p50" ? `url(#${medianGradientId})` : percentile === "p25" || percentile === "p75" ? "#10b981" : "#94a3b8"}
+                    strokeWidth={percentile === "p50" ? 5 : 2.5}
+                    mask={`url(#${hoverMaskId})`}
+                    pointerEvents="none"
+                    aria-hidden="true"
+                    dot={false}
+                    activeDot={false}
+                    tooltipType="none"
+                    legendType="none"
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                ))}
 
                 {/* Reference Lines for Target Range */}
                 <ReferenceLine 
