@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useMemo, type ReactNode } from "react";
+import { useId, useMemo, type ReactNode, type SVGProps } from "react";
+import styles from "./agp-active-dot.module.css";
 import { AgpHoverMask } from "@/components/agp-hover-mask";
 import { Loader2 } from "lucide-react";
 import {
@@ -56,6 +57,23 @@ interface AnalysisViewProps {
 
 const AGP_MOBILE_TIME_TICKS = [0, 4, 8, 12, 16, 20, 24];
 const AGP_DESKTOP_TIME_TICKS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+
+function AgpActiveDot({ cx = 0, cy = 0, r = 4, fill, stroke = "#fff", strokeWidth = 2 }: SVGProps<SVGCircleElement>) {
+  return (
+    <circle
+      className={styles.dot}
+      cx={0}
+      cy={0}
+      r={r}
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      style={{ transform: `translate(${cx}px, ${cy}px)` }}
+      pointerEvents="none"
+      aria-hidden="true"
+    />
+  );
+}
 
 function formatAgpHour(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
@@ -283,6 +301,7 @@ export function AnalysisView({
                 <Area
                   type="monotone"
                   dataKey="rangeP5P95"
+                  activeDot={<AgpActiveDot />}
                   stroke="none"
                   fill={`url(#${agpId}-p5-p95)`}
                   connectNulls={false}
@@ -293,6 +312,7 @@ export function AnalysisView({
                 <Area
                   type="monotone"
                   dataKey="rangeP25P75"
+                  activeDot={<AgpActiveDot />}
                   stroke="none"
                   fill={`url(#${agpId}-p25-p75)`}
                   connectNulls={false}
@@ -306,7 +326,7 @@ export function AnalysisView({
                   stroke={`url(#${medianGradientId})`}
                   strokeWidth={3}
                   dot={false}
-                  activeDot={{ r: 6, strokeWidth: 0 }}
+                  activeDot={<AgpActiveDot r={6} strokeWidth={0} />}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
