@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 import { usePlotArea } from "recharts";
 
-/** Reveals the percentile strokes near the pointer without rerendering the chart. */
-export function AgpHoverMask({ id }: { id: string }) {
+/** Reveals the chart strokes near the pointer without rerendering the chart. */
+export function ChartHoverMask({ id }: { id: string }) {
   const plot = usePlotArea();
   const gradientRef = useRef<SVGLinearGradientElement>(null);
   const revealRef = useRef<SVGRectElement>(null);

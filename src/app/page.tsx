@@ -54,6 +54,7 @@ import Cookies from "js-cookie";
 import {
   ComposedChart,
   Area,
+  Line,
   Scatter,
   XAxis,
   YAxis,
@@ -63,6 +64,8 @@ import {
   ReferenceLine,
   ReferenceArea,
 } from "recharts";
+import { ChartHoverMask } from "@/components/chart-hover-mask";
+import { MonitorActiveLabel } from "@/components/monitor-active-label";
 import { GlucoseLineGradient } from "@/components/glucose-line-gradient";
 import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
@@ -2544,61 +2547,7 @@ export default function GlucoPage() {
                                     allowEscapeViewBox={{ x: false, y: true }}
                                     wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
                                     cursor={CHART_TOOLTIP_CURSOR}
-                                    content={({ active, payload, label }) => {
-                                      if (!tooltipsEnabled || hoveredChartEventId) return null;
-                                      if (active && payload && payload.length) {
-                                        const glucoseItem = payload.find(
-                                          (p) => p.dataKey === "value" && p.name === "GLUCOSA",
-                                        );
-                                        if (
-                                          !glucoseItem ||
-                                          glucoseItem.value === null
-                                        )
-                                          return null;
-
-                                        const val = Number(glucoseItem.value);
-                                        const status = getGlucoseStatus(val);
-
-                                        return (
-                                          <div className="min-w-[124px] rounded-lg border border-border/50 bg-card/80 p-2 shadow-lg backdrop-blur-md">
-                                            <div className="flex flex-col gap-1.5">
-                                              <div className="flex items-center justify-between border-b border-border/40 pb-1.5 px-1">
-                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.1em]">
-                                                  {label
-                                                    ? new Date(
-                                                        label as number,
-                                                      ).toLocaleString([], {
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                        day: "numeric",
-                                                        month: "short",
-                                                      })
-                                                    : "--:--"}
-                                                </p>
-                                              </div>
-                                              <div className="flex items-baseline justify-between gap-3 px-1">
-                                                <div className="flex items-baseline gap-1">
-                                                  <span
-                                                    className={`text-xl font-black tabular-nums font-numbers tracking-tighter ${status.color}`}
-                                                  >
-                                                    {val}
-                                                  </span>
-                                                  <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40">
-                                                    {unit}
-                                                  </span>
-                                                </div>
-                                                <span
-                                                  className={`text-[12px] font-black uppercase tracking-wider ${status.color}`}
-                                                >
-                                                  {status.label}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                      return null;
-                                    }}
+                                    content={() => null}
                                   /> : null}
 
                                   {/* Background Bands */}
@@ -2696,6 +2645,30 @@ export default function GlucoPage() {
                                     />
                                   )}
 
+                                  <MonitorActiveLabel
+                                    enabled={!isChartPanning && !isRangeTransitioning && tooltipsEnabled && !hoveredChartEventId}
+                                    getColor={getGlucoseColor}
+                                  />
+                                  {showLine && !isChartPanning && !isRangeTransitioning && tooltipsEnabled && !hoveredChartEventId && (
+                                    <>
+                                      <ChartHoverMask id={`${gradientId}-hover`} />
+                                      <Line
+                                        type="monotone"
+                                        dataKey="value"
+                                        stroke={`url(#${gradientId})`}
+                                        strokeWidth={5}
+                                        mask={`url(#${gradientId}-hover)`}
+                                        pointerEvents="none"
+                                        aria-hidden="true"
+                                        dot={false}
+                                        activeDot={false}
+                                        tooltipType="none"
+                                        legendType="none"
+                                        connectNulls
+                                        isAnimationActive={false}
+                                      />
+                                    </>
+                                  )}
                                   {showLine ? (
                                     <Area
                                       type="monotone"
@@ -2719,12 +2692,7 @@ export default function GlucoPage() {
                                       }
                                       connectNulls={true}
                                       dot={<CustomDot />}
-                                      activeDot={{
-                                        r: 4,
-                                        strokeWidth: 2,
-                                        fill: "#94a3b8",
-                                        stroke: "var(--background)",
-                                      }}
+                                      activeDot={false}
                                     />
                                   ) : (
                                     <Scatter

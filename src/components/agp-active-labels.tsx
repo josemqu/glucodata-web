@@ -2,7 +2,7 @@
 
 import { useActiveTooltipDataPoints, useIsTooltipActive, usePlotArea, useXAxisScale, useYAxisScale, ZIndexLayer } from "recharts";
 import type { PercentilePoint } from "@/lib/metrics";
-import styles from "./agp-active-dot.module.css";
+import styles from "./chart-active-label.module.css";
 
 const PERCENTILES = ["p95", "p75", "p50", "p25", "p5"] as const;
 const LABEL_GAP = 22;

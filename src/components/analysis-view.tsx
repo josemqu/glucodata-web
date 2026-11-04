@@ -2,7 +2,7 @@
 
 import { useId, useMemo, type ReactNode } from "react";
 import { AgpActiveLabels } from "./agp-active-labels";
-import { AgpHoverMask } from "@/components/agp-hover-mask";
+import { ChartHoverMask } from "@/components/chart-hover-mask";
 import { Loader2 } from "lucide-react";
 import {
   ComposedChart,
@@ -313,7 +313,7 @@ export function AnalysisView({
                   isAnimationActive={false}
                 />
 
-                <AgpHoverMask id={hoverMaskId} />
+                <ChartHoverMask id={hoverMaskId} />
                 <AgpActiveLabels medianColor={getGlucoseColor} />
                 {(["p5", "p25", "p50", "p75", "p95"] as const).map((percentile) => (
                   <Line
