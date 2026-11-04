@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useMemo, type ReactNode, type SVGProps } from "react";
-import styles from "./agp-active-dot.module.css";
+import { useId, useMemo, type ReactNode } from "react";
+import { AgpActiveLabels } from "./agp-active-labels";
 import { AgpHoverMask } from "@/components/agp-hover-mask";
 import { Loader2 } from "lucide-react";
 import {
@@ -15,7 +15,6 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import type { TooltipContentProps } from "recharts";
 import {
   Card,
   CardContent,
@@ -57,23 +56,6 @@ interface AnalysisViewProps {
 
 const AGP_MOBILE_TIME_TICKS = [0, 4, 8, 12, 16, 20, 24];
 const AGP_DESKTOP_TIME_TICKS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
-
-function AgpActiveDot({ cx = 0, cy = 0, r = 4, fill, stroke = "#fff", strokeWidth = 2 }: SVGProps<SVGCircleElement>) {
-  return (
-    <circle
-      className={styles.dot}
-      cx={0}
-      cy={0}
-      r={r}
-      fill={fill}
-      stroke={stroke}
-      strokeWidth={strokeWidth}
-      style={{ transform: `translate(${cx}px, ${cy}px)` }}
-      pointerEvents="none"
-      aria-hidden="true"
-    />
-  );
-}
 
 function formatAgpHour(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
@@ -293,7 +275,7 @@ export function AnalysisView({
                   isAnimationActive={CHART_TOOLTIP_IS_ANIMATION_ACTIVE}
                   allowEscapeViewBox={{ x: false, y: true }}
                   wrapperStyle={CHART_TOOLTIP_WRAPPER_STYLE}
-                  content={(props) => <CustomTooltip {...props} />}
+                  content={() => null}
                   cursor={CHART_TOOLTIP_CURSOR}
                 />
                 
@@ -301,7 +283,7 @@ export function AnalysisView({
                 <Area
                   type="monotone"
                   dataKey="rangeP5P95"
-                  activeDot={<AgpActiveDot />}
+                  activeDot={false}
                   stroke="none"
                   fill={`url(#${agpId}-p5-p95)`}
                   connectNulls={false}
@@ -312,7 +294,7 @@ export function AnalysisView({
                 <Area
                   type="monotone"
                   dataKey="rangeP25P75"
-                  activeDot={<AgpActiveDot />}
+                  activeDot={false}
                   stroke="none"
                   fill={`url(#${agpId}-p25-p75)`}
                   connectNulls={false}
@@ -326,12 +308,13 @@ export function AnalysisView({
                   stroke={`url(#${medianGradientId})`}
                   strokeWidth={3}
                   dot={false}
-                  activeDot={<AgpActiveDot r={6} strokeWidth={0} />}
+                  activeDot={false}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
 
                 <AgpHoverMask id={hoverMaskId} />
+                <AgpActiveLabels medianColor={getGlucoseColor} />
                 {(["p5", "p25", "p50", "p75", "p95"] as const).map((percentile) => (
                   <Line
                     key={`highlight-${percentile}`}
@@ -589,40 +572,6 @@ function LegendItem({ color, label }: { color: string; label: string }) {
     <div className="flex items-center gap-1.5 whitespace-nowrap">
       <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
       <span>{label}</span>
-    </div>
-  );
-}
-
-function CustomTooltip({ active, payload }: TooltipContentProps) {
-  if (active && payload?.length) {
-    const data = payload[0]?.payload as PercentilePoint | undefined;
-    if (!data || data.count === 0) return null;
-    return (
-      <div className="rounded-xl border border-border/60 bg-popover/80 p-2.5 shadow-lg backdrop-blur-md">
-        <p className="text-[11px] font-black tracking-widest uppercase mb-2 border-b border-border pb-1">
-          {data.time}
-        </p>
-        <p className="mb-2 text-[10px] text-muted-foreground">
-          {data.count} {data.count === 1 ? "muestra" : "muestras"} en este horario
-        </p>
-        <div className="space-y-1">
-          <TooltipRow label="Percentil 95" value={data.p95} color="text-muted-foreground" />
-          <TooltipRow label="Percentil 75" value={data.p75} color="text-emerald-500/80" />
-          <TooltipRow label="Mediana (50)" value={data.p50} color="text-emerald-500 font-black" />
-          <TooltipRow label="Percentil 25" value={data.p25} color="text-emerald-500/80" />
-          <TooltipRow label="Percentil 5" value={data.p5} color="text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
-  return null;
-}
-
-function TooltipRow({ label, value, color }: { label: string; value: number | null; color: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-tighter">{label}</span>
-      <span className={`text-xs ${color}`}>{value === null ? "—" : `${value} mg/dL`}</span>
     </div>
   );
 }
