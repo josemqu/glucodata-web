@@ -65,7 +65,7 @@ export function AgpActiveLabels({ medianColor }: { medianColor: (value: number) 
                 <g className={`${styles.dot} ${styles.label}`} style={{ transform: `translate(${x + labelX}px, ${labelY}px)` }}>
                   {Math.abs(labelY - y) > 3 && <path d={`M 0 0 L ${-labelX / 2} ${y - labelY}`} stroke={color} strokeOpacity={0.5} fill="none" />}
                   <text textAnchor={leftSide ? "end" : "start"} dominantBaseline="central" fill={color} className={styles.value}>
-                    <tspan className={styles.percentile}>{key.toUpperCase()} </tspan>{Math.round(value)}{outside ? ` ${outside}` : ""}
+                    {Math.round(value)}{outside ? ` ${outside}` : ""}
                   </text>
                 </g>
               )}

@@ -22,11 +22,6 @@
   stroke-linejoin: round;
 }
 
-.percentile {
-  font-size: 9px;
-  font-weight: 500;
-}
-
 .time {
   fill: var(--muted-foreground);
   font-size: 10px;
