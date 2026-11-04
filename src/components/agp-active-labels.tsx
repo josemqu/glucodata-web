@@ -73,7 +73,7 @@ export function AgpActiveLabels({ medianColor }: { medianColor: (value: number) 
           );
         })}
         <g className={styles.dot} style={{ transform: `translate(${Math.max(plot.x + 48, Math.min(plot.x + plot.width - 48, x))}px, ${plot.y + plot.height - 3}px)` }}>
-          <text textAnchor="middle" className={styles.time}>{data.time} · mg/dL</text>
+          <text textAnchor="middle" className={styles.time}>{data.time}</text>
         </g>
       </g>
     </ZIndexLayer>
