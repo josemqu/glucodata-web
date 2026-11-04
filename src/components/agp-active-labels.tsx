@@ -62,7 +62,7 @@ export function AgpActiveLabels({ medianColor }: { medianColor: (value: number) 
                 <circle r={key === "p50" ? 6 : 4} fill={color} stroke={key === "p50" ? "none" : "var(--background)"} strokeWidth={2} />
               </g>
               {labelY !== undefined && (
-                <g transform={`translate(${x + labelX} ${labelY})`}>
+                <g className={`${styles.dot} ${styles.label}`} style={{ transform: `translate(${x + labelX}px, ${labelY}px)` }}>
                   {Math.abs(labelY - y) > 3 && <path d={`M 0 0 L ${-labelX / 2} ${y - labelY}`} stroke={color} strokeOpacity={0.5} fill="none" />}
                   <text textAnchor={leftSide ? "end" : "start"} dominantBaseline="central" fill={color} className={styles.value}>
                     <tspan className={styles.percentile}>{key.toUpperCase()} </tspan>{Math.round(value)}{outside ? ` ${outside}` : ""}
@@ -72,7 +72,9 @@ export function AgpActiveLabels({ medianColor }: { medianColor: (value: number) 
             </g>
           );
         })}
-        <text x={Math.max(plot.x + 48, Math.min(plot.x + plot.width - 48, x))} y={plot.y + plot.height - 3} textAnchor="middle" className={styles.time}>{data.time} · mg/dL</text>
+        <g className={styles.dot} style={{ transform: `translate(${Math.max(plot.x + 48, Math.min(plot.x + plot.width - 48, x))}px, ${plot.y + plot.height - 3}px)` }}>
+          <text textAnchor="middle" className={styles.time}>{data.time} · mg/dL</text>
+        </g>
       </g>
     </ZIndexLayer>
   );
