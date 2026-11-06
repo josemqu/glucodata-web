@@ -2107,23 +2107,6 @@ export default function GlucoPage() {
                   <p className="hidden text-[11px] text-muted-foreground sm:block">Perfil diario y métricas del período</p>
                 </div>
                 <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
-                  <div role="group" className="grid grid-cols-2 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Tipo de análisis">
-                    {([ ["profile", "Perfil"], ["year", "Año"] ] as const).map(([mode, label]) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setAnalysisMode(mode)}
-                        aria-pressed={analysisMode === mode}
-                        className={`min-h-9 rounded-md px-2.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-3 ${
-                          analysisMode === mode
-                            ? "bg-background text-primary shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
                   {analysisMode === "profile" && (
                     <div role="group" className="grid grid-cols-4 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana de análisis">
                       {[7, 14, 30, 90].map((d) => (
@@ -2143,6 +2126,23 @@ export default function GlucoPage() {
                       ))}
                     </div>
                   )}
+                  <div role="group" className="ml-auto grid shrink-0 grid-cols-2 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Tipo de análisis">
+                    {([ ["profile", "Perfil"], ["year", "Año"] ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setAnalysisMode(mode)}
+                        aria-pressed={analysisMode === mode}
+                        className={`min-h-9 rounded-md px-2.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-3 ${
+                          analysisMode === mode
+                            ? "bg-background text-primary shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
