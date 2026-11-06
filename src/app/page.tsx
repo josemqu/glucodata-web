@@ -2102,7 +2102,7 @@ export default function GlucoPage() {
               className="flex h-full flex-col gap-2"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <div className="min-w-0">
+                <div className="hidden min-w-0 sm:block">
                   <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Análisis</h2>
                   <p className="hidden text-[11px] text-muted-foreground sm:block">Perfil diario y métricas del período</p>
                 </div>
@@ -2183,17 +2183,17 @@ export default function GlucoPage() {
                   <h2 className="truncate text-base font-black tracking-tight sm:text-lg">Monitor</h2>
                   <p className="hidden text-[11px] text-muted-foreground sm:block">Lecturas y distribución del período</p>
                 </div>
-                <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1 sm:flex sm:w-auto sm:justify-end">
-                  <div className="col-span-2 flex items-center justify-self-start gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Navegación temporal del monitor">
-                    <Button type="button" variant="ghost" size="icon-sm" className="rounded-md" onClick={() => shiftMonitorDay(-1)} aria-label="Ver el día anterior">
+                <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 sm:flex sm:w-auto sm:justify-end">
+                  <div className="flex items-center gap-0 rounded-lg bg-muted/60 p-0.5 sm:gap-0.5" aria-label="Navegación temporal del monitor">
+                    <Button type="button" variant="ghost" size="icon-sm" className="h-9 w-6 rounded-md sm:h-8 sm:w-8" onClick={() => shiftMonitorDay(-1)} aria-label="Ver el día anterior">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <MonitorDatePicker value={monitorDate} onChange={(value) => void selectMonitorDate(value)} loading={monitorDateLoading} />
-                    <Button type="button" variant="ghost" size="icon-sm" className="rounded-md" onClick={() => shiftMonitorDay(1)} disabled={!canMoveForward} aria-label="Ver el día siguiente">
+                    <Button type="button" variant="ghost" size="icon-sm" className="h-9 w-6 rounded-md sm:h-8 sm:w-8" onClick={() => shiftMonitorDay(1)} disabled={!canMoveForward} aria-label="Ver el día siguiente">
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-6 gap-0.5 rounded-lg bg-muted/60 p-0.5" aria-label="Ventana del monitor">
+                  <div className="grid min-w-0 grid-cols-6 gap-0 rounded-lg bg-muted/60 p-0.5 sm:gap-0.5" aria-label="Ventana del monitor">
                     {([1, 3, 6, 12, 24, "dtd"] as const).map((h) => (
                       <button
                         key={h}
@@ -2205,7 +2205,7 @@ export default function GlucoPage() {
                         aria-pressed={timeRange === h}
                         aria-label={h === "dtd" ? "Día hasta ahora, desde las 00:00 (DTD)" : undefined}
                         title={h === "dtd" ? "Día hasta ahora · desde las 00:00" : undefined}
-                        className={`min-h-9 whitespace-nowrap rounded-md px-1.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-2.5 ${
+                        className={`min-h-9 whitespace-nowrap rounded-md px-0.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:px-2.5 ${
                           timeRange === h
                             ? "bg-background text-primary shadow-sm"
                             : "text-muted-foreground hover:text-foreground"
@@ -2218,7 +2218,7 @@ export default function GlucoPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={`h-9 w-9 shrink-0 rounded-lg transition-colors sm:h-8 sm:w-8 ${
+                    className={`h-9 w-7 shrink-0 rounded-lg transition-colors sm:h-8 sm:w-8 ${
                       showLine
                         ? "bg-muted/60 text-primary"
                         : "text-muted-foreground hover:bg-muted"

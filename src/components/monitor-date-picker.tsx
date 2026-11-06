@@ -87,7 +87,7 @@ export function MonitorDatePicker({ value, onChange, loading = false }: MonitorD
         type="button"
         variant="outline"
         size="sm"
-        className="min-w-[5.75rem] justify-start gap-1.5 rounded-lg bg-background px-2.5 text-xs font-semibold shadow-none"
+        className="h-9 w-[3.75rem] min-w-0 justify-center gap-1 rounded-lg bg-background px-1 text-[10px] font-semibold shadow-none has-[>svg]:px-1 sm:h-8 sm:w-auto sm:min-w-[5.75rem] sm:justify-start sm:gap-1.5 sm:px-2.5 sm:text-xs sm:has-[>svg]:px-2.5"
         aria-label={`Fecha del gráfico: ${selectedLabel}`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -97,7 +97,7 @@ export function MonitorDatePicker({ value, onChange, loading = false }: MonitorD
         }}
         disabled={loading}
       >
-        <CalendarDays className="h-4 w-4 text-primary" />
+        <CalendarDays className="hidden h-4 w-4 text-primary sm:block" />
         <span className="truncate capitalize">{loading ? "Cargando" : triggerLabel}</span>
       </Button>
 
