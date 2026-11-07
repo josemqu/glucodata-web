@@ -14,7 +14,6 @@ import {
   LogOut,
   RefreshCw,
   Droplets,
-  User,
   Settings,
   ArrowLeft,
   ShieldCheck,
@@ -2850,24 +2849,6 @@ export default function GlucoPage() {
 
                   </div>
 
-                  {/* Patient Profile Snapshot */}
-                  <Card className="border shadow-none mt-auto bg-muted/10">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-background flex items-center justify-center border shadow-sm">
-                          <User className="w-5 h-5 text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[7px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">
-                            Perfil clínico
-                          </p>
-                          <p className="text-[11px] font-black truncate uppercase tracking-tight">
-                            {patient.firstName} {patient.lastName}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
                 </div>
               </div>
             </motion.div>
