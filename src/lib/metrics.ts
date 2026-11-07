@@ -172,7 +172,7 @@ export function calculatePercentiles(
   data: { value: number; time: number }[],
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ): PercentilePoint[] {
-  // Group by hour/minute buckets (e.g., 30-minute intervals)
+  // Group readings into 15-minute local-time buckets.
   const buckets: Record<number, number[]> = {};
   const timeFormatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -186,7 +186,7 @@ export function calculatePercentiles(
     const parts = timeFormatter.formatToParts(p.time);
     const hour = Number(parts.find((part) => part.type === "hour")?.value);
     const minute = Number(parts.find((part) => part.type === "minute")?.value);
-    const bucketIndex = hour * 2 + Math.floor(minute / 30);
+    const bucketIndex = hour * 4 + Math.floor(minute / 15);
     
     if (!buckets[bucketIndex]) buckets[bucketIndex] = [];
     buckets[bucketIndex].push(p.value);
@@ -194,8 +194,8 @@ export function calculatePercentiles(
 
   const result: PercentilePoint[] = [];
   
-  // Ensure we have all buckets (0 to 47 for 30min intervals)
-  for (let i = 0; i < 48; i++) {
+  // Include all 96 quarter-hour buckets, including those without readings.
+  for (let i = 0; i < 96; i++) {
     const values = buckets[i] || [];
     values.sort((a, b) => a - b);
 
@@ -205,7 +205,7 @@ export function calculatePercentiles(
       return values[idx];
     };
 
-    const timeMinutes = i * 30;
+    const timeMinutes = i * 15;
     const hours = Math.floor(timeMinutes / 60);
     const minutes = timeMinutes % 60;
     const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;

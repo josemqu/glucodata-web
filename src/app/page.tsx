@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUp,
   ArrowUpRight,
@@ -71,6 +71,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
 import { getHistoricalGlucoseAction } from "./actions";
 import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
+import { RangeDistributionCard } from "@/components/range-distribution-card";
 import { AnalysisView } from "@/components/analysis-view";
 import { YearOverviewChart } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
@@ -370,18 +371,14 @@ function ChartEventContextMenu({ menu, onClose, onSelect }: {
 }
 
 type ProfileResult = NonNullable<Awaited<ReturnType<typeof getHistoricalGlucoseAction>>["data"]>;
-function AnalysisProfile({ resource, targetConfig, days, timeZone, onRefresh }: {
+function AnalysisProfile({ resource, targetConfig, days, timeZone }: {
   resource: AnalysisResource<ProfileResult>;
   targetConfig: { low: number; high: number; hypo: number; hyper: number };
-  days: number; timeZone: string; onRefresh: () => void;
+  days: number; timeZone: string;
 }) {
   const fetcher = useCallback((refresh = false) => getHistoricalGlucoseAction(days, undefined, undefined, undefined, targetConfig, timeZone, refresh), [days, targetConfig, timeZone]);
   const result = useAnalysisResource(resource, String(days), fetcher);
   return <>
-    <div className="flex items-center justify-between gap-2 text-xs" aria-live="polite">
-      <span>{result.loading ? `Actualizando Perfil de ${days} días…` : `Perfil de ${days} días`}</span>
-      <button type="button" onClick={() => { onRefresh(); void resource.load(String(days), () => getHistoricalGlucoseAction(days, undefined, undefined, undefined, targetConfig, timeZone, true), true); }} className="min-h-9 px-2">Actualizar análisis</button>
-    </div>
     {result.error ? <div role="alert">{result.error} <button type="button" onClick={() => void result.retry()}>Reintentar</button></div> : null}
     {!result.error && <AnalysisView history={result.data?.history ?? []} targetConfig={targetConfig} days={days}
       preCalculatedStats={result.data?.stats} preCalculatedPercentiles={result.data?.percentileData}
@@ -2095,10 +2092,14 @@ export default function GlucoPage() {
       {/* Main Content Area */}
       <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/5 p-2.5 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:p-3 md:p-4">
         <div className="mx-auto h-full min-w-0 max-w-[1100px]">
+          <AnimatePresence mode="wait" initial={false}>
           {activeView === "analysis" ? (
             <motion.div
-              initial={false}
-              animate={{ opacity: 1, scale: 1 }}
+              key="analysis"
+              initial={{ opacity: reduceMotion ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: reduceMotion ? 1 : 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.16, ease: "easeInOut" }}
               className="flex h-full flex-col gap-2"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -2163,7 +2164,6 @@ export default function GlucoPage() {
                   />
                 ) : (
                   <AnalysisProfile
-                    onRefresh={clearAnalysis}
                     resource={profileResource}
                     targetConfig={targetConfig}
                     days={analysisDays}
@@ -2174,8 +2174,11 @@ export default function GlucoPage() {
             </motion.div>
           ) : activeView === "dashboard" ? (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              key="dashboard"
+              initial={{ opacity: reduceMotion ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: reduceMotion ? 1 : 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.16, ease: "easeInOut" }}
               className="flex h-full flex-col gap-2"
             >
               <div className="flex items-center justify-between gap-3">
@@ -2761,6 +2764,13 @@ export default function GlucoPage() {
                 {/* Right Column - Sidemenu */}
                 <div className="lg:col-span-3 flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                    <RangeDistributionCard values={{
+                      veryHigh: rangeStats?.veryHigh?.pct ?? 0,
+                      high: rangeStats?.high?.pct ?? 0,
+                      inRange: rangeStats?.inRange?.pct ?? 0,
+                      low: rangeStats?.low?.pct ?? 0,
+                      veryLow: rangeStats?.veryLow?.pct ?? 0,
+                    }} />
                     <Card
                       ref={syncCardRef}
                       className="sync-card border-transparent bg-card/30"
@@ -2816,70 +2826,7 @@ export default function GlucoPage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="border bg-card/30">
-                      <CardContent className="p-3.5 space-y-2">
-                        <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                          Tiempo en rangos
-                        </p>
-                        <div className="space-y-1.5">
-                          {(
-                            [
-                              {
-                                key: "veryHigh",
-                                label: "Muy Alta",
-                                color: "bg-red-500",
-                                text: "text-red-500",
-                              },
-                              {
-                                key: "high",
-                                label: "Alta",
-                                color: "bg-amber-500",
-                                text: "text-amber-500",
-                              },
-                              {
-                                key: "inRange",
-                                label: "Objetivo",
-                                color: "bg-emerald-500",
-                                text: "text-emerald-500",
-                              },
-                              {
-                                key: "low",
-                                label: "Baja",
-                                color: "bg-amber-500",
-                                text: "text-amber-500",
-                              },
-                              {
-                                key: "veryLow",
-                                label: "Muy Baja",
-                                color: "bg-red-500",
-                                text: "text-red-500",
-                              },
-                            ] as const
-                          ).map((r) => (
-                            <div key={r.key} className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                                  {r.label}
-                                </span>
-                                <span
-                                  className={`text-[10px] font-black tabular-nums font-numbers ${r.text}`}
-                                >
-                                  {rangeStats?.[r.key]?.pct ?? 0}%
-                                </span>
-                              </div>
-                              <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
-                                <div
-                                  className={`${r.color} h-full`}
-                                  style={{
-                                    width: `${rangeStats?.[r.key]?.pct ?? 0}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+
                   </div>
 
                   {/* Patient Profile Snapshot */}
@@ -2905,8 +2852,11 @@ export default function GlucoPage() {
             </motion.div>
           ) : (
             <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
+              key="settings"
+              initial={{ opacity: reduceMotion ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: reduceMotion ? 1 : 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.16, ease: "easeInOut" }}
               className="max-w-2xl mx-auto py-4"
             >
               <div className="flex items-center gap-3 mb-6">
@@ -3123,6 +3073,7 @@ export default function GlucoPage() {
               </div>
             </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
 

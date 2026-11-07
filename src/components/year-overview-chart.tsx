@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, RotateCw } from "lucide-react";
 import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
 import { getYearOverviewAction } from "@/app/actions";
@@ -17,35 +16,35 @@ type YearOverviewDay = {
 };
 type Targets = { low: number; high: number; hypo: number; hyper: number };
 type Metric = "average" | "timeInRange";
-type HoverTooltip = {
+type ActiveDay = {
   date: string;
   day?: YearOverviewDay;
-  x: number;
-  y: number;
-  placement: "above" | "below";
 };
 
 const EMPTY_DAYS: YearOverviewDay[] = [];
+const TIR_BANDS = [
+  { min: 0, label: "0–19%", color: "bg-emerald-100 dark:bg-emerald-950" },
+  { min: 20, label: "20–39%", color: "bg-emerald-200 dark:bg-emerald-800" },
+  { min: 40, label: "40–59%", color: "bg-emerald-400 dark:bg-emerald-600" },
+  { min: 60, label: "60–79%", color: "bg-emerald-600 dark:bg-emerald-400" },
+  { min: 80, label: "80–100%", color: "bg-emerald-800 dark:bg-emerald-200" },
+];
 const CELL_SIZE = 15;
 const CELL_GAP = 3;
 const WEEKDAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-function glucoseBand(value: number, targets: Targets) {
-  if (value <= targets.hypo) return "very-low";
-  if (value < targets.low) return "low";
-  if (value <= targets.high) return "in-range";
-  if (value < targets.hyper) return "high";
-  return "very-high";
-}
-
-function bandClass(value: number, targets: Targets) {
-  switch (glucoseBand(value, targets)) {
-    case "very-low": return "bg-[#00090b] dark:bg-[#f3fbfd]";
-    case "low": return "bg-[#046f82] dark:bg-[#67d2e5]";
-    case "in-range": return "bg-[#61be50]";
-    case "high": return "bg-[#f37e19]";
-    case "very-high": return "bg-[#d73331]";
-  }
+function glucoseBands(targets: Targets) {
+  const highMidpoint = Math.floor((targets.high + targets.hyper) / 2);
+  const upperHigh = targets.hyper + 50;
+  return [
+    { min: -Infinity, label: `≤${targets.hypo}`, color: "bg-[#00090b] dark:bg-[#f3fbfd]" },
+    { min: targets.hypo + 1, label: `${targets.hypo + 1}–${targets.low - 1}`, color: "bg-[#046f82] dark:bg-[#67d2e5]" },
+    { min: targets.low, label: `${targets.low}–${targets.high}`, color: "bg-[#61be50]" },
+    { min: targets.high + 1, label: `${targets.high + 1}–${highMidpoint - 1}`, color: "bg-[#f5b642]" },
+    { min: highMidpoint, label: `${highMidpoint}–${targets.hyper - 1}`, color: "bg-[#f37e19]" },
+    { min: targets.hyper, label: `${targets.hyper}–${upperHigh - 1}`, color: "bg-[#e34b3c]" },
+    { min: upperHigh, label: `≥${upperHigh}`, color: "bg-[#a51c30]" },
+  ].filter((band, index, bands) => index === bands.length - 1 || band.min < bands[index + 1].min);
 }
 
 function dateString(year: number, month: number, day: number) {
@@ -75,8 +74,7 @@ export function YearOverviewChart({
   onSelectDate: (date: string) => void;
 }) {
   const [metric, setMetric] = useState<Metric>("average");
-  const [hoverTooltip, setHoverTooltip] = useState<HoverTooltip | null>(null);
-  const tooltipDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeDay, setActiveDay] = useState<ActiveDay | null>(null);
   const currentYear = new Date().getFullYear();
   const fetcher = useCallback((refresh = false) => getYearOverviewAction(year, timeZone, { low: targets.low, high: targets.high }, refresh), [year, timeZone, targets.low, targets.high]);
   const result = useAnalysisResource(resource, String(year), fetcher);
@@ -87,37 +85,15 @@ export function YearOverviewChart({
     void resource.load(String(year), () => getYearOverviewAction(year, timeZone, { low: targets.low, high: targets.high }, true), true);
   };
 
-  useEffect(() => () => {
-    if (tooltipDismissTimer.current) clearTimeout(tooltipDismissTimer.current);
-  }, []);
-
-  const cancelTooltipDismiss = () => {
-    if (tooltipDismissTimer.current) clearTimeout(tooltipDismissTimer.current);
-    tooltipDismissTimer.current = null;
-  };
-  const dismissDayTooltip = () => {
-    cancelTooltipDismiss();
-    setHoverTooltip(null);
-  };
-  const scheduleTooltipDismiss = () => {
-    cancelTooltipDismiss();
-    tooltipDismissTimer.current = setTimeout(() => setHoverTooltip(null), 120);
+  const dismissDayLabel = () => setActiveDay(null);
+  const showDayLabel = (date: string, day: YearOverviewDay | undefined) => {
+    setActiveDay({ date, day });
   };
 
   const changeYear = (nextYear: number) => {
-    dismissDayTooltip();
+    dismissDayLabel();
     onYearChange(nextYear);
   };
-
-  const showDayTooltip = (date: string, day: YearOverviewDay | undefined, element: HTMLButtonElement) => {
-    cancelTooltipDismiss();
-    const rect = element.getBoundingClientRect();
-    const placement = rect.top > 120 ? "above" : "below";
-    const horizontalPadding = 152;
-    const x = Math.min(Math.max(rect.left + rect.width / 2, horizontalPadding), window.innerWidth - horizontalPadding);
-    setHoverTooltip({ date, day, x, y: placement === "above" ? rect.top - 8 : rect.bottom + 8, placement });
-  };
-
 
   const calendar = useMemo(() => {
     const firstDay = new Date(Date.UTC(year, 0, 1)).getUTCDay();
@@ -147,6 +123,7 @@ export function YearOverviewChart({
     return { cells, months, weekCount };
   }, [days, year]);
 
+  const averageBands = glucoseBands(targets);
   const daysWithData = days.length;
   const mean = days.reduce((sum, day) => sum + day.average * day.count, 0) /
     (days.reduce((sum, day) => sum + day.count, 0) || 1);
@@ -159,16 +136,13 @@ export function YearOverviewChart({
     : meanTimeInRange == null
       ? "Sin cobertura de TIR disponible"
       : `TIR promedio ${Math.round(meanTimeInRange)}% · ${Math.round(totalCoverageMinutes / 60)} h de cobertura`;
-  const getCellStyle = (day?: YearOverviewDay) => {
-    if (metric !== "timeInRange" || day?.timeInRangePercent == null) return undefined;
-    const opacity = 0.16 + (day.timeInRangePercent / 100) * 0.72;
-    return { backgroundColor: `rgb(var(--year-overview-tir-rgb) / ${opacity.toFixed(3)})` };
-  };
   const getCellClass = (day?: YearOverviewDay) => {
     if (!day) return "border border-border/60 bg-muted/60";
-    // Match the whole mg/dL value shown in the tooltip and range legend.
-    if (metric === "average") return bandClass(Math.round(day.average), targets);
-    return day.timeInRangePercent == null ? "border border-border/60 bg-muted/60" : "";
+    // Match the whole mg/dL value shown in the data label and range legend.
+    if (metric === "average") return averageBands.findLast((band) => Math.round(day.average) >= band.min)!.color;
+    if (day.timeInRangePercent == null) return "border border-border/60 bg-muted/60";
+    const percent = Math.round(day.timeInRangePercent);
+    return TIR_BANDS.findLast((band) => percent >= band.min)?.color ?? TIR_BANDS[0].color;
   };
   const getCellDescription = (day?: YearOverviewDay) => {
     if (metric === "average") return day ? `${Math.round(day.average)} mg/dL · ${day.count} lecturas` : "Sin datos";
@@ -179,11 +153,11 @@ export function YearOverviewChart({
   };
 
   return (
-    <Card className="min-h-0 gap-0 overflow-hidden border bg-card/40 shadow-sm">
-      <CardHeader className="flex flex-col items-start justify-between gap-3 border-b bg-muted/20 px-4 py-3 sm:flex-row sm:items-center">
+    <Card className="min-h-0 gap-0 overflow-hidden border bg-card/20 shadow-sm">
+      <CardHeader className="flex flex-col items-start justify-between gap-3 border-b bg-muted/10 px-3 py-2.5 pb-2.5! sm:px-4 sm:py-2 sm:pb-2! sm:flex-row sm:items-center">
         <div className="min-w-0">
-          <CardTitle className="text-sm font-bold">Año en glucosa</CardTitle>
-          <CardDescription className="mt-1 text-xs">
+          <CardTitle className="flex h-8 items-center text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">Año en glucosa</CardTitle>
+          <CardDescription className="text-[9px] font-semibold">
             {loading ? "Resumiendo lecturas…" : summary}
           </CardDescription>
         </div>
@@ -193,7 +167,7 @@ export function YearOverviewChart({
             <span className="sr-only">Métrica del mapa anual</span>
             <select
               value={metric}
-              onChange={(event) => { setHoverTooltip(null); setMetric(event.target.value as Metric); }}
+              onChange={(event) => { setActiveDay(null); setMetric(event.target.value as Metric); }}
               className="h-9 w-full cursor-pointer appearance-none rounded-md border border-input bg-background py-2 pl-2.5 pr-10 text-xs font-medium shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-40"
             >
               <option value="average">Promedio de glucosa</option>
@@ -230,7 +204,7 @@ export function YearOverviewChart({
           </div>
         ) : (
           <>
-            <div className="mobile-scroll-hint w-full overflow-x-auto pb-2" aria-label={`Calendario de glucosa de ${year}`} onScroll={dismissDayTooltip}>
+            <div className="mobile-scroll-hint w-full overflow-x-auto pb-2" aria-label={`Calendario de glucosa de ${year}`} onScroll={dismissDayLabel}>
               <div className="mx-auto w-fit min-w-max">
                 <div
                   className="mb-1 ml-10 grid h-5 items-end text-[10px] font-medium capitalize text-muted-foreground"
@@ -259,90 +233,60 @@ export function YearOverviewChart({
                       <button
                         key={date}
                         type="button"
-                        onClick={() => { dismissDayTooltip(); onSelectDate(date); }}
-                        onMouseEnter={(event) => showDayTooltip(date, day, event.currentTarget)}
-                        onMouseLeave={scheduleTooltipDismiss}
-                        onFocus={(event) => showDayTooltip(date, day, event.currentTarget)}
-                        onBlur={dismissDayTooltip}
-                        onKeyDown={(event) => { if (event.key === "Escape") dismissDayTooltip(); }}
+                        onClick={() => { dismissDayLabel(); onSelectDate(date); }}
+                        onMouseEnter={() => showDayLabel(date, day)}
+                        onMouseLeave={dismissDayLabel}
+                        onFocus={() => showDayLabel(date, day)}
+                        onBlur={dismissDayLabel}
+                        onKeyDown={(event) => { if (event.key === "Escape") dismissDayLabel(); }}
                         title=""
                         aria-label={`${formatDay(date)}: ${getCellDescription(day)}. Abrir en Monitor.`}
-                        aria-describedby={hoverTooltip?.date === date ? "year-overview-day-tooltip" : undefined}
-                        className={`h-[15px] w-[15px] rounded-[3px] ${metric === "timeInRange" ? "saturate-[0.9]" : "saturate-[0.72]"} outline-none ring-offset-1 transition-[filter,transform] duration-150 hover:z-10 hover:scale-125 hover:saturate-[1.08] focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring ${
+                        aria-describedby={activeDay?.date === date ? "year-overview-day-label" : undefined}
+                        className={`h-[15px] w-[15px] rounded-[3px] ${metric === "timeInRange" ? "saturate-[0.9]" : "saturate-[0.72]"} outline-none ring-offset-1 transition-[filter] duration-150 hover:shadow-[inset_0_0_0_1px_white] hover:saturate-[1.08] focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring ${
                           getCellClass(day)
                         }`}
-                        style={getCellStyle(day)}
                       />
                     ))}
                   </div>
                 </div>
               </div>
             </div>
-            {hoverTooltip && typeof document !== "undefined" && createPortal(
-              <div
-                id="year-overview-day-tooltip"
-                role="tooltip"
-                onMouseEnter={cancelTooltipDismiss}
-                onMouseLeave={scheduleTooltipDismiss}
-                className={`fixed z-[100] w-72 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-xl border border-border/80 bg-popover px-3.5 py-3 text-popover-foreground shadow-xl shadow-black/20 ${
-                  hoverTooltip.placement === "above" ? "-translate-y-full" : ""
-                }`}
-                style={{ left: hoverTooltip.x, top: hoverTooltip.y }}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-border/80 bg-popover ${
-                    hoverTooltip.placement === "above"
-                      ? "-bottom-1 border-b border-r"
-                      : "-top-1 border-l border-t"
-                  }`}
-                />
-                <p className="relative text-[11px] font-semibold capitalize text-muted-foreground">{formatDay(hoverTooltip.date)}</p>
-                {hoverTooltip.day ? (
-                  <>
-                    {metric === "average" ? (
-                      <p className="mt-1 font-numbers text-lg font-bold leading-tight">
-                        {Math.round(hoverTooltip.day.average)} <span className="text-xs font-medium text-muted-foreground">mg/dL promedio</span>
-                      </p>
-                    ) : (
-                      <p className="mt-1 font-numbers text-lg font-bold leading-tight">
-                        {hoverTooltip.day.timeInRangePercent == null ? "—" : `${Math.round(hoverTooltip.day.timeInRangePercent)}%`}
-                        <span className="text-xs font-medium text-muted-foreground"> TIR</span>
-                      </p>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
-                      <span>{hoverTooltip.day.count} lecturas</span>
-                      {hoverTooltip.day.coverageMinutes > 0 && (
-                        <span>{Math.round(hoverTooltip.day.coverageMinutes / 60 * 10) / 10} h de cobertura</span>
-                      )}
-                      {metric === "timeInRange" && hoverTooltip.day.timeInRangePercent == null && (
-                        <span>Sin cobertura válida de TIR</span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-1 text-sm font-medium">Sin lecturas este día</p>
-                )}
-              </div>,
-              document.body,
-            )}
+            <div className="flex h-7 items-center justify-center gap-2 overflow-hidden text-[10px] leading-none text-muted-foreground" id="year-overview-day-label">
+              {activeDay && (
+                <>
+                  <span className="truncate capitalize">{formatDay(activeDay.date)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="shrink-0 font-numbers font-semibold text-foreground">
+                    {!activeDay.day ? "Sin datos" : metric === "average"
+                      ? `${Math.round(activeDay.day.average)} mg/dL`
+                      : activeDay.day.timeInRangePercent == null
+                        ? "Sin cobertura de TIR"
+                        : `${Math.round(activeDay.day.timeInRangePercent)}% TIR`}
+                  </span>
+                </>
+              )}
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3 text-[10px] text-muted-foreground">
               <p>Seleccioná un día para abrirlo en Monitor.</p>
               {metric === "average" ? (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="Escala de glucemia por rangos">
-                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] saturate-[0.72] bg-[#00090b] dark:bg-[#f3fbfd]" /> ≤{targets.hypo}</span>
-                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] saturate-[0.72] bg-[#046f82] dark:bg-[#67d2e5]" /> {targets.hypo + 1}–{targets.low - 1}</span>
-                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] saturate-[0.72] bg-[#61be50]" /> {targets.low}–{targets.high}</span>
-                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] saturate-[0.72] bg-[#f37e19]" /> {targets.high + 1}–{targets.hyper - 1}</span>
-                  <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] saturate-[0.72] bg-[#d73331]" /> ≥{targets.hyper}</span>
+                  {averageBands.map((band) => (
+                    <span key={band.min} className="inline-flex items-center gap-1.5">
+                      <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-[2px] saturate-[0.72] ${band.color}`} />
+                      {band.label}
+                    </span>
+                  ))}
                   <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] border border-border bg-muted/60" /> Sin datos</span>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1" aria-label="Escala de tiempo en rango">
                   <span>{targets.low}–{targets.high} mg/dL</span>
-                  <span>0%</span>
-                  <span aria-hidden="true" className="h-2.5 w-28 rounded-[2px] border border-border/50 saturate-[0.9]" style={{ background: "linear-gradient(to right, rgb(var(--year-overview-tir-rgb) / 0.16), rgb(var(--year-overview-tir-rgb) / 0.88))" }} />
-                  <span>100% TIR</span>
+                  {TIR_BANDS.map((band) => (
+                    <span key={band.min} className="inline-flex items-center gap-1.5">
+                      <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-[2px] saturate-[0.9] ${band.color}`} />
+                      {band.label}
+                    </span>
+                  ))}
                   <span className="inline-flex items-center gap-1"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-[2px] border border-border bg-muted/60" /> Sin cobertura</span>
                 </div>
               )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo, type ReactNode } from "react";
+import { RangeDistributionCard } from "@/components/range-distribution-card";
 import { AgpActiveLabels } from "./agp-active-labels";
 import { ChartHoverMask } from "@/components/chart-hover-mask";
 import { Loader2 } from "lucide-react";
@@ -145,9 +146,10 @@ export function AnalysisView({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+    <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-12">
+      <div className="flex min-w-0 flex-col gap-3 lg:col-span-9">
       {/* Long-period metrics */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4">
         <MetricCard
           title="TIR"
           value={`${stats?.tir}%`}
@@ -187,17 +189,17 @@ export function AnalysisView({
       </div>
 
       {/* AGP Chart — primary analytical surface */}
-      <Card className="flex min-h-[360px] min-w-0 flex-[2_1_480px] overflow-hidden border bg-card/20 shadow-sm sm:min-h-[440px]">
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-4 border-b bg-muted/20">
+      <Card className="gap-0 flex flex-col min-h-[320px] min-w-0 flex-1 overflow-hidden border bg-card/20 shadow-sm">
+        <CardHeader className="flex flex-col gap-1 border-b bg-muted/10 px-3 py-2.5 pb-2.5! sm:px-4 sm:py-2 sm:pb-2!">
           <div className="flex flex-col w-full sm:w-auto">
-            <CardTitle className="min-w-0 truncate text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2">
+            <CardTitle className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] opacity-75 flex h-8 items-center gap-2">
               Perfil glucémico (AGP)
-              <span className="hidden sm:inline-flex text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+              <span className="hidden sm:inline-flex font-numbers text-[9px] font-semibold tabular-nums text-muted-foreground">
                 {days} DÍAS
               </span>
               {loading && <RefreshCw className="w-3 h-3 text-primary animate-spin" />}
             </CardTitle>
-            <CardDescription className="mt-1 text-[10px]">Hora local · percentiles por bloque de 30 min</CardDescription>
+            <CardDescription className="text-[9px] font-semibold">Hora local · percentiles por bloque de 15 min</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="relative flex min-h-0 min-w-0 flex-1 flex-col p-0">
@@ -446,37 +448,32 @@ export function AnalysisView({
         </CardContent>
       </Card>
 
-      {/* Secondary analysis */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <Card className="border bg-card/30 flex flex-col">
-            <CardHeader className="p-4 pb-0">
-              <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80">Distribución por Rangos</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 flex-1">
-              <div className="space-y-3">
-                <RangeBar label="Muy Alta (>250)" value={stats?.veryHigh || 0} color="bg-red-600" loading={loading} />
-                <RangeBar label="Alta (181-250)" value={stats?.high || 0} color="bg-amber-500" loading={loading} />
-                <RangeBar label="En Rango (70-180)" value={stats?.tir || 0} color="bg-emerald-500" loading={loading} />
-                <RangeBar label="Baja (54-69)" value={stats?.low || 0} color="bg-amber-500" loading={loading} />
-                <RangeBar label="Muy Baja (<54)" value={stats?.veryLow || 0} color="bg-red-600" loading={loading} />
-              </div>
-            </CardContent>
-          </Card>
+      </div>
 
-          <Card className="border bg-card/30 flex flex-col">
-            <CardHeader className="p-4 pb-0">
-              <CardTitle className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 italic">Análisis T1D</CardTitle>
+      {/* Secondary analysis — same sidebar proportions as Monitor */}
+      <div className="grid min-w-0 grid-cols-2 content-start gap-3 lg:col-span-3 lg:grid-cols-1">
+          <RangeDistributionCard loading={loading} values={{
+            veryHigh: stats?.veryHigh ?? 0,
+            high: stats?.high ?? 0,
+            inRange: stats?.tir ?? 0,
+            low: stats?.low ?? 0,
+            veryLow: stats?.veryLow ?? 0,
+          }} />
+
+          <Card className="gap-2 border bg-card/30 flex flex-col">
+            <CardHeader className="px-3.5 pt-3.5 pb-0">
+              <CardTitle className="text-[8px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Análisis T1D</CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-4 flex flex-col flex-1">
+            <CardContent className="px-3.5 pb-3.5 space-y-2 flex flex-col flex-1">
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                El análisis de los últimos <span className="text-foreground font-bold">{days} días</span> muestra un control 
+                El análisis de los últimos <span className="font-numbers font-black tabular-nums text-foreground">{days} días</span> muestra un control
                 { (stats?.tir || 0) > 70 ? ' óptimo' : ' que requiere atención' }. 
-                El GMI de <span className="text-foreground font-bold">{stats?.gmi}%</span> sugiere una hemoglobina glicosilada similar.
+                El GMI de <span className="font-numbers font-black tabular-nums text-foreground">{stats?.gmi}%</span> sugiere una hemoglobina glicosilada similar.
               </p>
-              <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2 mt-auto">
+              <div className="p-2.5 rounded-lg bg-muted/40 space-y-2 mt-auto">
                 <div className="flex items-center gap-2">
                   <Info className="w-3 h-3 text-primary" />
-                  <span className="text-[11px] font-bold uppercase tracking-tighter">Tip del Día</span>
+                  <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Tip del Día</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   { (stats?.cv || 0) > 36 
@@ -511,59 +508,35 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
     info: "text-primary bg-primary/10 border-primary/20",
   };
 
-  return (
-    <div className="flex h-[104px] min-w-0 flex-col rounded-xl border border-border/60 bg-card/45 p-3 shadow-sm sm:px-4">
-        <div className="mb-1.5 flex min-h-6 items-center justify-between gap-2">
-          <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${colors[status as keyof typeof colors]}`}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
-          </div>
-          {target && (
-            <span className="truncate text-[10px] font-bold text-muted-foreground">
-              Meta {target}
-            </span>
-          )}
-        </div>
-        <div className="flex h-6 items-center gap-1 leading-none">
-          {loading ? (
-            <div className="h-5 w-16 animate-pulse rounded bg-muted/40" />
-          ) : (
-            <span className="text-xl font-black tracking-tight">{value}</span>
-          )}
-          {unit && (
-            <span className={`text-[10px] font-bold text-muted-foreground ${loading ? "invisible" : ""}`}>
-              {unit}
-            </span>
-          )}
-        </div>
-        <p className="mt-1 min-h-4 truncate text-[10px] font-medium text-muted-foreground">
-          {title} · {description}
-        </p>
-    </div>
-  );
-}
+  const valueColors = {
+    success: "text-emerald-500",
+    warning: "text-amber-500",
+    error: "text-red-500",
+    info: "text-foreground",
+  };
 
-function RangeBar({ label, value, color, loading }: { label: string; value: number; color: string; loading: boolean }) {
   return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-[11px] font-bold uppercase tracking-tighter">
-        <span>{label}</span>
-        {loading ? (
-          <div className="h-3 w-8 rounded bg-muted/40 animate-pulse" />
-        ) : (
-          <span>{value}%</span>
-        )}
-      </div>
-      <div className="h-2 w-full bg-muted/30 rounded-full overflow-hidden">
-        {loading ? (
-          <div className="h-full w-full bg-muted/20 animate-pulse" />
-        ) : (
-          <div
-            style={{ width: `${value}%` }}
-            className={`h-full ${color}`} 
-          />
-        )}
-      </div>
-    </div>
+    <Card className="h-[104px] min-w-0 rounded-xl border border-border/60 bg-card/45 shadow-sm">
+      <CardContent className="flex h-full flex-col justify-between p-3 sm:p-3.5">
+        <div className="flex min-h-6 items-center justify-between gap-2">
+          <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${colors[status]}`}>
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
+          </div>
+          <p className="min-w-0 truncate text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground" title={description}>
+            {title}
+          </p>
+        </div>
+        <div className="flex items-baseline gap-1">
+          {loading ? <div className="h-6 w-16 animate-pulse rounded bg-muted/40" /> : (
+            <span className={`font-numbers text-2xl font-black tabular-nums ${valueColors[status]}`}>{value}</span>
+          )}
+          {unit && <span className="text-[8px] font-bold uppercase text-muted-foreground">{unit}</span>}
+        </div>
+        <p className="truncate text-[8px] font-bold text-muted-foreground">
+          {description}{target ? ` · Meta ${target}` : ""}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
