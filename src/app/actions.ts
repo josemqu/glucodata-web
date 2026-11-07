@@ -1,6 +1,6 @@
 "use server";
 
-import { GlucoseData } from "@/lib/librelink";
+import { GlucoseData, LibreLinkUpError } from "@/lib/librelink";
 import { adminDatabase, libreContext, logoutUser, requireUser, EventAuthError } from "@/lib/server/user-auth";
 
 import { calculateStats, calculatePercentiles } from "@/lib/metrics";
@@ -20,7 +20,7 @@ type MonitorDayResult = {
   hasData: boolean;
 };
 
-const analysisCache = new Map<string, { data: { stats: ReturnType<typeof calculateStats> | null; percentileData: ReturnType<typeof calculatePercentiles>; history: { value: number; time: number }[]; patient: import("@/lib/librelink").Patient; days: number }, timestamp: number }>();
+const analysisCache = new Map<string, { data: { stats: ReturnType<typeof calculateStats> | null; percentileData: ReturnType<typeof calculatePercentiles>; history: { value: number; time: number }[]; days: number }, timestamp: number }>();
 const monitorDayCache = new Map<string, { data: MonitorDayResult, timestamp: number }>();
 type YearOverviewDay = { date: string; average: number; count: number; timeInRangePercent: number | null; coverageMinutes: number };
 const yearOverviewCache = new Map<string, { data: YearOverviewDay[]; timestamp: number }>();
@@ -262,8 +262,10 @@ export async function getLatestGlucoseAction(
   password?: string,
   sessionData?: { token: string; userId: string; region: string },
 ) {
+  let stage = "session";
   try {
     const { database: supabase, client, patientId, connections, userId } = await libreContext(email, password);
+    stage = "glucose";
     const requestTime = Date.now();
     const { measurement: rawGlucose, graph: apiGraph } =
       await client.getGlucose(patientId);
@@ -303,6 +305,7 @@ export async function getLatestGlucoseAction(
       }));
     };
 
+    stage = "save_readings";
     const readings = new Map(apiGraph.map(reading => [reading.time, reading]));
     if (glucose) readings.set(glucose.time, glucose);
     if (readings.size && process.env.GLUCO_IMPORTS_PAUSED !== "true") {
@@ -385,9 +388,17 @@ export async function getLatestGlucoseAction(
       },
     };
   } catch (error: unknown) {
+    const code = error instanceof LibreLinkUpError ? error.code
+      : typeof error === "object" && error !== null && "code" in error
+        && typeof error.code === "string" && /^[A-Z0-9_]{2,32}$/.test(error.code) ? error.code : "unknown";
+    console.error("Glucose request failed", {
+      stage, code,
+      ...(error instanceof LibreLinkUpError ? { httpStatus: error.httpStatus, providerStatus: error.providerStatus } : {}),
+    });
     return {
       success: false,
-      error: error instanceof EventAuthError ? error.message : "No se pudo completar la consulta.",
+      retryAfterSeconds: error instanceof LibreLinkUpError ? error.retryAfterSeconds : undefined,
+      error: error instanceof EventAuthError || error instanceof LibreLinkUpError ? error.message : "No se pudo completar la consulta.",
     };
   }
 }
@@ -400,8 +411,17 @@ export async function getHistoricalGlucoseAction(
   timeZone = "UTC",
   refresh = false,
 ) {
+  let stage = "session";
   try {
-    const { database: supabase, patientId, connections, userId } = await libreContext(email, password);
+    // Analysis reads stored data; provider availability must not gate it.
+    void email; void password; void sessionData;
+    const { userId, database: supabase } = await requireUser();
+    const { data: providerSession, error: sessionError } = await adminDatabase()
+      .from("user_provider_sessions").select("patient_id").eq("user_id", userId).maybeSingle();
+    if (sessionError || !providerSession?.patient_id) {
+      throw new EventAuthError("Volvé a iniciar sesión con LibreLinkUp.", 401);
+    }
+    const patientId = providerSession.patient_id;
 
     if (refresh) invalidateAnalysisResults(userId);
     const token = analysisToken(userId);
@@ -419,6 +439,7 @@ export async function getHistoricalGlucoseAction(
     if (![7, 14, 30, 90].includes(days)) {
       throw new Error("Ventana de análisis no válida.");
     }
+    stage = "readings";
     const queryStarted = Date.now();
     const endDate = new Date().toISOString();
     const startDate = new Date(Date.parse(endDate) - days * 24 * 60 * 60 * 1000).toISOString();
@@ -451,6 +472,7 @@ export async function getHistoricalGlucoseAction(
     const history = windows.flat();
     if (history.length > 250_000) throw new Error("Demasiadas mediciones para analizar el período completo.");
 
+    stage = "metrics";
     const stats = targetConfig ? calculateStats(history, targetConfig) : null;
     const percentileData = calculatePercentiles(history, timeZone);
 
@@ -460,7 +482,6 @@ export async function getHistoricalGlucoseAction(
       // We still return history but only if specifically needed or for fallback
       // For now, let's keep it but it could be removed if we are sure the client won't need it
       history: history.length > 5000 ? [] : history, // Don't send massive history if it's too big
-      patient: connections[0],
       days,
     };
 
@@ -474,7 +495,13 @@ export async function getHistoricalGlucoseAction(
       validForMs: token.valid ? Math.max(0, CACHE_TTL - (Date.now() - queryStarted)) : 0,
     };
   } catch (error: unknown) {
-    return { success: false, error: error instanceof EventAuthError ? error.message : "No se pudo completar la consulta." };
+    const code = error instanceof LibreLinkUpError ? error.code
+      : typeof error === "object" && error !== null && "code" in error
+        && typeof error.code === "string" && /^[A-Z0-9_]{2,32}$/.test(error.code) ? error.code : "unknown";
+    console.error("Analysis request failed", { stage, code,
+      ...(error instanceof LibreLinkUpError ? { httpStatus: error.httpStatus, providerStatus: error.providerStatus } : {}),
+    });
+    return { success: false, error: error instanceof EventAuthError || error instanceof LibreLinkUpError ? error.message : "No se pudo completar la consulta." };
   }
 }
 

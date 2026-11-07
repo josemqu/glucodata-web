@@ -69,14 +69,15 @@ import { MonitorActiveLabel } from "@/components/monitor-active-label";
 import { GlucoseLineGradient } from "@/components/glucose-line-gradient";
 import { ModeToggle } from "@/components/mode-toggle";
 import { calculateTrend, getTrendRotation, TrendState } from "@/lib/trend";
-import { getHistoricalGlucoseAction } from "./actions";
+import { getHistoricalGlucoseAction, getYearOverviewAction } from "./actions";
+import { preloadAnalysis } from "@/lib/analysis-preload";
 import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
 import { RangeDistributionCard } from "@/components/range-distribution-card";
 import { AnalysisView } from "@/components/analysis-view";
 import { YearOverviewChart } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import { MonitorDatePicker } from "@/components/monitor-date-picker";
-import { MonitorInsulinColumns, MonitorInsulinLegend, useMonitorInsulinDoses } from "@/components/monitor-insulin-columns";
+import { MonitorInsulinColumns, useMonitorInsulinDoses } from "@/components/monitor-insulin-columns";
 import { useChartTooltipTimeout } from "@/lib/use-chart-tooltip-timeout";
 import type { GlucoEvent } from "@/lib/events";
 import { isManualGlucose, type EventFormType } from "@/lib/events";
@@ -575,6 +576,18 @@ export default function GlucoPage() {
   const clearAnalysis = useCallback(() => { profileResource.clear(); yearResource.clear(); }, [profileResource, yearResource]);
   useEffect(() => () => { profileResource.clear(); yearResource.clear(); }, [profileResource, yearResource]);
 
+  useEffect(() => {
+    if (!isLoggedIn || !data?.patient?.patientId || loading || activeView !== "dashboard") return;
+    const windows = [analysisDays, ...[7, 14, 30, 90].filter(days => days !== analysisDays)];
+    return preloadAnalysis([
+      ...windows.map(days => () => profileResource.preload(String(days), (refresh = false) =>
+        getHistoricalGlucoseAction(days, undefined, undefined, undefined, targetConfig, analysisTimeZone, refresh))),
+      () => yearResource.preload(String(analysisYear), (refresh = false) =>
+        getYearOverviewAction(analysisYear, analysisTimeZone, { low: targetConfig.low, high: targetConfig.high }, refresh)),
+    ]);
+  }, [isLoggedIn, data?.patient?.patientId, loading, activeView, profileResource, yearResource,
+    analysisDays, analysisYear, targetConfig, analysisTimeZone]);
+
   // Sync activeView with URL Hash
   useEffect(() => {
     const handleHashChange = () => {
@@ -638,10 +651,13 @@ export default function GlucoPage() {
     } catch (error) { setError(error instanceof Error ? error.message : "No se pudo guardar la configuración."); }
   };
 
+  const providerRetryAtRef = useRef(0);
+
   const fetchData = async (
     creds = credentialsRef.current,
     sessionData = sessionRef.current,
   ) => {
+    if (!creds.email && Date.now() < providerRetryAtRef.current) return;
     const epoch = authEpochRef.current;
     setLoading(true);
     setError(null);
@@ -653,6 +669,7 @@ export default function GlucoPage() {
       );
       if (epoch !== authEpochRef.current) return;
       if (result.success) {
+        providerRetryAtRef.current = 0;
         const newSession = result.data?.session;
         if (newSession && newSession.token) {
           setSession(newSession);
@@ -726,11 +743,14 @@ export default function GlucoPage() {
         }
 
       } else {
+        if (result.retryAfterSeconds) providerRetryAtRef.current = Date.now() + result.retryAfterSeconds * 1000;
         setError(result.error ?? "No se pudieron cargar los datos.");
-        setSession(null);
-        if (isLoggedIn) {
-          setIsLoggedIn(false);
-          Cookies.remove("gluco_session");
+        if (!result.retryAfterSeconds) {
+          setSession(null);
+          if (isLoggedIn) {
+            setIsLoggedIn(false);
+            Cookies.remove("gluco_session");
+          }
         }
       }
     } catch (e: any) {
@@ -832,8 +852,8 @@ export default function GlucoPage() {
     credentialsRef.current = { email: "", password: "" };
     setCredentials({ email: "", password: "" });
     fetchData(submitted, null).finally(() => {
-      nextRefreshAtRef.current = Date.now() + 60000;
-      setSecondsUntilRefresh(60);
+      nextRefreshAtRef.current = Math.max(Date.now() + 60000, providerRetryAtRef.current);
+      setSecondsUntilRefresh(Math.max(60, Math.ceil((providerRetryAtRef.current - Date.now()) / 1000)));
     });
   };
 
@@ -878,14 +898,14 @@ export default function GlucoPage() {
       inFlightRef.current = true;
       fetchData().finally(() => {
         inFlightRef.current = false;
-        nextRefreshAtRef.current = Date.now() + 60000;
-        setSecondsUntilRefresh(60);
+        nextRefreshAtRef.current = Math.max(Date.now() + 60000, providerRetryAtRef.current);
+        setSecondsUntilRefresh(Math.max(60, Math.ceil((providerRetryAtRef.current - Date.now()) / 1000)));
       });
     };
 
     if (isLoggedIn && activeView === "dashboard" && isMonitorToday) {
-      nextRefreshAtRef.current = Date.now() + 60000;
-      setSecondsUntilRefresh(60);
+      nextRefreshAtRef.current = Math.max(Date.now() + 60000, providerRetryAtRef.current);
+      setSecondsUntilRefresh(Math.max(60, Math.ceil((providerRetryAtRef.current - Date.now()) / 1000)));
 
       tick = setInterval(() => {
         const nextAt = nextRefreshAtRef.current;
@@ -899,8 +919,8 @@ export default function GlucoPage() {
           inFlightRef.current = true;
           fetchData().finally(() => {
             inFlightRef.current = false;
-            nextRefreshAtRef.current = Date.now() + 60000;
-            setSecondsUntilRefresh(60);
+            nextRefreshAtRef.current = Math.max(Date.now() + 60000, providerRetryAtRef.current);
+            setSecondsUntilRefresh(Math.max(60, Math.ceil((providerRetryAtRef.current - Date.now()) / 1000)));
           });
         }
       }, 250);
@@ -2395,7 +2415,6 @@ export default function GlucoPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col p-0">
-                      <MonitorInsulinLegend doses={visibleInsulinDoses} />
                       <div
                         className={`glucose-chart-stage relative h-[clamp(300px,52dvh,460px)] min-h-0 min-w-0 flex-1 overflow-hidden outline-none sm:min-h-[420px] ${isChartDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
                         tabIndex={0}
@@ -2784,6 +2803,8 @@ export default function GlucoPage() {
                         <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                           Diagnóstico de salud
                         </p>
+                        {error && <p role="status" className="text-[10px] leading-relaxed text-muted-foreground">{error}</p>}
+
 
                         <div className="flex items-center justify-between">
                           <span className="max-w-[9rem] truncate text-[8px] font-bold uppercase tracking-[0.2em] text-muted-foreground">

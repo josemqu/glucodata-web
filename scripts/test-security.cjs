@@ -88,3 +88,33 @@ test('maintenance blocks reads and writes before authentication during cutover',
     else process.env.GLUCO_MAINTENANCE = previous;
   }
 });
+
+test('LibreLinkUp errors remain safe and distinguish provider failures from internal errors', async () => {
+  const { LibreLinkUpClient, LibreLinkUpError } = load('src/lib/librelink.ts');
+  const original = global.fetch;
+  try {
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ status: 4, message: 'provider-secret' }) });
+    await assert.rejects(new LibreLinkUpClient('fake', 'fake-password').login(), error =>
+      error instanceof LibreLinkUpError && /condiciones/.test(error.message) && !error.message.includes('provider-secret'));
+    global.fetch = async () => { throw new TypeError('fetch failed: provider-secret'); };
+    await assert.rejects(new LibreLinkUpClient('fake', 'fake-password').login(), error =>
+      error instanceof LibreLinkUpError && /conectar/.test(error.message) && !error.message.includes('provider-secret'));
+  } finally { global.fetch = original; }
+});
+
+test('LibreLinkUp 429 pauses repeated provider requests and exposes only a safe retry message', async () => {
+  const { LibreLinkUpClient, LibreLinkUpError } = load('src/lib/librelink.ts');
+  const original = global.fetch;
+  let calls = 0;
+  global.fetch = async () => { calls++; return {
+    ok: false, status: 429, headers: new Headers({ 'Retry-After': '120' }),
+    json: async () => { throw Error('429 may return a non-JSON body'); },
+  }; };
+  try {
+    for (let i = 0; i < 2; i++) {
+      await assert.rejects(new LibreLinkUpClient('rate-limit-test@example.invalid', 'fake-password').login(), error =>
+        error instanceof LibreLinkUpError && error.code === 'rate_limited' && error.retryAfterSeconds > 0 && /limitando/.test(error.message));
+    }
+    assert.equal(calls, 1, 'repeated requests during Retry-After must not reach the provider');
+  } finally { global.fetch = original; }
+});

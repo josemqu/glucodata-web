@@ -26,7 +26,11 @@ export class AnalysisResource<T> {
     }
   }
 
-  load(key: string, fetcher: (refresh?: boolean) => Promise<Reply<T>>, refresh = false) {
+  preload(key: string, fetcher: (refresh?: boolean) => Promise<Reply<T>>) {
+    return this.load(key, fetcher, false, true);
+  }
+
+  load(key: string, fetcher: (refresh?: boolean) => Promise<Reply<T>>, refresh = false, background = false) {
     const previous = this.read(key);
     if (previous?.pending) return previous.pending;
     if (!refresh && previous?.data !== undefined && previous.expiresAt > Date.now()) return Promise.resolve();
@@ -51,7 +55,13 @@ export class AnalysisResource<T> {
       // for transit and avoiding extension of an already aged server result.
       entry.expiresAt = started + Math.max(0, reply.validForMs ?? 0);
     }).catch((error: unknown) => {
-      if (generation === this.generation) entry.error = error instanceof Error ? error.message : "No se pudo cargar el análisis.";
+      if (generation !== this.generation) return;
+      if (background) {
+        // Failed speculation is a cache miss, never a persistent foreground error.
+        if (this.entries.get(key) === entry) this.entries.delete(key);
+      } else {
+        entry.error = error instanceof Error ? error.message : "No se pudo cargar el análisis.";
+      }
     }).finally(() => {
       if (generation !== this.generation) return;
       entry.pending = undefined;

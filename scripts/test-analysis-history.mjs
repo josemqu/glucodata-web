@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-function setup(rows, { failPage = -1, cap = 1000 } = {}) {
+function setup(rows, { failPage = -1, cap = 1000, providerFails = false } = {}) {
   const source = fs.readFileSync('src/app/actions.ts', 'utf8');
   const action = source.slice(source.indexOf('export async function getHistoricalGlucoseAction('), source.indexOf('export async function getMonitorGlucoseDayAction('));
   const calls = [];
   const cache = new Map();
   const context = {
-    exports: {}, Date, JSON, Number, Error,
+    exports: {}, Date, JSON, Number, Error, console: { error() {} },
+    LibreLinkUpError: class extends Error {},
     analysisCache: cache, CACHE_TTL: 60000, analysisToken: () => ({ valid: true }), invalidateAnalysisResults: () => {},
     EventAuthError: class extends Error {},
     libreContext: async () => ({ userId: 'u', patientId: 'p', connections: [], database: {
@@ -37,6 +38,9 @@ function setup(rows, { failPage = -1, cap = 1000 } = {}) {
     calculateStats: history => ({ count: history.length }),
     calculatePercentiles: history => [{ count: history.length }],
   };
+  context.requireUser = context.libreContext;
+  context.adminDatabase = () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { patient_id: 'p' } }) }) }) }) });
+  if (providerFails) context.libreContext = async () => { throw new Error('LibreLinkUp HTTP 429'); };
   vm.runInNewContext(ts.transpileModule(action, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, context);
   return { run: days => context.exports.getHistoricalGlucoseAction(days, undefined, undefined, undefined, {}), calls, cache };
 }
@@ -68,4 +72,11 @@ test('empty period produces an empty analysis', async () => {
   const result = await setup([]).run(7);
   assert.equal(result.success, true);
   assert.equal(result.data.stats.count, 0);
+});
+
+ test('stored history remains available when LibreLinkUp rejects requests with 429', async () => {
+  const state = setup([row(1)], { providerFails: true });
+  const result = await state.run(7);
+  assert.equal(result.success, true, 'analysis must use internal auth and stored readings, without contacting LibreLinkUp');
+  assert.equal(result.data.stats.count, 1);
 });

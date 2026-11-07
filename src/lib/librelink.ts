@@ -1,5 +1,13 @@
 import crypto from "crypto";
 
+// Per-account, bounded server-process cooldown. Never stores credentials or tokens.
+const providerCooldowns = new Map<string, number>();
+
+/** Only locally defined messages may be exposed to the login screen. */
+export class LibreLinkUpError extends Error {
+  constructor(message: string, public readonly code: string, public readonly httpStatus?: number, public readonly providerStatus?: number, public readonly retryAfterSeconds?: number) { super(message); }
+}
+
 export interface GlucoseData {
   value: number;
   trend: number;
@@ -168,17 +176,46 @@ export class LibreLinkUpClient {
     body?: any,
     redirects: number = 0,
   ): Promise<any> {
-    const response = await fetch(this.getUrl(endpoint), {
-      method,
-      redirect: "error",
-      signal: AbortSignal.timeout(15000),
-      headers: this.getHeaders(),
-      body: body ? JSON.stringify(body) : undefined,
-      cache: "no-store",
-      next: { revalidate: 0 },
-    });
+    const url = this.getUrl(endpoint);
+    const cooldownKeys = [this.userId ? `user:${this.userId}` : null, this.email ? `email:${this.email.toLowerCase()}` : null]
+      .filter((key): key is string => key !== null).map(key => this.encryptSHA256(key));
+    const retryAt = Math.max(0, ...cooldownKeys.map(key => providerCooldowns.get(key) ?? 0));
+    if (retryAt > Date.now()) {
+      throw new LibreLinkUpError("LibreLinkUp está limitando las consultas. Esperá unos minutos antes de actualizar.", "rate_limited", 429, undefined, Math.ceil((retryAt - Date.now()) / 1000));
+    }
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        redirect: "error",
+        signal: AbortSignal.timeout(15000),
+        headers: this.getHeaders(),
+        body: body ? JSON.stringify(body) : undefined,
+        cache: "no-store",
+        next: { revalidate: 0 },
+      });
+    } catch {
+      throw new LibreLinkUpError("No se pudo conectar con LibreLinkUp. Volvé a intentar en unos minutos.", "network");
+    }
 
-    const data = await response.json();
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("retry-after");
+      const seconds = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter)
+        : retryAfter ? (Date.parse(retryAfter) - Date.now()) / 1000 : NaN;
+      const retryAfterSeconds = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 300;
+      for (const key of cooldownKeys) {
+        if (providerCooldowns.size >= 256) providerCooldowns.delete(providerCooldowns.keys().next().value!);
+        providerCooldowns.set(key, Date.now() + retryAfterSeconds * 1000);
+      }
+      throw new LibreLinkUpError("LibreLinkUp está limitando las consultas. Esperá unos minutos antes de actualizar.", "rate_limited", 429, undefined, retryAfterSeconds);
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new LibreLinkUpError("LibreLinkUp devolvió una respuesta no válida. Volvé a intentar en unos minutos.", "response");
+    }
 
     if (data.status === 0 && data.data?.redirect && data.data?.region) {
       if (redirects >= 3) throw new Error("Demasiadas redirecciones de LibreLinkUp.");
@@ -186,11 +223,11 @@ export class LibreLinkUpClient {
       return this.request(endpoint, method, body, redirects + 1);
     }
     if (data.status === 4) {
-      throw new Error("Abrí LibreLinkUp para revisar las condiciones pendientes antes de continuar.");
+      throw new LibreLinkUpError("Abrí LibreLinkUp para revisar las condiciones pendientes antes de continuar.", "conditions");
     }
     if (!response.ok || data.status !== 0) {
       // Never propagate upstream messages: they may echo credentials or tokens.
-      throw new Error("No se pudo autenticar o consultar LibreLinkUp.");
+      throw new LibreLinkUpError("No se pudo autenticar o consultar LibreLinkUp. Revisá el acceso desde la aplicación LibreLinkUp.", "provider_rejected", response.status, Number.isInteger(data.status) ? data.status : undefined);
     }
 
     return data;
