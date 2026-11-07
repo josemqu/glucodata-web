@@ -1,5 +1,7 @@
 "use client";
 
+import { MonitorExtremaLabels } from "@/components/monitor-extrema-labels";
+import { findMonitorExtrema } from "@/lib/monitor-extrema";
 import { GlucoLoadingSpinner, LoadingSpinner } from "@/components/loading-spinner";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -1284,6 +1286,12 @@ export default function GlucoPage() {
       { time: chartDataEnd, value: null },
     ];
   }, [chartPoints, chartDataStart, chartDataEnd]);
+  const localExtrema = useMemo(() => findMonitorExtrema(chartGraph.filter(
+    point => Number.isFinite(point.value)
+      && point.time >= displayedChartWindowStart
+      && point.time <= displayedChartWindowEnd,
+  )), [chartGraph, displayedChartWindowStart, displayedChartWindowEnd]);
+
 
   useEffect(() => {
     if (graphPoints.length === 0) return;
@@ -1837,69 +1845,6 @@ export default function GlucoPage() {
       ? scatterDataRaw
       : scatterDataRaw.filter((_: any, idx: number) => idx % scatterStep === 0);
 
-  const localExtrema = (() => {
-    const points = chartGraph.filter(
-      (point: any) => typeof point?.time === "number" && typeof point?.value === "number",
-    );
-    if (points.length < 5) return [];
-
-    type ExtremaCandidate = (typeof points)[number] & {
-      extremum: "min" | "max";
-      prominence: number;
-      absolute: boolean;
-    };
-    const candidates: ExtremaCandidate[] = [];
-    const radius = 2;
-    for (let index = radius; index < points.length - radius; index += 1) {
-      const point = points[index];
-      const left = points.slice(index - radius, index);
-      const right = points.slice(index + 1, index + radius + 1);
-      const neighbors = [...left, ...right];
-      const isMinimum = neighbors.every((neighbor) => point.value <= neighbor.value)
-        && neighbors.some((neighbor) => point.value < neighbor.value);
-      const isMaximum = neighbors.every((neighbor) => point.value >= neighbor.value)
-        && neighbors.some((neighbor) => point.value > neighbor.value);
-
-      if (isMinimum) {
-        const prominence = Math.min(
-          Math.max(...left.map((neighbor) => neighbor.value)) - point.value,
-          Math.max(...right.map((neighbor) => neighbor.value)) - point.value,
-        );
-        if (prominence >= 6) candidates.push({ ...point, extremum: "min", prominence, absolute: false });
-      } else if (isMaximum) {
-        const prominence = Math.min(
-          point.value - Math.min(...left.map((neighbor) => neighbor.value)),
-          point.value - Math.min(...right.map((neighbor) => neighbor.value)),
-        );
-        if (prominence >= 6) candidates.push({ ...point, extremum: "max", prominence, absolute: false });
-      }
-    }
-
-    const globalMin = points.reduce((best, point) => point.value < best.value ? point : best);
-    const globalMax = points.reduce((best, point) => point.value > best.value ? point : best);
-    const prioritized = [
-      { ...globalMin, extremum: "min" as const, prominence: Number.POSITIVE_INFINITY, absolute: true },
-      { ...globalMax, extremum: "max" as const, prominence: Number.POSITIVE_INFINITY, absolute: true },
-      ...candidates.sort((first, second) => second.prominence - first.prominence),
-    ];
-    const minimumSeparationMs = Math.max(20 * 60_000, (windowEnd - chartDataStart) / 8);
-    const eventClearanceMs = Math.max(20 * 60_000, (windowEnd - chartDataStart) * 0.04);
-    const visibleEventTimes = events
-      .map((event) => new Date(event.occurred_at).getTime())
-      .filter((time) => time >= chartDataStart && time <= windowEnd);
-    const chartRange = Math.max(1, yMax - yMin);
-    const selected: ExtremaCandidate[] = [];
-    for (const candidate of prioritized) {
-      if (selected.some((item) => item.time === candidate.time)) continue;
-      if (!candidate.absolute && selected.some((item) => Math.abs(item.time - candidate.time) < minimumSeparationMs)) continue;
-      const isNearTopEdge = candidate.value >= yMax - chartRange * 0.12;
-      if (!candidate.absolute && isNearTopEdge && visibleEventTimes.some((time) => Math.abs(time - candidate.time) < eventClearanceMs)) continue;
-      selected.push(candidate);
-      if (selected.length === 6) break;
-    }
-    return selected.sort((first, second) => first.time - second.time);
-  })();
-
   const visibleEvents = events.filter((event) => {
     const occurredAt = new Date(event.occurred_at).getTime();
     const endedAt = event.ended_at ? new Date(event.ended_at).getTime() : occurredAt;
@@ -1918,8 +1863,6 @@ export default function GlucoPage() {
       val === null
     )
       return null;
-    const extremum = localExtrema.find((item) => item.time === payload.time);
-    if (extremum) return <ExtremumMarker {...props} payload={extremum} />;
     return <circle cx={cx} cy={cy} r={2} fill={getGlucoseColor(val)} />;
   };
 
@@ -1934,8 +1877,6 @@ export default function GlucoPage() {
     )
       return null;
 
-    const extremum = localExtrema.find((item) => item.time === payload.time);
-    if (extremum) return <ExtremumMarker {...props} payload={extremum} />;
     if (!showDots) return null;
 
     const dataLength = chartGraph.length;
@@ -1990,21 +1931,6 @@ export default function GlucoPage() {
     // Si minDist >= 0.5, mostrar todos los dots (área dispersa)
 
     return <circle cx={cx} cy={cy} r={1.5} fill={getGlucoseColor(val)} />;
-  };
-
-  const ExtremumMarker = (props: any) => {
-    const { cx, cy, payload } = props;
-    if (typeof cx !== "number" || typeof cy !== "number" || typeof payload?.value !== "number") return null;
-    const color = getGlucoseColor(payload.value);
-    const labelY = payload.extremum === "max" ? cy - 8 : cy + 13;
-    return (
-      <g aria-hidden="true" className="pointer-events-none">
-        <circle cx={cx} cy={cy} r={3} fill={color} stroke="var(--background)" strokeWidth={1.5} />
-        <text x={cx} y={labelY} textAnchor="middle" fill={color} fontSize={9} fontWeight={800} paintOrder="stroke" stroke="var(--background)" strokeWidth={3} strokeLinejoin="round">
-          {Math.round(payload.value)}
-        </text>
-      </g>
-    );
   };
 
   return (
@@ -2732,6 +2658,7 @@ export default function GlucoPage() {
                                       animationEasing={CHART_SERIES_ANIMATION_EASING}
                                     />
                                   )}
+                                  <MonitorExtremaLabels extrema={localExtrema} getColor={getGlucoseColor} />
                                 </>
                               );
                             })()}
