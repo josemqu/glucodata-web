@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { FormEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -692,7 +693,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                     <InsetField id="event-notes" label="Nota" optional><textarea id="event-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} rows={3} placeholder="Agregá un dato que ayude a interpretar el evento" className={insetTextareaClass} /></InsetField>
                     {formError ? <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{formError}</p> : null}
                   </div>
-                  <div className="grid grid-cols-1 gap-2 border-t bg-muted/20 px-4 py-3 min-[380px]:grid-cols-[auto_1fr] sm:px-5"><Button type="button" variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving} className="min-h-11 min-w-0 gap-2"><Save className="h-4 w-4" />{saving ? "Guardando…" : editing ? "Guardar cambios" : duplicating ? "Registrar copia" : "Registrar"}</Button></div>
+                  <div className="grid grid-cols-1 gap-2 border-t bg-muted/20 px-4 py-3 min-[380px]:grid-cols-[auto_1fr] sm:px-5"><Button type="button" variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving} className="min-h-11 min-w-0 gap-2">{saving ? <LoadingSpinner /> : <Save className="h-4 w-4" />}{saving ? "Guardando…" : editing ? "Guardar cambios" : duplicating ? "Registrar copia" : "Registrar"}</Button></div>
                 </form>
               ) : panelView === "compare" ? (
                 comparison ? (
@@ -715,7 +716,7 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
                 <section>
                 <div className="flex items-center justify-between">
                   <div><h3 className="text-base font-bold">Eventos en el gráfico</h3><p className="mt-1 text-sm text-muted-foreground">{visibleRangeLabel} · {visibleEvents.length} {visibleEvents.length === 1 ? "evento" : "eventos"}</p></div>
-                  {loading ? <span role="status" className="text-xs text-muted-foreground">Actualizando…</span> : null}
+                  {loading ? <span role="status" className="inline-flex items-center gap-2 text-xs text-muted-foreground"><LoadingSpinner className="size-3 text-primary" />Actualizando…</span> : null}
                 </div>
                 {detailError ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{detailError}</p> : null}
                 {error ? <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p> : null}
@@ -796,7 +797,7 @@ function ComparisonPicker({
       {error ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{error}</p> : null}
       <div className="sticky bottom-0 -mx-5 mt-5 border-t bg-background/95 px-5 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <Button type="button" className="min-h-11 w-full gap-2" disabled={loading || selectedIds.length < 2} onClick={onCompare}>
-          <BarChart3 className="h-4 w-4" />{loading ? "Preparando comparación…" : `Comparar ${selectedIds.length || ""} ${selectedIds.length === 1 ? "evento" : "eventos"}`}
+          {loading ? <LoadingSpinner /> : <BarChart3 className="h-4 w-4" />}{loading ? "Preparando comparación…" : `Comparar ${selectedIds.length || ""} ${selectedIds.length === 1 ? "evento" : "eventos"}`}
         </Button>
       </div>
     </section>
@@ -866,11 +867,11 @@ function EventComparison({ data, onBack }: { data: EventComparisonResult; onBack
 function EventDetailSkeleton({ title }: { title: string }) {
   return (
     <section role="status" aria-live="polite" aria-label={`Cargando respuesta de ${title || "evento"}`}>
-      <div className="animate-pulse motion-reduce:animate-none">
+      <div aria-hidden="true">
         <div className="h-4 w-28 rounded bg-muted" />
         <div className="mt-5 h-3 w-32 rounded bg-muted" />
         <div className="mt-2 h-7 max-w-64 rounded bg-muted" />
-        <div className="mt-5 h-56 rounded-xl border bg-card" />
+        <div className="mt-5 grid h-56 place-items-center rounded-xl border bg-card"><LoadingSpinner className="size-8 text-primary [--spinner-stroke:6.25]" /></div>
         <div className="mt-3 flex items-center justify-between rounded-xl bg-muted/50 px-3 py-3">
           <div className="h-6 w-28 rounded bg-muted" />
           <div className="h-3 w-24 rounded bg-muted" />
@@ -965,7 +966,7 @@ function EventDetail({
       {data.event.type === "insulin" ? (
         <label htmlFor="detail-event-correction" className="mt-4 flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border bg-card px-3 py-3">
           <input id="detail-event-correction" type="checkbox" checked={data.event.metadata.dose_purpose === "correction"} disabled={dosePurposeSaving} onChange={(event) => onDosePurposeChange(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-primary disabled:cursor-wait" />
-          <span className="min-w-0"><span className="block text-sm font-semibold">Esta dosis fue una corrección</span><span role="status" className="mt-0.5 block text-xs leading-5 text-muted-foreground">{dosePurposeSaving ? "Guardando clasificación…" : data.event.metadata.dose_purpose === "correction" ? "Clasificada como dosis de corrección." : "Clasificada como dosis habitual o asociada a comida."}</span></span>
+          <span className="min-w-0"><span className="block text-sm font-semibold">Esta dosis fue una corrección</span><span role="status" className="mt-0.5 block text-xs leading-5 text-muted-foreground">{dosePurposeSaving ? <span className="inline-flex items-center gap-2"><LoadingSpinner className="size-3 text-primary" />Guardando clasificación…</span> : data.event.metadata.dose_purpose === "correction" ? "Clasificada como dosis de corrección." : "Clasificada como dosis habitual o asociada a comida."}</span></span>
         </label>
       ) : null}
 
@@ -1069,6 +1070,7 @@ function EventDetail({
         <div className="flex items-center gap-2">
           <Link2 className="h-4 w-4 text-primary" />
           <h4 className="text-sm font-semibold">Eventos relacionados</h4>
+          {pendingKey !== null ? <LoadingSpinner label="Actualizando vínculos" className="size-3.5 text-primary" /> : null}
         </div>
         {error ? <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">{error}</p> : null}
         {relationships.links.length ? (

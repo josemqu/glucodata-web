@@ -1,10 +1,10 @@
 "use client";
 
+import { GlucoLoadingSpinner, LoadingSpinner } from "@/components/loading-spinner";
 import { useId, useMemo, type ReactNode } from "react";
 import { RangeDistributionCard } from "@/components/range-distribution-card";
 import { AgpActiveLabels } from "./agp-active-labels";
 import { ChartHoverMask } from "@/components/chart-hover-mask";
-import { Loader2 } from "lucide-react";
 import {
   ComposedChart,
   Area,
@@ -43,7 +43,6 @@ import {
   Activity, 
   Target, 
   Clock, 
-  RefreshCw
 } from "lucide-react";
 
 interface AnalysisViewProps {
@@ -127,8 +126,8 @@ export function AnalysisView({
   if (history.length === 0 && !hasPercentileReadings) {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div role="status" className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+          <GlucoLoadingSpinner className="size-14 [--spinner-stroke:4.3]" />
           <h3 className="text-lg font-bold">Cargando análisis</h3>
         </div>
       );
@@ -136,7 +135,7 @@ export function AnalysisView({
 
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
-        <Activity className="w-12 h-12 text-muted-foreground animate-pulse" />
+        <Activity className="w-12 h-12 text-muted-foreground" />
         <h3 className="text-lg font-bold">No hay suficientes datos</h3>
         <p className="text-sm text-muted-foreground max-w-xs">
           Sigue usando la app para acumular historial de glucosa y ver el análisis detallado.
@@ -197,7 +196,7 @@ export function AnalysisView({
               <span className="hidden sm:inline-flex font-numbers text-[9px] font-semibold tabular-nums text-muted-foreground">
                 {days} DÍAS
               </span>
-              {loading && <RefreshCw className="w-3 h-3 text-primary animate-spin" />}
+              {loading && <LoadingSpinner label="Actualizando perfil glucémico" className="size-3 text-primary" />}
             </CardTitle>
             <CardDescription className="text-[9px] font-semibold">Hora local · percentiles por bloque de 15 min</CardDescription>
           </div>
@@ -520,14 +519,14 @@ function MetricCard({ title, value, unit, description, status, icon, target, loa
       <CardContent className="flex h-full flex-col justify-between p-3 sm:p-3.5">
         <div className="flex min-h-6 items-center justify-between gap-2">
           <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${colors[status]}`}>
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
+            {loading ? <LoadingSpinner className="size-3.5" /> : icon}
           </div>
           <p className="min-w-0 truncate text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground" title={description}>
             {title}
           </p>
         </div>
         <div className="flex items-baseline gap-1">
-          {loading ? <div className="h-6 w-16 animate-pulse rounded bg-muted/40" /> : (
+          {loading ? <div className="h-6 w-16 rounded bg-muted/40" /> : (
             <span className={`font-numbers text-2xl font-black tabular-nums ${valueColors[status]}`}>{value}</span>
           )}
           {unit && <span className="text-[8px] font-bold uppercase text-muted-foreground">{unit}</span>}

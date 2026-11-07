@@ -1,7 +1,8 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Search, Star, Trash2, X } from "lucide-react";
+import { Plus, Search, Star, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -232,7 +233,7 @@ export function MealComposer({ session, value, onChange, disabled = false }: Mea
                 <div className="relative min-w-0 flex-1">
                   <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input ref={searchRef} aria-label="Buscar alimentos propios" className="h-11 pl-9 pr-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar alimentos" disabled={disabled} />
-                  {loading ? <Loader2 aria-label="Buscando alimentos" className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" /> : null}
+                  {loading ? <LoadingSpinner label="Buscando alimentos" className="absolute right-3 top-1/2 -translate-y-1/2 text-primary" /> : null}
                 </div>
                 <Button type="button" variant={creating ? "secondary" : "outline"} className="h-11 shrink-0 gap-1.5" onClick={() => setCreating((current) => !current)} disabled={disabled}>
                   {creating ? <X /> : <Plus />}{creating ? "Cerrar" : "Nuevo"}
@@ -255,7 +256,7 @@ export function MealComposer({ session, value, onChange, disabled = false }: Mea
                     <InsetField id="food-calories" label="kcal"><Input id="food-calories" className={insetControlClass} type="number" min="0" step="1" value={foodCalories} onChange={(event) => setFoodCalories(event.target.value)} /></InsetField>
                   </div>
                   <Button type="button" className="w-full" onClick={() => void createFood()} disabled={disabled || savingFood || !name.trim() || !foodCarbs}>
-                    {savingFood ? <Loader2 className="animate-spin" /> : <Plus />}{savingFood ? "Guardando…" : "Guardar y agregar"}
+                    {savingFood ? <LoadingSpinner /> : <Plus />}{savingFood ? "Guardando…" : "Guardar y agregar"}
                   </Button>
                 </div>
               ) : null}

@@ -1,0 +1,24 @@
+@property --spinner-reflection-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.reflection {
+  color: oklch(from currentColor calc(l + 0.12) c h);
+  mask-image: conic-gradient(
+    from calc(var(--spinner-reflection-angle) - 55deg),
+    transparent,
+    black 55deg,
+    transparent 110deg
+  );
+  animation: loading-spinner-reflection var(--spinner-period, 2.6s) linear infinite;
+}
+
+@keyframes loading-spinner-reflection {
+  to { --spinner-reflection-angle: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reflection { display: none; }
+}

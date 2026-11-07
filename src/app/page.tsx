@@ -1,5 +1,6 @@
 "use client";
 
+import { GlucoLoadingSpinner, LoadingSpinner } from "@/components/loading-spinner";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -1531,22 +1532,18 @@ export default function GlucoPage() {
     return (
       <main className="app-background flex h-[100dvh] flex-col items-center justify-center overflow-hidden bg-background p-4">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
+          role="status"
           className="flex flex-col items-center gap-6"
         >
-          <div className="relative">
-            <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center animate-pulse">
-              <Droplets className="w-10 h-10 text-primary animate-smooth-float" />
-            </div>
-            <div className="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-3xl animate-spin" />
-          </div>
+          <GlucoLoadingSpinner />
           <div className="text-center">
             <h2 className="text-2xl font-black tracking-tighter italic">
               GLUCOWEB
             </h2>
             <div className="flex items-center gap-2 justify-center mt-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <div className="w-1.5 h-1.5 rounded-full bg-primary motion-safe:animate-pulse" />
               <p className="text-muted-foreground text-[11px] uppercase tracking-[0.3em] font-bold">
                 Sincronizando
               </p>
@@ -1675,7 +1672,7 @@ export default function GlucoPage() {
                     aria-busy={loading}
                   >
                     {loading ? (
-                      <><RefreshCw className="animate-spin" aria-hidden="true" /> Conectando…</>
+                      <><LoadingSpinner /> Conectando…</>
                     ) : (
                       "Ingresar"
                     )}
@@ -2741,8 +2738,8 @@ export default function GlucoPage() {
                           </ComposedChart>
                         </ResponsiveContainer>
                         {monitorWindowLoading ? (
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center bg-gradient-to-r from-card/70 to-transparent" aria-label="Cargando lecturas anteriores">
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-center bg-gradient-to-r from-card/70 to-transparent" role="status" aria-label="Cargando lecturas anteriores">
+                            <LoadingSpinner className="size-3.5 text-primary" />
                           </div>
                         ) : null}
                         {monitorWindowEmpty || monitorWindowHasError ? (
@@ -2836,11 +2833,7 @@ export default function GlucoPage() {
                           disabled={loading || monitorDateLoading}
                           variant="secondary"
                         >
-                          <RefreshCw
-                            className={`w-3.5 h-3.5 mr-2 ${
-                              loading || monitorDateLoading ? "animate-spin" : ""
-                            }`}
-                          />
+                          {loading || monitorDateLoading ? <LoadingSpinner className="mr-2 size-3.5" /> : <RefreshCw className="mr-2 size-3.5" />}
                           {isMonitorToday ? "Sincronizar ahora" : "Volver a hoy"}
                         </Button>
                       </CardContent>
@@ -3046,7 +3039,7 @@ export default function GlucoPage() {
                     ))}
                     <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
                       <Button type="button" variant="outline" disabled={insulins.length >= 6} onClick={() => setInsulins((current) => [...current, { name: "", insulin_type: "rapid", sort_order: current.length }])} className="min-h-11 gap-2"><Plus className="h-4 w-4" />Agregar insulina</Button>
-                      <Button type="button" disabled={insulinsLoading || insulinsSaving || insulins.some((item) => !item.name.trim())} onClick={() => void saveInsulins()} className="min-h-11 gap-2"><Save className="h-4 w-4" />{insulinsSaving ? "Guardando…" : "Guardar insulinas"}</Button>
+                      <Button type="button" disabled={insulinsLoading || insulinsSaving || insulins.some((item) => !item.name.trim())} onClick={() => void saveInsulins()} className="min-h-11 gap-2">{insulinsLoading || insulinsSaving ? <LoadingSpinner /> : <Save className="h-4 w-4" />}{insulinsSaving ? "Guardando…" : insulinsLoading ? "Cargando…" : "Guardar insulinas"}</Button>
                     </div>
                     {insulinsMessage ? <p role="status" className="text-xs text-muted-foreground">{insulinsMessage}</p> : null}
                   </CardContent>

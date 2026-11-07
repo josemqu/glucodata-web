@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -96,8 +97,9 @@ export function MonitorDatePicker({ value, onChange, loading = false }: MonitorD
           setOpen((current) => !current);
         }}
         disabled={loading}
+        aria-busy={loading}
       >
-        <CalendarDays className="hidden h-4 w-4 text-primary sm:block" />
+        {loading ? <LoadingSpinner className="size-3 text-primary" /> : <CalendarDays className="hidden h-4 w-4 text-primary sm:block" />}
         <span className="truncate capitalize">{loading ? "Cargando" : triggerLabel}</span>
       </Button>
 

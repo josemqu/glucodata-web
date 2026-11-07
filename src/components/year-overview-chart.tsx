@@ -1,7 +1,8 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { useCallback, useMemo, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, RotateCw } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, RotateCw } from "lucide-react";
 import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
 import { getYearOverviewAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -196,7 +197,7 @@ export function YearOverviewChart({
           </div>
         ) : loading ? (
           <div className="flex min-h-44 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
-            <LoaderCircle className="h-4 w-4 animate-spin" /> Cargando resumen anual
+            <LoadingSpinner className="text-primary" /> Cargando resumen anual
           </div>
         ) : days.length === 0 ? (
           <div className="flex min-h-44 items-center justify-center px-4 text-center text-sm text-muted-foreground">
