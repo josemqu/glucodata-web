@@ -13,8 +13,8 @@ export function LoadingSpinner({ className, label }: { className?: string; label
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <rect x="4" y="4" width="72" height="72" rx="20" stroke="currentColor" className="loading-spinner-track" />
-      <rect x="4" y="4" width="72" height="72" rx="20" pathLength="100" stroke="currentColor" strokeLinecap="round" className="loading-spinner-light" />
+      <rect x="4" y="4" width="72" height="72" rx="20" stroke="currentColor" className={styles.track} />
+      <rect x="4" y="4" width="72" height="72" rx="20" pathLength="100" stroke="currentColor" strokeLinecap="round" className={styles.light} />
     </svg>
   );
 }

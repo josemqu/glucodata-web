@@ -179,26 +179,6 @@
     );
 }
 
-.loading-spinner-track {
-  stroke-width: var(--spinner-stroke, 7.5);
-  opacity: 0.3;
-}
-
-.loading-spinner-light {
-  stroke-width: var(--spinner-stroke, 7.5);
-  stroke-dasharray: 14 86;
-  filter: drop-shadow(0 0 2px currentColor);
-  animation: loading-spinner-sweep var(--spinner-period, 2.6s) linear infinite;
-}
-
-@keyframes loading-spinner-sweep {
-  to { stroke-dashoffset: -100; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .loading-spinner-light { display: none; }
-}
-
 .mobile-scroll-hint {
   scrollbar-width: thin;
   scrollbar-color: var(--muted-foreground) var(--muted);
