@@ -1530,7 +1530,7 @@ export default function GlucoPage() {
 
   if (isInitializing) {
     return (
-      <main className="flex h-[100dvh] flex-col items-center justify-center overflow-hidden bg-background p-4">
+      <main className="app-background flex h-[100dvh] flex-col items-center justify-center overflow-hidden bg-background p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -1560,7 +1560,7 @@ export default function GlucoPage() {
 
   if (!isLoggedIn) {
     return (
-      <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
+      <main className="app-background relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-8 sm:px-6">
         <div aria-hidden="true" className="absolute -left-20 top-[14%] h-64 w-64 rounded-full bg-primary/8 blur-3xl" />
         <div aria-hidden="true" className="absolute -right-24 bottom-[8%] h-72 w-72 rounded-full bg-primary/6 blur-3xl" />
         <motion.div
@@ -2012,7 +2012,7 @@ export default function GlucoPage() {
   };
 
   return (
-    <main className="flex h-[100dvh] min-h-[100dvh] max-w-full flex-col overflow-hidden bg-background text-xs text-foreground transition-colors duration-300">
+    <main className="app-background flex h-[100dvh] min-h-[100dvh] max-w-full flex-col overflow-hidden bg-background text-xs text-foreground transition-colors duration-300">
       {/* Header */}
       <header className="z-10 flex-none border-b bg-background/80 px-3 py-2 backdrop-blur-md sm:px-4">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3">

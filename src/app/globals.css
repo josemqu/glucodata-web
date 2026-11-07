@@ -165,6 +165,20 @@
   }
 }
 
+.app-background {
+  background-image:
+    radial-gradient(
+      ellipse at 10% 0%,
+      color-mix(in oklch, var(--primary) 9%, transparent),
+      transparent 65%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in oklch, var(--background) 94%, var(--foreground)),
+      var(--background) 75%
+    );
+}
+
 .mobile-scroll-hint {
   scrollbar-width: thin;
   scrollbar-color: var(--muted-foreground) var(--muted);
