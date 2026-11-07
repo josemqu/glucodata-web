@@ -258,14 +258,3 @@
   stroke-dasharray: 1 7;
   stroke-linecap: round;
 }
-
-/* Small, bounded SVG height maps catch the moving light on actual bevels. */
-.startup-seal {
-  --startup-seal-light: color-mix(in oklch, var(--primary) 58%, white);
-  --startup-seal-dark: color-mix(in oklch, var(--primary) 50%, black);
-  display: block;
-  width: 144px;
-  height: 144px;
-  overflow: visible;
-  filter: drop-shadow(0 14px 12px rgb(0 0 0 / 0.22));
-}

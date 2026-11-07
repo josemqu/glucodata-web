@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { StartupMark } from "@/components/startup-mark";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -1531,17 +1530,29 @@ export default function GlucoPage() {
   if (isInitializing) {
     return (
       <main className="app-background flex h-[100dvh] flex-col items-center justify-center overflow-hidden bg-background p-4">
-        <div className="startup-loader flex flex-col items-center" role="status" aria-live="polite">
-          <StartupMark />
-          <div className="mt-9 text-center">
-            <h2 className="text-3xl font-black italic tracking-tight sm:text-4xl">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-6"
+        >
+          <div className="relative">
+            <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center animate-pulse">
+              <Droplets className="w-10 h-10 text-primary animate-smooth-float" />
+            </div>
+            <div className="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-3xl animate-spin" />
+          </div>
+          <div className="text-center">
+            <h2 className="text-2xl font-black tracking-tighter italic">
               GLUCOWEB
             </h2>
-            <p className="mt-3 text-xs font-medium tracking-[0.16em] text-foreground/70 uppercase">
-              Sincronizando
-            </p>
+            <div className="flex items-center gap-2 justify-center mt-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <p className="text-muted-foreground text-[11px] uppercase tracking-[0.3em] font-bold">
+                Sincronizando
+              </p>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </main>
     );
   }
