@@ -124,6 +124,33 @@ export function YearOverviewChart({
     return { cells, months, weekCount };
   }, [days, year]);
 
+  const latestDate = calendar.cells.findLast(({ day }) => day !== undefined)?.date;
+  const positionCalendar = useCallback((container: HTMLDivElement | null) => {
+    if (!container || !latestDate) return;
+
+    const latestCell = container.querySelector(`[data-date="${latestDate}"]`);
+    if (latestCell) {
+      container.scrollLeft += Math.ceil(
+        latestCell.getBoundingClientRect().right - container.getBoundingClientRect().right,
+      );
+    }
+
+    const scrollWithWheel = (event: WheelEvent) => {
+      if (!event.cancelable || event.ctrlKey || event.shiftKey || event.deltaX !== 0 || event.deltaY === 0) return;
+
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      const scrollLeft = container.scrollLeft;
+      if (maxScroll <= 0 || (event.deltaY < 0 ? scrollLeft <= 0 : scrollLeft >= maxScroll - 1)) return;
+
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? container.clientWidth : 1;
+      event.preventDefault();
+      container.scrollLeft += event.deltaY * unit;
+    };
+
+    container.addEventListener("wheel", scrollWithWheel, { passive: false });
+    return () => container.removeEventListener("wheel", scrollWithWheel);
+  }, [latestDate]);
+
   const averageBands = glucoseBands(targets);
   const daysWithData = days.length;
   const mean = days.reduce((sum, day) => sum + day.average * day.count, 0) /
@@ -205,7 +232,7 @@ export function YearOverviewChart({
           </div>
         ) : (
           <>
-            <div className="mobile-scroll-hint w-full overflow-x-auto pb-2" aria-label={`Calendario de glucosa de ${year}`} onScroll={dismissDayLabel}>
+            <div ref={positionCalendar} className="mobile-scroll-hint w-full overflow-x-auto pb-2" aria-label={`Calendario de glucosa de ${year}`} onScroll={dismissDayLabel}>
               <div className="mx-auto w-fit min-w-max">
                 <div
                   className="mb-1 ml-10 grid h-5 items-end text-[10px] font-medium capitalize text-muted-foreground"
@@ -234,6 +261,7 @@ export function YearOverviewChart({
                       <button
                         key={date}
                         type="button"
+                        data-date={date}
                         onClick={() => { dismissDayLabel(); onSelectDate(date); }}
                         onMouseEnter={() => showDayLabel(date, day)}
                         onMouseLeave={dismissDayLabel}
