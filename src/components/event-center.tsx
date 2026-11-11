@@ -603,8 +603,8 @@ export const EventCenter = forwardRef<EventCenterHandle, EventCenterProps>(funct
 
   return (
     <>
-      <Button ref={triggerRef} aria-label="Registrar evento" onClick={() => { setDetail(null); setDetailError(null); setPanelView("register"); reset("insulin"); setOpen(true); }} className="h-11 w-11 gap-2 px-0 text-[10px] font-bold sm:h-8 sm:w-auto sm:px-3">
-        <Plus className="h-4 w-4" />
+      <Button ref={triggerRef} aria-label="Registrar evento" onClick={() => { setDetail(null); setDetailError(null); setPanelView("register"); reset("insulin"); setOpen(true); }} className="gap-2 px-0 text-[10px] font-bold max-sm:fixed max-sm:right-[calc(1rem+env(safe-area-inset-right))] max-sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] max-sm:z-40 max-sm:size-14 max-sm:rounded-full max-sm:shadow-lg sm:h-8 sm:w-auto sm:px-3">
+        <Plus className="size-6 sm:size-4" aria-hidden="true" />
         <span className="hidden sm:inline">Registrar evento</span>
       </Button>
 

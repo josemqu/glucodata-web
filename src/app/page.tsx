@@ -9,7 +9,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUp,
   ArrowUpRight,
-  ArrowRight,
   ArrowDownRight,
   ArrowDown,
   AlertCircle,
@@ -19,6 +18,7 @@ import {
   Droplets,
   Settings,
   ArrowLeft,
+  ChevronDown,
   ShieldCheck,
   Eye,
   EyeOff,
@@ -49,7 +49,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getLatestGlucoseAction, getMonitorGlucoseDayAction, getSessionAction, logoutAction } from "./actions";
 import Cookies from "js-cookie";
@@ -76,7 +75,7 @@ import { preloadAnalysis } from "@/lib/analysis-preload";
 import { AnalysisResource, useAnalysisResource } from "@/lib/analysis-resource";
 import { RangeDistributionCard } from "@/components/range-distribution-card";
 import { AnalysisView } from "@/components/analysis-view";
-import { YearOverviewChart } from "@/components/year-overview-chart";
+import { YearOverviewChart, type YearOverviewMetric } from "@/components/year-overview-chart";
 import { EventCenter, type EventCenterHandle } from "@/components/event-center";
 import { MonitorDatePicker } from "@/components/monitor-date-picker";
 import { MonitorInsulinColumns, useMonitorInsulinDoses } from "@/components/monitor-insulin-columns";
@@ -406,6 +405,8 @@ export default function GlucoPage() {
   const [analysisDays, setAnalysisDays] = useState(7);
   const [analysisMode, setAnalysisMode] = useState<"profile" | "year">("profile");
   const [analysisYear, setAnalysisYear] = useState(() => new Date().getFullYear());
+  const [analysisMetric, setAnalysisMetric] = useState<YearOverviewMetric>("average");
+  const [chartPrefsLoaded, setChartPrefsLoaded] = useState(false);
   const [analysisRevision, setAnalysisRevision] = useState(0);
   const [events, setEvents] = useState<GlucoEvent[]>([]);
   const insulinDoses = useMonitorInsulinDoses(events);
@@ -1437,25 +1438,38 @@ export default function GlucoPage() {
 
   useEffect(() => {
     const saved = Cookies.get("gluco_chart_prefs");
-    if (!saved) return;
     try {
-      const parsed = JSON.parse(saved);
+      const parsed = saved ? JSON.parse(saved) : null;
       if (parsed?.timeRange === "dtd" || (typeof parsed?.timeRange === "number" && Number.isFinite(parsed.timeRange) && parsed.timeRange > 0 && parsed.timeRange <= 25)) {
         setTimeRange(parsed.timeRange);
       }
       if (typeof parsed?.showLine === "boolean") {
         setShowLine(parsed.showLine);
       }
+      if ([7, 14, 30, 90].includes(parsed?.analysisDays)) {
+        setAnalysisDays(parsed.analysisDays);
+      }
+      if (parsed?.analysisMode === "profile" || parsed?.analysisMode === "year") {
+        setAnalysisMode(parsed.analysisMode);
+      }
+      if (Number.isInteger(parsed?.analysisYear) && parsed.analysisYear >= 2000 && parsed.analysisYear <= new Date().getFullYear()) {
+        setAnalysisYear(parsed.analysisYear);
+      }
+      if (parsed?.analysisMetric === "average" || parsed?.analysisMetric === "timeInRange") {
+        setAnalysisMetric(parsed.analysisMetric);
+      }
     } catch {
       Cookies.remove("gluco_chart_prefs");
     }
+    setChartPrefsLoaded(true);
   }, []);
 
   useEffect(() => {
-    Cookies.set("gluco_chart_prefs", JSON.stringify({ timeRange, showLine }), {
-      expires: 365,
-    });
-  }, [timeRange, showLine]);
+    if (!chartPrefsLoaded) return;
+    Cookies.set("gluco_chart_prefs", JSON.stringify({
+      timeRange, showLine, analysisDays, analysisMode, analysisYear, analysisMetric,
+    }), { expires: 365 });
+  }, [chartPrefsLoaded, timeRange, showLine, analysisDays, analysisMode, analysisYear, analysisMetric]);
 
   // Calculate the actual range of values in the current visible data set
   const dataMin = useMemo(() => {
@@ -1936,7 +1950,7 @@ export default function GlucoPage() {
   return (
     <main className="app-background flex h-[100dvh] min-h-[100dvh] max-w-full flex-col overflow-hidden bg-background text-xs text-foreground transition-colors duration-300">
       {/* Header */}
-      <header className="z-10 flex-none border-b bg-background/80 px-3 py-2 backdrop-blur-md sm:px-4">
+      <header className="flex-none border-b bg-background/80 px-3 py-2 sm:z-10 sm:px-4 sm:backdrop-blur-md">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/10">
@@ -1984,7 +1998,7 @@ export default function GlucoPage() {
                 {patient.firstName} {patient.lastName}
               </p>
             </div>
-            <div className="flex items-center gap-1 border-l border-border/50 pl-1 sm:gap-2 sm:pl-4">
+            <div className="flex items-center gap-1 sm:gap-2">
               {session?.token ? (
                 <EventCenter
                   ref={eventCenterRef}
@@ -2032,7 +2046,7 @@ export default function GlucoPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/5 p-2.5 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:p-3 md:p-4">
+      <div className={`min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/5 p-2.5 sm:p-3 md:p-4 ${session?.token ? "max-sm:pb-[calc(9rem+env(safe-area-inset-bottom))]" : "max-sm:pb-[calc(5.25rem+env(safe-area-inset-bottom))]"}`}>
         <div className="mx-auto h-full min-w-0 max-w-[1100px]">
           <AnimatePresence mode="wait" initial={false}>
           {activeView === "analysis" ? (
@@ -2099,6 +2113,8 @@ export default function GlucoPage() {
                     onRefresh={clearAnalysis}
                     year={analysisYear}
                     onYearChange={setAnalysisYear}
+                    metric={analysisMetric}
+                    onMetricChange={setAnalysisMetric}
                     onSelectDate={(date) => {
                       setActiveView("dashboard");
                       void selectMonitorDate(date);
@@ -2779,220 +2795,95 @@ export default function GlucoPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: reduceMotion ? 1 : 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.16, ease: "easeInOut" }}
-              className="max-w-2xl mx-auto py-4"
+              className="mx-auto max-w-2xl space-y-4 py-3 sm:space-y-5 sm:py-5"
             >
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Volver al Monitor"
                   onClick={() => setActiveView("dashboard")}
-                  className="rounded-full"
+                  className="size-11 shrink-0 rounded-full"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="size-4" />
                 </Button>
+                <h2 className="text-xl font-black italic uppercase tracking-tight">
+                  Configuración
+                </h2>
+              </div>
+
+              <Card role="region" aria-labelledby="glucose-settings-title" className="gap-3 bg-card/40 p-3.5 shadow-none sm:p-5">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck aria-hidden="true" className="size-4 shrink-0 text-primary" />
+                  <h3 id="glucose-settings-title" className="text-sm font-bold">Umbrales de glucosa</h3>
+                  <span className="ml-auto text-xs text-muted-foreground">mg/dL</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-4">
+                  {([
+                    { key: "hypo", label: "Hipo grave" },
+                    { key: "low", label: "Inicio del rango" },
+                    { key: "high", label: "Fin del rango" },
+                    { key: "hyper", label: "Hiper grave" },
+                  ] as const).map(({ key, label }) => (
+                    <div key={key} className="min-w-0 space-y-1">
+                      <Label htmlFor={`glucose-threshold-${key}`} className="text-xs font-semibold">
+                        {label}
+                      </Label>
+                      <Input
+                        id={`glucose-threshold-${key}`}
+                        type="number"
+                        aria-describedby="glucose-settings-note"
+                        value={targetConfig[key]}
+                        onChange={(event) =>
+                          saveConfig({
+                            ...targetConfig,
+                            [key]: parseInt(event.target.value),
+                          })
+                        }
+                        className="h-11 bg-muted/50 font-numbers text-base font-bold tabular-nums"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p id="glucose-settings-note" className="border-t border-border/70 pt-2.5 text-xs leading-relaxed text-muted-foreground">
+                  Se guardan automáticamente en tu cuenta y se usan para el tiempo en rango, las alertas visuales y el gráfico.
+                </p>
+              </Card>
+
+              <section aria-labelledby="insulin-settings-title" className="space-y-3 px-0.5 sm:px-1">
                 <div>
-                  <h2 className="text-xl font-black italic tracking-tight">
-                    CONFIGURACIÓN GENERAL
-                  </h2>
-                    <p className="max-w-[28rem] truncate text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                    Umbrales clínicos
+                  <div className="flex items-center gap-2">
+                    <Syringe aria-hidden="true" className="size-4 shrink-0 text-primary" />
+                    <h3 id="insulin-settings-title" className="text-sm font-bold">Insulinas del paciente</h3>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Accesos rápidos al registrar una dosis.
                   </p>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border bg-card/40 md:col-span-2">
-                  <CardHeader className="pb-3 px-6 pt-6 flex flex-row items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                      <ShieldCheck className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-sm font-black uppercase tracking-tight">
-                        Umbrales de Control
-                      </CardTitle>
-                      <CardDescription className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                        Define los límites para alertas y análisis
-                      </CardDescription>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[11px] font-black uppercase tracking-widest text-red-500">
-                            HIPO
-                          </Label>
-                          <Badge className="bg-red-500 h-4 text-[11px] font-black">
-                            CRÍTICO
-                          </Badge>
-                        </div>
-                        <Input
-                          type="number"
-                          value={targetConfig.hypo}
-                          onChange={(e) =>
-                            saveConfig({
-                              ...targetConfig,
-                              hypo: parseInt(e.target.value),
-                            })
-                          }
-                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
-                        />
-                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
-                          Umbral hipoglucemia grave
-                        </p>
+                <div className="space-y-2">
+                  {insulins.map((insulin, index) => (
+                    <div key={insulin.id ?? index} className="grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_2.75rem] gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`insulin-name-${index}`} className="sr-only">Nombre de insulina {index + 1}</Label>
+                        <Input id={`insulin-name-${index}`} value={insulin.name} maxLength={80} placeholder="Nombre comercial" onChange={(event) => setInsulins((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} className="h-11" />
                       </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[11px] font-black uppercase tracking-widest text-amber-500">
-                            Bajo
-                          </Label>
-                          <Badge className="bg-amber-500 h-4 text-[11px] font-black">
-                            ATENCIÓN
-                          </Badge>
-                        </div>
-                        <Input
-                          type="number"
-                          value={targetConfig.low}
-                          onChange={(e) =>
-                            saveConfig({
-                              ...targetConfig,
-                              low: parseInt(e.target.value),
-                            })
-                          }
-                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
-                        />
-                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
-                          Inicio de rango objetivo
-                        </p>
+                      <div className="relative">
+                        <Label htmlFor={`insulin-type-${index}`} className="sr-only">Tipo de insulina {index + 1}</Label>
+                        <select id={`insulin-type-${index}`} value={insulin.insulin_type} onChange={(event) => setInsulins((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, insulin_type: event.target.value as PatientInsulin["insulin_type"] } : item))} className="h-11 w-full appearance-none rounded-md border border-input bg-background pl-2 pr-7 text-base sm:pl-3 sm:text-sm forced-colors:appearance-auto">
+                          {INSULIN_TYPES.map((type) => <option key={type} value={type}>{type === "ultra_long" ? "Ultralarga" : INSULIN_TYPE_LABELS[type]}</option>)}
+                        </select>
+                        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground forced-colors:hidden" />
                       </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[11px] font-black uppercase tracking-widest text-amber-500">
-                            Alto
-                          </Label>
-                          <Badge className="bg-amber-500 h-4 text-[11px] font-black">
-                            ATENCIÓN
-                          </Badge>
-                        </div>
-                        <Input
-                          type="number"
-                          value={targetConfig.high}
-                          onChange={(e) =>
-                            saveConfig({
-                              ...targetConfig,
-                              high: parseInt(e.target.value),
-                            })
-                          }
-                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
-                        />
-                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
-                          Fin de rango objetivo
-                        </p>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[11px] font-black uppercase tracking-widest text-red-500">
-                            HIPER
-                          </Label>
-                          <Badge className="bg-red-500 h-4 text-[11px] font-black">
-                            CRÍTICO
-                          </Badge>
-                        </div>
-                        <Input
-                          type="number"
-                          value={targetConfig.hyper}
-                          onChange={(e) =>
-                            saveConfig({
-                              ...targetConfig,
-                              hyper: parseInt(e.target.value),
-                            })
-                          }
-                          className="bg-muted/50 font-black tabular-nums font-numbers h-12 text-lg"
-                        />
-                        <p className="text-[11px] text-muted-foreground font-medium italic opacity-60">
-                          Umbral hiperglucemia grave
-                        </p>
-                      </div>
+                      <Button type="button" variant="ghost" size="icon" disabled={insulins.length === 1} onClick={() => setInsulins((current) => current.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, sort_order: itemIndex })))} className="h-11 w-11 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /><span className="sr-only">Quitar {insulin.name || `insulina ${index + 1}`}</span></Button>
                     </div>
-
-                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
-                      <div className="flex gap-3">
-                        <AlertCircle className="w-5 h-5 text-primary shrink-0" />
-                        <div className="space-y-1">
-                          <p className="text-[11px] font-black uppercase tracking-widest text-primary">
-                            Información de Sistema
-                          </p>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            Estos valores afectan directamente a los cálculos de{" "}
-                              <strong>Tiempo en rango</strong>, las alertas visuales
-                            de colores y las líneas de referencia en el gráfico
-                            analítico. Los cambios se guardan automáticamente en
-                            tu sesión local.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border bg-card/40 md:col-span-2">
-                  <CardHeader className="flex flex-row items-center gap-4 px-4 pb-3 pt-5 sm:px-6 sm:pt-6">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <Syringe className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-sm font-black uppercase tracking-tight">Insulinas del paciente</CardTitle>
-                      <CardDescription className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground sm:tracking-widest">Se muestran como acceso rápido al registrar una dosis</CardDescription>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 p-4 pt-2 sm:p-6 sm:pt-3">
-                    {insulins.map((insulin, index) => (
-                      <div key={insulin.id ?? index} className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)_2.75rem] gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`insulin-name-${index}`} className="sr-only">Nombre de insulina {index + 1}</Label>
-                          <Input id={`insulin-name-${index}`} value={insulin.name} maxLength={80} placeholder="Nombre comercial" onChange={(event) => setInsulins((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} className="h-11" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`insulin-type-${index}`} className="sr-only">Tipo de insulina {index + 1}</Label>
-                          <select id={`insulin-type-${index}`} value={insulin.insulin_type} onChange={(event) => setInsulins((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, insulin_type: event.target.value as PatientInsulin["insulin_type"] } : item))} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm">
-                            {INSULIN_TYPES.map((type) => <option key={type} value={type}>{INSULIN_TYPE_LABELS[type]}</option>)}
-                          </select>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" disabled={insulins.length === 1} onClick={() => setInsulins((current) => current.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, sort_order: itemIndex })))} className="h-11 w-11 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /><span className="sr-only">Quitar {insulin.name || `insulina ${index + 1}`}</span></Button>
-                      </div>
-                    ))}
-                    <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-                      <Button type="button" variant="outline" disabled={insulins.length >= 6} onClick={() => setInsulins((current) => [...current, { name: "", insulin_type: "rapid", sort_order: current.length }])} className="min-h-11 gap-2"><Plus className="h-4 w-4" />Agregar insulina</Button>
-                      <Button type="button" disabled={insulinsLoading || insulinsSaving || insulins.some((item) => !item.name.trim())} onClick={() => void saveInsulins()} className="min-h-11 gap-2">{insulinsLoading || insulinsSaving ? <LoadingSpinner /> : <Save className="h-4 w-4" />}{insulinsSaving ? "Guardando…" : insulinsLoading ? "Cargando…" : "Guardar insulinas"}</Button>
-                    </div>
-                    {insulinsMessage ? <p role="status" className="text-xs text-muted-foreground">{insulinsMessage}</p> : null}
-                  </CardContent>
-                </Card>
-
-                <Card className="border bg-card/10 md:col-span-2">
-                  <CardContent className="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">
-                        Estado de Sincronización
-                      </p>
-                      <p className="text-[11px] font-black">
-                        ALMACENAMIENTO LOCAL ACTIVO
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="min-h-11 w-full border-primary/20 text-[11px] font-black uppercase tracking-wide text-primary hover:bg-primary/10 sm:h-8 sm:min-h-0 sm:w-auto sm:tracking-widest"
-                      onClick={() => setActiveView("dashboard")}
-                    >
-                      Volver al Panel
-                      <ArrowRight className="ml-2 w-3.5 h-3.5" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
+                  ))}
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-border/70 pt-2">
+                    <Button type="button" variant="outline" aria-label="Agregar insulina" disabled={insulins.length >= 6} onClick={() => setInsulins((current) => [...current, { name: "", insulin_type: "rapid", sort_order: current.length }])} className="min-h-11 gap-1.5 px-3"><Plus className="h-4 w-4" />Agregar</Button>
+                    <Button type="button" disabled={insulinsLoading || insulinsSaving || insulins.some((item) => !item.name.trim())} onClick={() => void saveInsulins()} className="min-h-11 gap-1.5 px-3">{insulinsLoading || insulinsSaving ? <LoadingSpinner /> : <Save className="h-4 w-4" />}{insulinsSaving ? "Guardando…" : insulinsLoading ? "Cargando…" : "Guardar insulinas"}</Button>
+                  </div>
+                  {insulinsMessage ? <p role="status" className="text-xs text-muted-foreground">{insulinsMessage}</p> : null}
+                </div>
+              </section>
             </motion.div>
           )}
           </AnimatePresence>

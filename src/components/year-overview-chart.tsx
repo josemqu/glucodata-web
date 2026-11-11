@@ -16,7 +16,7 @@ type YearOverviewDay = {
   coverageMinutes: number;
 };
 type Targets = { low: number; high: number; hypo: number; hyper: number };
-type Metric = "average" | "timeInRange";
+export type YearOverviewMetric = "average" | "timeInRange";
 type ActiveDay = {
   date: string;
   day?: YearOverviewDay;
@@ -64,7 +64,7 @@ function formatDay(date: string) {
 
 export function YearOverviewChart({
   targets, resource, timeZone, year, onYearChange, onRefresh,
-  onSelectDate,
+  metric, onMetricChange, onSelectDate,
 }: {
   targets: Targets;
   resource: AnalysisResource<YearOverviewDay[]>;
@@ -72,9 +72,10 @@ export function YearOverviewChart({
   onRefresh: () => void;
   year: number;
   onYearChange: (year: number) => void;
+  metric: YearOverviewMetric;
+  onMetricChange: (metric: YearOverviewMetric) => void;
   onSelectDate: (date: string) => void;
 }) {
-  const [metric, setMetric] = useState<Metric>("average");
   const [activeDay, setActiveDay] = useState<ActiveDay | null>(null);
   const currentYear = new Date().getFullYear();
   const fetcher = useCallback((refresh = false) => getYearOverviewAction(year, timeZone, { low: targets.low, high: targets.high }, refresh), [year, timeZone, targets.low, targets.high]);
@@ -195,7 +196,7 @@ export function YearOverviewChart({
             <span className="sr-only">Métrica del mapa anual</span>
             <select
               value={metric}
-              onChange={(event) => { setActiveDay(null); setMetric(event.target.value as Metric); }}
+              onChange={(event) => { setActiveDay(null); onMetricChange(event.target.value as YearOverviewMetric); }}
               className="h-9 w-full cursor-pointer appearance-none rounded-md border border-input bg-background py-2 pl-2.5 pr-10 text-xs font-medium shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-40"
             >
               <option value="average">Promedio de glucosa</option>
